@@ -1,0 +1,5 @@
+[saga_addr]
+url = "http://saga:8000"
+
+[tugush_addr]
+url = "http://tugush:8000"

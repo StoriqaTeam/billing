@@ -1,0 +1,42 @@
+version: '3'
+services:
+  billing:
+    image: billing
+    build:
+      context: .
+      dockerfile: Dockerfile.billing
+    container_name: billing
+    working_dir: /app
+    command: ["sh", "-c", "/utils/wait_for_it.sh billing-pg:5432 ; diesel migration run ; cargo run"]
+    volumes:
+      - ..:/app
+      - stq_cargo_cache:/usr/local/cargo
+    environment:
+      - DATABASE_URL=postgresql://billing:billing@billing-pg/billing
+      - "RUST_LOG=billing=debug"
+    expose:
+      - 8000
+    stdin_open: true
+    depends_on:
+      - billing-pg
+
+  billing-pg:
+    image: postgres:10
+    container_name: billing-pg
+    volumes:
+      - stq-billing-postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=billing
+      - POSTGRES_DB=billing
+      - POSTGRES_PASSWORD=billing
+    expose:
+      - 5432
+
+volumes:
+  stq_cargo_cache:
+  stq-billing-postgres-data:
+
+networks:
+  default:
+    external:
+      name: storiqa
