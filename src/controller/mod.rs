@@ -104,8 +104,8 @@ impl<
         let path = req.path().to_string();
 
         match (&req.method().clone(), self.route_parser.test(req.path())) {
-            (&Get, Some(Route::TugushCallback { id })) => {
-                debug!("Received request to get tugush callback with id: {:?}", id);
+            (&Get, Some(Route::ExternalBillingCallback { id })) => {
+                debug!("Received request to get external billing callback with id: {:?}", id);
                 serialize_future(order_info_service.set_paid(id))
             }
 

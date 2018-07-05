@@ -8,8 +8,6 @@
 //! `ServiceError`. That way Controller will only have to deal with ServiceError, but not with `Repo`
 //! or `HttpClient` repo.
 
-extern crate base64;
-extern crate chrono;
 extern crate config as config_crate;
 #[macro_use]
 extern crate diesel;
@@ -18,22 +16,19 @@ extern crate env_logger;
 extern crate derive_more;
 #[macro_use]
 extern crate failure;
+extern crate chrono;
 extern crate futures;
 extern crate futures_cpupool;
 extern crate hyper;
 extern crate hyper_tls;
-extern crate jsonwebtoken;
 #[macro_use]
 extern crate log;
 extern crate r2d2;
 extern crate r2d2_diesel;
-extern crate rand;
-extern crate regex;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-extern crate sha3;
 extern crate stq_http;
 extern crate stq_router;
 extern crate tokio_core;
@@ -74,7 +69,7 @@ use repos::acl::RolesCacheImpl;
 use repos::repo_factory::ReposFactoryImpl;
 
 /// Starts new web service from provided `Config`
-pub fn start_server(config: Config) {
+pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>, callback: F) {
     let mut builder = LogBuilder::new();
     builder
         .format(|formatter, record| {
@@ -108,9 +103,8 @@ pub fn start_server(config: Config) {
 
     // Prepare server
     let address = {
-        format!("{}:{}", config.server.host, config.server.port)
-            .parse()
-            .expect("Could not parse address")
+        let port = port.as_ref().unwrap_or(&config.server.port);
+        format!("{}:{}", config.server.host, port).parse().expect("Could not parse address")
     };
 
     // Prepare database pool
@@ -157,5 +151,9 @@ pub fn start_server(config: Config) {
     );
 
     info!("Listening on http://{}, threads: {}", address, thread_count);
+    handle.spawn_fn(move || {
+        callback();
+        future::ok(())
+    });
     core.run(future::empty::<(), ()>()).unwrap();
 }

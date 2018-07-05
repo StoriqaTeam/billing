@@ -5,7 +5,7 @@ use stq_router::RouteParser;
 /// List of all routes with params for the app
 #[derive(Clone, Debug, PartialEq)]
 pub enum Route {
-    TugushCallback { id: OrderInfoId },
+    ExternalBillingCallback { id: OrderInfoId },
     OrderInfo,
     Roles,
     RoleById { id: RoleId },
@@ -15,11 +15,11 @@ pub enum Route {
 pub fn create_route_parser() -> RouteParser<Route> {
     let mut route_parser = RouteParser::default();
 
-    route_parser.add_route_with_params(r"^/tugush_callback/(\d+)$", |params| {
+    route_parser.add_route_with_params(r"^/external_billing_callback/(\d+)$", |params| {
         params
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
-            .map(|id| Route::TugushCallback { id })
+            .map(|id| Route::ExternalBillingCallback { id })
     });
 
     route_parser.add_route(r"^/order_info$", || Route::OrderInfo);

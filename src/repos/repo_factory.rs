@@ -87,15 +87,12 @@ impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 
 
 #[cfg(test)]
 pub mod tests {
-    extern crate base64;
     extern crate diesel;
     extern crate futures;
     extern crate futures_cpupool;
     extern crate hyper;
     extern crate r2d2;
-    extern crate rand;
     extern crate serde_json;
-    extern crate sha3;
     extern crate stq_http;
     extern crate tokio_core;
 

@@ -3,13 +3,13 @@
 use config_crate::{Config as RawConfig, ConfigError, Environment, File};
 use std::env;
 
-/// Basic settings - HTTP binding address and database DSN
+/// Basic settings - HTTP binding, saga and external billing addresses
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     pub server: Server,
     pub client: Client,
     pub saga_addr: SagaAddr,
-    pub tugush_addr: TugushAddr,
+    pub external_billing: ExternalBilling,
 }
 
 /// Common server settings
@@ -35,10 +35,11 @@ pub struct SagaAddr {
     pub url: String,
 }
 
-/// Tugush billing service url
+/// External billing service url
 #[derive(Debug, Deserialize, Clone)]
-pub struct TugushAddr {
-    pub url: String,
+pub struct ExternalBilling {
+    pub create_order_url: String,
+    pub create_merchant_url: String,
 }
 
 /// Creates new app config struct

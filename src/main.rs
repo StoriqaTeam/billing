@@ -5,5 +5,5 @@ extern crate billing_lib;
 
 fn main() {
     let config = billing_lib::config::Config::new().expect("Can't load app config!");
-    billing_lib::start_server(config);
+    billing_lib::start_server(config, &None, || ());
 }
