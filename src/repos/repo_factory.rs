@@ -25,28 +25,13 @@ impl ReposFactoryImpl {
     pub fn new(roles_cache: RolesCacheImpl) -> Self {
         Self { roles_cache }
     }
-
+    
     pub fn get_roles<'a, C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
         &self,
-        id: i32,
+        id: UserId,
         db_conn: &'a C,
     ) -> Vec<Role> {
-        if self.roles_cache.contains(id) {
-            self.roles_cache.get(id)
-        } else {
-            UserRolesRepoImpl::new(
-                db_conn,
-                Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, UserRole>>,
-            ).list_for_user(UserId(id))
-                .and_then(|ref r| {
-                    if !r.is_empty() {
-                        self.roles_cache.add_roles(id, r);
-                    }
-                    Ok(r.clone())
-                })
-                .ok()
-                .unwrap_or_default()
-        }
+        self.create_user_roles_repo(db_conn).list_for_user(id).ok().unwrap_or_default()
     }
 
     fn get_acl<'a, T, C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
@@ -62,6 +47,7 @@ impl ReposFactoryImpl {
             },
         )
     }
+
 }
 
 impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> ReposFactory<C> for ReposFactoryImpl {
@@ -81,6 +67,7 @@ impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 
         Box::new(UserRolesRepoImpl::new(
             db_conn,
             Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, UserRole>>,
+            self.roles_cache.clone(),
         )) as Box<UserRolesRepo>
     }
 }

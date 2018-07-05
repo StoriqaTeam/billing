@@ -23,7 +23,7 @@ impl RoleId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display, FromStr, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Display, FromStr, PartialEq, Hash, Serialize, Deserialize, Eq)]
 pub struct UserId(pub i32);
 
 #[derive(Serialize, Queryable, Insertable, Debug)]
