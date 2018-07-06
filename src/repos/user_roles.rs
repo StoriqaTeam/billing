@@ -43,9 +43,11 @@ pub struct UserRolesRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager 
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> UserRolesRepoImpl<'a, T> {
     pub fn new(db_conn: &'a T, acl: Box<Acl<Resource, Action, Scope, FailureError, UserRole>>, cached_roles: RolesCacheImpl) -> Self {
-        Self { db_conn, acl, 
-        cached_roles
-         }
+        Self {
+            db_conn,
+            acl,
+            cached_roles,
+        }
     }
 }
 
@@ -113,12 +115,12 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, UserRole>
     for UserRolesRepoImpl<'a, T>
 {
-    fn is_in_scope(&self, user_id_arg: i32, scope: &Scope, obj: Option<&UserRole>) -> bool {
+    fn is_in_scope(&self, user_id_arg: UserId, scope: &Scope, obj: Option<&UserRole>) -> bool {
         match *scope {
             Scope::All => true,
             Scope::Owned => {
                 if let Some(user_role) = obj {
-                    user_role.user_id.0 == user_id_arg
+                    user_role.user_id == user_id_arg
                 } else {
                     false
                 }

@@ -9,6 +9,7 @@ pub struct Config {
     pub server: Server,
     pub client: Client,
     pub saga_addr: SagaAddr,
+    pub callback: Callback,
     pub external_billing: ExternalBilling,
 }
 
@@ -32,6 +33,11 @@ pub struct Client {
 /// Saga microservice url
 #[derive(Debug, Deserialize, Clone)]
 pub struct SagaAddr {
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Callback {
     pub url: String,
 }
 

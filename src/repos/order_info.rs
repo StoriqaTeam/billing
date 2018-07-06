@@ -14,7 +14,7 @@ use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
 use models::order_info::order_info::dsl::*;
-use models::{NewOrderInfo, OrderInfo, OrderInfoId, UpdateOrderInfo};
+use models::{CallbackId, NewOrderInfo, OrderInfo, OrderInfoId, SetOrderInfoPaid, UserId};
 
 /// OrderInfos repository, responsible for handling order_info
 pub struct OrderInfoRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
@@ -29,8 +29,8 @@ pub trait OrderInfoRepo {
     /// Creates new order_info
     fn create(&self, payload: NewOrderInfo) -> RepoResult<OrderInfo>;
 
-    /// Updates specific order_info
-    fn update(&self, order_info_id: OrderInfoId, payload: UpdateOrderInfo) -> RepoResult<OrderInfo>;
+    /// Set specific order_info paid
+    fn set_paid(&self, callback_id_arg: CallbackId) -> RepoResult<Vec<OrderInfo>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> OrderInfoRepoImpl<'a, T> {
@@ -64,21 +64,27 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .map_err(|e| e.context(format!("Create a new order_info {:?} error occured", payload)).into())
     }
 
-    /// Updates specific order_info
-    fn update(&self, id_arg: OrderInfoId, payload: UpdateOrderInfo) -> RepoResult<OrderInfo> {
+    /// Set specific order_info paid
+    fn set_paid(&self, callback_id_arg: CallbackId) -> RepoResult<Vec<OrderInfo>> {
         order_info
-            .filter(id.eq(id_arg.clone()))
-            .get_result(self.db_conn)
+            .filter(callback_id.eq(callback_id_arg.clone()))
+            .get_results(self.db_conn)
             .map_err(From::from)
-            .and_then(|order_info_arg: OrderInfo| acl::check(&*self.acl, Resource::OrderInfo, Action::Write, self, Some(&order_info_arg)))
+            .and_then(|order_info_args: Vec<OrderInfo>| {
+                for order_info_arg in &order_info_args {
+                    acl::check(&*self.acl, Resource::OrderInfo, Action::Write, self, Some(order_info_arg))?;
+                }
+                Ok(order_info_args)
+            })
             .and_then(|_| {
-                diesel::update(order_info.filter(id.eq(id_arg.clone())))
+                let payload = SetOrderInfoPaid::new();
+                diesel::update(order_info.filter(callback_id.eq(callback_id_arg.clone())))
                     .set(&payload)
-                    .get_result::<OrderInfo>(self.db_conn)
+                    .get_results::<OrderInfo>(self.db_conn)
                     .map_err(From::from)
             })
             .map_err(|e: FailureError| {
-                e.context(format!("update order_info {:?} with {:?} error occured", id_arg, payload))
+                e.context(format!("Set order info paid with callback id {:?}", callback_id_arg))
                     .into()
             })
     }
@@ -87,7 +93,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, OrderInfo>
     for OrderInfoRepoImpl<'a, T>
 {
-    fn is_in_scope(&self, _order_info_id_arg: i32, scope: &Scope, _obj: Option<&OrderInfo>) -> bool {
+    fn is_in_scope(&self, _order_info_id_arg: UserId, scope: &Scope, _obj: Option<&OrderInfo>) -> bool {
         match *scope {
             Scope::All => true,
             Scope::Owned => false,

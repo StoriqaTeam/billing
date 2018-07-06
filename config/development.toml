@@ -1,6 +1,9 @@
 [saga_addr]
 url = "http://saga:8000"
 
+[callback]
+url = "http://billing:8000"
+
 [external_billing]
 create_order_url = "http://tugush.com:8000/order"
 create_merchant_url = "http://tugush.com:8000/merchant"

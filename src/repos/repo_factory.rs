@@ -11,8 +11,10 @@ use repos::*;
 pub trait ReposFactory<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>:
     Clone + Send + Sync + 'static
 {
-    fn create_order_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<i32>) -> Box<OrderInfoRepo + 'a>;
+    fn create_order_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrderInfoRepo + 'a>;
     fn create_order_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderInfoRepo + 'a>;
+    fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a>;
+    fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a>;
     fn create_user_roles_repo<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
 }
 
@@ -25,7 +27,7 @@ impl ReposFactoryImpl {
     pub fn new(roles_cache: RolesCacheImpl) -> Self {
         Self { roles_cache }
     }
-    
+
     pub fn get_roles<'a, C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
         &self,
         id: UserId,
@@ -37,7 +39,7 @@ impl ReposFactoryImpl {
     fn get_acl<'a, T, C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
         &self,
         db_conn: &'a C,
-        user_id: Option<i32>,
+        user_id: Option<UserId>,
     ) -> Box<Acl<Resource, Action, Scope, FailureError, T>> {
         user_id.map_or(
             Box::new(UnauthorizedACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, T>>,
@@ -47,11 +49,10 @@ impl ReposFactoryImpl {
             },
         )
     }
-
 }
 
 impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> ReposFactory<C> for ReposFactoryImpl {
-    fn create_order_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<i32>) -> Box<OrderInfoRepo + 'a> {
+    fn create_order_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderInfoRepo + 'a> {
         let acl = self.get_acl(db_conn, user_id);
         Box::new(OrderInfoRepoImpl::new(db_conn, acl)) as Box<OrderInfoRepo>
     }
@@ -61,6 +62,18 @@ impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 
             db_conn,
             Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, OrderInfo>>,
         )) as Box<OrderInfoRepo>
+    }
+
+    fn create_merchant_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<MerchantRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(MerchantRepoImpl::new(db_conn, acl)) as Box<MerchantRepo>
+    }
+
+    fn create_merchant_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<MerchantRepo + 'a> {
+        Box::new(MerchantRepoImpl::new(
+            db_conn,
+            Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, Merchant>>,
+        )) as Box<MerchantRepo>
     }
 
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
@@ -82,6 +95,7 @@ pub mod tests {
     extern crate serde_json;
     extern crate stq_http;
     extern crate tokio_core;
+    extern crate uuid;
 
     use std::error::Error;
     use std::fmt;
@@ -105,10 +119,13 @@ pub mod tests {
     use diesel::QueryResult;
     use diesel::Queryable;
 
+    use uuid::Uuid;
+
     use stq_http::client::Config as HttpConfig;
 
     use config::Config;
     use models::*;
+    use repos::merchant::MerchantRepo;
     use repos::order_info::*;
     use repos::repo_factory::ReposFactory;
     use repos::types::RepoResult;
@@ -119,12 +136,20 @@ pub mod tests {
     pub struct ReposFactoryMock;
 
     impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> ReposFactory<C> for ReposFactoryMock {
-        fn create_order_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<i32>) -> Box<OrderInfoRepo + 'a> {
-            Box::new(OrderInfoMock::default()) as Box<OrderInfoRepo>
+        fn create_order_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrderInfoRepo + 'a> {
+            Box::new(OrderInfoRepoMock::default()) as Box<OrderInfoRepo>
         }
 
         fn create_order_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderInfoRepo + 'a> {
-            Box::new(OrderInfoMock::default()) as Box<OrderInfoRepo>
+            Box::new(OrderInfoRepoMock::default()) as Box<OrderInfoRepo>
+        }
+
+        fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a> {
+            Box::new(MerchantRepoMock::default()) as Box<MerchantRepo>
+        }
+
+        fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a> {
+            Box::new(MerchantRepoMock::default()) as Box<MerchantRepo>
         }
 
         fn create_user_roles_repo<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
@@ -133,9 +158,9 @@ pub mod tests {
     }
 
     #[derive(Clone, Default)]
-    pub struct OrderInfoMock;
+    pub struct OrderInfoRepoMock;
 
-    impl OrderInfoRepo for OrderInfoMock {
+    impl OrderInfoRepo for OrderInfoRepoMock {
         /// Find specific order_info by ID
         fn find(&self, _order_info_id: OrderInfoId) -> RepoResult<Option<OrderInfo>> {
             Ok(Some(create_order_info()))
@@ -147,8 +172,63 @@ pub mod tests {
         }
 
         /// Updates specific order_info
-        fn update(&self, _order_info_id: OrderInfoId, _payload: UpdateOrderInfo) -> RepoResult<OrderInfo> {
-            Ok(create_order_info())
+        fn set_paid(&self, callback_id_arg: CallbackId) -> RepoResult<Vec<OrderInfo>> {
+            let mut order_info = create_order_info();
+            order_info.callback_id = callback_id_arg;
+            Ok(vec![order_info])
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct MerchantRepoMock;
+
+    impl MerchantRepo for MerchantRepoMock {
+        /// Returns merchant by subject identifier
+        fn get_by_subject_id(&self, id: SubjectIdentifier) -> RepoResult<Merchant> {
+            Ok(match id {
+                SubjectIdentifier::Store(store_ident) => Merchant {
+                    merchant_id: MerchantId(Uuid::new_v4()),
+                    user_id: None,
+                    store_id: Some(store_ident),
+                    merchant_type: MerchantType::Store,
+                },
+                SubjectIdentifier::User(user_ident) => Merchant {
+                    merchant_id: MerchantId(Uuid::new_v4()),
+                    user_id: Some(user_ident),
+                    store_id: None,
+                    merchant_type: MerchantType::User,
+                },
+            })
+        }
+
+        /// Returns merchant by merchant identifier
+        fn get_by_merchant_id(&self, merchant_id: MerchantId) -> RepoResult<Merchant> {
+            Ok(Merchant {
+                merchant_id,
+                user_id: Some(UserId(1)),
+                store_id: None,
+                merchant_type: MerchantType::User,
+            })
+        }
+
+        /// Create a new store merchant
+        fn create_store_merchant(&self, payload: NewStoreMerchant) -> RepoResult<Merchant> {
+            Ok(Merchant {
+                merchant_id: payload.merchant_id().clone(),
+                user_id: payload.user_id().clone(),
+                store_id: payload.store_id().clone(),
+                merchant_type: payload.merchant_type().clone(),
+            })
+        }
+
+        /// Create a new user merchant
+        fn create_user_merchant(&self, payload: NewUserMerchant) -> RepoResult<Merchant> {
+            Ok(Merchant {
+                merchant_id: payload.merchant_id().clone(),
+                user_id: payload.user_id().clone(),
+                store_id: payload.store_id().clone(),
+                merchant_type: payload.merchant_type().clone(),
+            })
         }
     }
 
@@ -192,7 +272,7 @@ pub mod tests {
     }
 
     pub fn create_order_info_service(
-        user_id: Option<i32>,
+        user_id: Option<UserId>,
         handle: Arc<Handle>,
     ) -> OrderInfoServiceImpl<MockConnection, MockConnectionManager, ReposFactoryMock> {
         let manager = MockConnectionManager::default();
@@ -207,21 +287,14 @@ pub mod tests {
         let client = stq_http::client::Client::new(&http_config, &handle);
         let client_handle = client.handle();
 
-        OrderInfoServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY)
+        OrderInfoServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, "".to_string(), "".to_string())
     }
 
     pub fn create_order_info() -> OrderInfo {
         OrderInfo {
             id: OrderInfoId::new(),
             order_id: OrderId::new(),
-            status: OrderStatus::PaimentAwaited,
-        }
-    }
-    pub fn create_new_order_info() -> NewOrderInfo {
-        NewOrderInfo { order_id: OrderId::new() }
-    }
-    pub fn create_update_order_info() -> UpdateOrderInfo {
-        UpdateOrderInfo {
+            callback_id: CallbackId::new(),
             status: OrderStatus::PaimentAwaited,
         }
     }
@@ -319,6 +392,5 @@ pub mod tests {
     }
 
     pub const MOCK_REPO_FACTORY: ReposFactoryMock = ReposFactoryMock {};
-    pub const MOCK_ORDER_INFO: OrderInfoMock = OrderInfoMock {};
 
 }

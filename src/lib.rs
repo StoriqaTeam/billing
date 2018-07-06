@@ -31,6 +31,7 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate stq_http;
 extern crate stq_router;
+extern crate stq_static_resources;
 extern crate tokio_core;
 extern crate uuid;
 extern crate validator;

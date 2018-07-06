@@ -28,4 +28,5 @@ chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
 failure = "0.1.1"
 stq_http = { path = "vendor/libstqbackend/http" }
 stq_router = { path = "vendor/libstqbackend/router" }
+stq_static_resources = { path = "vendor/libstqbackend/static_resources" }
 uuid = { version = "*", features = ["use_std", "v4", "serde"] }

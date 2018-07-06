@@ -17,6 +17,7 @@ use failure::Fail;
 use super::legacy_acl::{Acl, CheckScope};
 
 use models::authorization::*;
+use models::UserId;
 
 pub fn check<T>(
     acl: &Acl<Resource, Action, Scope, FailureError, T>,
@@ -41,21 +42,26 @@ pub fn check<T>(
 pub struct ApplicationAcl {
     acls: Rc<HashMap<Role, Vec<Permission>>>,
     roles: Vec<Role>,
-    user_id: i32,
+    user_id: UserId,
 }
 
 impl ApplicationAcl {
-    pub fn new(roles: Vec<Role>, user_id: i32) -> Self {
+    pub fn new(roles: Vec<Role>, user_id: UserId) -> Self {
         let mut hash = ::std::collections::HashMap::new();
         hash.insert(
             Role::Superuser,
-            vec![permission!(Resource::OrderInfo), permission!(Resource::UserRoles)],
+            vec![
+                permission!(Resource::OrderInfo),
+                permission!(Resource::Merchant),
+                permission!(Resource::UserRoles),
+            ],
         );
         hash.insert(Role::User, vec![permission!(Resource::UserRoles, Action::Read, Scope::Owned)]);
         hash.insert(
             Role::StoreManager,
             vec![
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
+                permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::UserRoles, Action::Read, Scope::Owned),
             ],
         );
@@ -99,6 +105,7 @@ mod tests {
         OrderInfo {
             id: OrderInfoId::new(),
             order_id: OrderId::new(),
+            callback_id: CallbackId::new(),
             status: OrderStatus::PaimentAwaited,
         }
     }
@@ -107,7 +114,7 @@ mod tests {
     struct ScopeChecker;
 
     impl CheckScope<Scope, OrderInfo> for ScopeChecker {
-        fn is_in_scope(&self, _user_id: i32, scope: &Scope, _obj: Option<&OrderInfo>) -> bool {
+        fn is_in_scope(&self, _user_id: UserId, scope: &Scope, _obj: Option<&OrderInfo>) -> bool {
             match *scope {
                 Scope::All => true,
                 Scope::Owned => false,
@@ -116,12 +123,12 @@ mod tests {
     }
 
     impl CheckScope<Scope, UserRole> for ScopeChecker {
-        fn is_in_scope(&self, user_id: i32, scope: &Scope, obj: Option<&UserRole>) -> bool {
+        fn is_in_scope(&self, user_id: UserId, scope: &Scope, obj: Option<&UserRole>) -> bool {
             match *scope {
                 Scope::All => true,
                 Scope::Owned => {
                     if let Some(user_role) = obj {
-                        user_role.user_id.0 == user_id
+                        user_role.user_id == user_id
                     } else {
                         false
                     }
@@ -132,7 +139,7 @@ mod tests {
 
     #[test]
     fn test_super_user_for_users() {
-        let acl = ApplicationAcl::new(vec![Role::Superuser], 1232);
+        let acl = ApplicationAcl::new(vec![Role::Superuser], UserId(1232));
         let s = ScopeChecker::default();
         let resource = create_order();
 
@@ -143,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_ordinary_user_for_users() {
-        let acl = ApplicationAcl::new(vec![Role::User], 2);
+        let acl = ApplicationAcl::new(vec![Role::User], UserId(2));
         let s = ScopeChecker::default();
         let resource = create_order();
 
@@ -154,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_super_user_for_user_roles() {
-        let acl = ApplicationAcl::new(vec![Role::Superuser], 1232);
+        let acl = ApplicationAcl::new(vec![Role::Superuser], UserId(1232));
         let s = ScopeChecker::default();
 
         let resource = UserRole {
@@ -171,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_user_for_user_roles() {
-        let acl = ApplicationAcl::new(vec![Role::User], 2);
+        let acl = ApplicationAcl::new(vec![Role::User], UserId(2));
         let s = ScopeChecker::default();
 
         let resource = UserRole {

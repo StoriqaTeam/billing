@@ -4,6 +4,7 @@ table! {
     order_info (id) {
         id -> Uuid,
         order_id -> Uuid,
+        callback_id -> Uuid,
         status -> VarChar,
     }
 }
@@ -26,6 +27,15 @@ impl OrderInfoId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct CallbackId(pub Uuid);
+
+impl CallbackId {
+    pub fn new() -> Self {
+        CallbackId(Uuid::new_v4())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum OrderStatus {
     PaimentAwaited,
@@ -37,19 +47,35 @@ pub enum OrderStatus {
 pub struct OrderInfo {
     pub id: OrderInfoId,
     pub order_id: OrderId,
+    pub callback_id: CallbackId,
     pub status: OrderStatus,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
 #[table_name = "order_info"]
 pub struct NewOrderInfo {
-    pub order_id: OrderId,
+    order_id: OrderId,
+    callback_id: CallbackId,
+}
+
+impl NewOrderInfo {
+    pub fn new(order_id: OrderId, callback_id: CallbackId) -> Self {
+        Self { order_id, callback_id }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable, AsChangeset)]
 #[table_name = "order_info"]
-pub struct UpdateOrderInfo {
-    pub status: OrderStatus,
+pub struct SetOrderInfoPaid {
+    status: OrderStatus,
+}
+
+impl SetOrderInfoPaid {
+    pub fn new() -> Self {
+        Self {
+            status: OrderStatus::PaimentReceived,
+        }
+    }
 }
 
 mod diesel_impl {
@@ -201,6 +227,49 @@ mod diesel_impl {
         type Expression = Bound<VarChar, &'a OrderStatus>;
         fn as_expression(self) -> Self::Expression {
             Bound::new(self)
+        }
+    }
+
+    use super::CallbackId;
+
+    impl<'a> AsExpression<SqlUuid> for &'a CallbackId {
+        type Expression = Bound<SqlUuid, &'a CallbackId>;
+
+        fn as_expression(self) -> Self::Expression {
+            Bound::new(self)
+        }
+    }
+
+    impl AsExpression<SqlUuid> for CallbackId {
+        type Expression = Bound<SqlUuid, CallbackId>;
+
+        fn as_expression(self) -> Self::Expression {
+            Bound::new(self)
+        }
+    }
+
+    impl ToSql<SqlUuid, Pg> for CallbackId {
+        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
+            out.write_all(self.0.as_bytes())?;
+            Ok(IsNull::No)
+        }
+    }
+
+    impl FromSqlRow<SqlUuid, Pg> for CallbackId {
+        fn build_from_row<T: Row<Pg>>(row: &mut T) -> Result<Self, Box<Error + Send + Sync>> {
+            let uuid = match row.take() {
+                Some(id) => Uuid::from_bytes(id)?,
+                None => Uuid::nil(),
+            };
+            Ok(CallbackId(uuid))
+        }
+    }
+
+    impl Queryable<SqlUuid, Pg> for CallbackId {
+        type Row = Self;
+
+        fn build(row: Self::Row) -> Self {
+            row
         }
     }
 }

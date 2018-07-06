@@ -148,4 +148,26 @@ mod diesel_impl {
             row
         }
     }
+
+    impl<'a> AsExpression<Nullable<Integer>> for &'a UserId {
+        type Expression = Bound<Nullable<Integer>, &'a UserId>;
+
+        fn as_expression(self) -> Self::Expression {
+            Bound::new(self)
+        }
+    }
+
+    impl AsExpression<Nullable<Integer>> for UserId {
+        type Expression = Bound<Nullable<Integer>, UserId>;
+
+        fn as_expression(self) -> Self::Expression {
+            Bound::new(self)
+        }
+    }
+
+    impl ToSql<Nullable<Integer>, Pg> for UserId {
+        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
+            ToSql::<Nullable<Integer>, Pg>::to_sql(&self.0, out)
+        }
+    }
 }

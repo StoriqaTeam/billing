@@ -89,7 +89,10 @@ impl<
     fn call(&self, req: Request) -> ControllerFuture {
         let headers = req.headers().clone();
         let auth_header = headers.get::<Authorization<String>>();
-        let user_id = auth_header.map(move |auth| auth.0.clone()).and_then(|id| i32::from_str(&id).ok());
+        let user_id = auth_header
+            .map(move |auth| auth.0.clone())
+            .and_then(|id| i32::from_str(&id).ok())
+            .map(UserId);
         let cached_roles = self.roles_cache.clone();
         let order_info_service = OrderInfoServiceImpl::new(
             self.db_pool.clone(),
@@ -97,6 +100,8 @@ impl<
             self.client_handle.clone(),
             user_id,
             self.repo_factory.clone(),
+            self.config.external_billing.create_order_url.clone(),
+            self.config.callback.url.clone(),
         );
         let user_roles_service =
             UserRolesServiceImpl::new(self.db_pool.clone(), self.cpu_pool.clone(), cached_roles, self.repo_factory.clone());
@@ -110,8 +115,8 @@ impl<
             }
 
             (&Post, Some(Route::OrderInfo)) => serialize_future({
-                parse_body::<NewOrderInfo>(req.body()).and_then(move |data| {
-                    debug!("Received request to create order {:?}", data);
+                parse_body::<CreateOrder>(req.body()).and_then(move |data| {
+                    debug!("Received request to create orders {:?}", data);
                     order_info_service.create(data)
                 })
             }),

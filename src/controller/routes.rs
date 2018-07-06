@@ -5,7 +5,7 @@ use stq_router::RouteParser;
 /// List of all routes with params for the app
 #[derive(Clone, Debug, PartialEq)]
 pub enum Route {
-    ExternalBillingCallback { id: OrderInfoId },
+    ExternalBillingCallback { id: CallbackId },
     OrderInfo,
     Roles,
     RoleById { id: RoleId },
