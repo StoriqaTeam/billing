@@ -13,6 +13,8 @@ pub trait ReposFactory<C: Connection<Backend = Pg, TransactionManager = AnsiTran
 {
     fn create_order_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrderInfoRepo + 'a>;
     fn create_order_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderInfoRepo + 'a>;
+    fn create_invoice_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<InvoiceRepo + 'a>;
+    fn create_invoice_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoiceRepo + 'a>;
     fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a>;
     fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a>;
     fn create_user_roles_repo<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
@@ -62,6 +64,18 @@ impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 
             db_conn,
             Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, OrderInfo>>,
         )) as Box<OrderInfoRepo>
+    }
+
+    fn create_invoice_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<InvoiceRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(InvoiceRepoImpl::new(db_conn, acl)) as Box<InvoiceRepo>
+    }
+
+    fn create_invoice_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InvoiceRepo + 'a> {
+        Box::new(InvoiceRepoImpl::new(
+            db_conn,
+            Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, Invoice>>,
+        )) as Box<InvoiceRepo>
     }
 
     fn create_merchant_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<MerchantRepo + 'a> {
@@ -125,11 +139,8 @@ pub mod tests {
 
     use config::Config;
     use models::*;
-    use repos::merchant::MerchantRepo;
-    use repos::order_info::*;
-    use repos::repo_factory::ReposFactory;
-    use repos::types::RepoResult;
-    use repos::user_roles::UserRolesRepo;
+    use repos::*;
+    use services::merchant::MerchantServiceImpl;
     use services::order_info::OrderInfoServiceImpl;
 
     #[derive(Default, Copy, Clone)]
@@ -142,6 +153,14 @@ pub mod tests {
 
         fn create_order_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderInfoRepo + 'a> {
             Box::new(OrderInfoRepoMock::default()) as Box<OrderInfoRepo>
+        }
+
+        fn create_invoice_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<InvoiceRepo + 'a> {
+            Box::new(InvoiceRepoMock::default()) as Box<InvoiceRepo>
+        }
+
+        fn create_invoice_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoiceRepo + 'a> {
+            Box::new(InvoiceRepoMock::default()) as Box<InvoiceRepo>
         }
 
         fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a> {
@@ -176,6 +195,21 @@ pub mod tests {
             let mut order_info = create_order_info();
             order_info.callback_id = callback_id_arg;
             Ok(vec![order_info])
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct InvoiceRepoMock;
+
+    impl InvoiceRepo for InvoiceRepoMock {
+        /// Find specific invoice by ID
+        fn find(&self, _invoice_id: InvoiceId) -> RepoResult<Option<Invoice>> {
+            Ok(Some(create_invoice()))
+        }
+
+        /// Creates new invoice
+        fn create(&self, _payload: NewInvoice) -> RepoResult<Invoice> {
+            Ok(create_invoice())
         }
     }
 
@@ -287,7 +321,35 @@ pub mod tests {
         let client = stq_http::client::Client::new(&http_config, &handle);
         let client_handle = client.handle();
 
-        OrderInfoServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, "".to_string(), "".to_string())
+        OrderInfoServiceImpl::new(
+            db_pool,
+            cpu_pool,
+            client_handle,
+            user_id,
+            MOCK_REPO_FACTORY,
+            "".to_string(),
+            "".to_string(),
+            "".to_string(),
+        )
+    }
+
+    pub fn create_merchant_service(
+        user_id: Option<UserId>,
+        handle: Arc<Handle>,
+    ) -> MerchantServiceImpl<MockConnection, MockConnectionManager, ReposFactoryMock> {
+        let manager = MockConnectionManager::default();
+        let db_pool = r2d2::Pool::builder().build(manager).expect("Failed to create connection pool");
+        let cpu_pool = CpuPool::new(1);
+
+        let config = Config::new().unwrap();
+        let http_config = HttpConfig {
+            http_client_retries: config.client.http_client_retries,
+            http_client_buffer_size: config.client.http_client_buffer_size,
+        };
+        let client = stq_http::client::Client::new(&http_config, &handle);
+        let client_handle = client.handle();
+
+        MerchantServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, "".to_string())
     }
 
     pub fn create_order_info() -> OrderInfo {
@@ -296,6 +358,13 @@ pub mod tests {
             order_id: OrderId::new(),
             callback_id: CallbackId::new(),
             status: OrderStatus::PaimentAwaited,
+        }
+    }
+
+    pub fn create_invoice() -> Invoice {
+        Invoice {
+            id: InvoiceId::new(),
+            billing_url: "billing_url".to_string(),
         }
     }
 

@@ -32,6 +32,7 @@ use errors::Error;
 use models::*;
 use repos::acl::RolesCacheImpl;
 use repos::repo_factory::*;
+use services::merchant::{MerchantService, MerchantServiceImpl};
 use services::order_info::{OrderInfoService, OrderInfoServiceImpl};
 use services::user_roles::{UserRolesService, UserRolesServiceImpl};
 
@@ -102,6 +103,15 @@ impl<
             self.repo_factory.clone(),
             self.config.external_billing.create_order_url.clone(),
             self.config.callback.url.clone(),
+            self.config.saga_addr.url.clone(),
+        );
+        let merchant_service = MerchantServiceImpl::new(
+            self.db_pool.clone(),
+            self.cpu_pool.clone(),
+            self.client_handle.clone(),
+            user_id,
+            self.repo_factory.clone(),
+            self.config.external_billing.create_order_url.clone(),
         );
         let user_roles_service =
             UserRolesServiceImpl::new(self.db_pool.clone(), self.cpu_pool.clone(), cached_roles, self.repo_factory.clone());
@@ -113,11 +123,22 @@ impl<
                 debug!("Received request to get external billing callback with id: {:?}", id);
                 serialize_future(order_info_service.set_paid(id))
             }
-
+            (&Post, Some(Route::UserMerchant)) => serialize_future({
+                parse_body::<CreateUserMerchantPayload>(req.body()).and_then(move |data| {
+                    debug!("Received request to create user merchant {:?}", data);
+                    merchant_service.create_user(data)
+                })
+            }),
+            (&Post, Some(Route::StoreMerchant)) => serialize_future({
+                parse_body::<CreateStoreMerchantPayload>(req.body()).and_then(move |data| {
+                    debug!("Received request to create store merchant {:?}", data);
+                    merchant_service.create_store(data)
+                })
+            }),
             (&Post, Some(Route::OrderInfo)) => serialize_future({
-                parse_body::<CreateOrder>(req.body()).and_then(move |data| {
+                parse_body::<CreateInvoice>(req.body()).and_then(move |data| {
                     debug!("Received request to create orders {:?}", data);
-                    order_info_service.create(data)
+                    order_info_service.create_invoice(data)
                 })
             }),
             (Get, Some(Route::RolesByUserId { user_id })) => {

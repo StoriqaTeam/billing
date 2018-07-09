@@ -14,6 +14,12 @@ table! {
 #[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct MerchantId(pub Uuid);
 
+impl MerchantId {
+    pub fn new() -> Self {
+        MerchantId(Uuid::new_v4())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum MerchantType {
     Store,
@@ -97,6 +103,28 @@ impl NewUserMerchant {
     pub fn merchant_type(&self) -> &MerchantType {
         &self.merchant_type
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CreateUserMerchantPayload {
+    pub id: UserId,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CreateStoreMerchantPayload {
+    pub id: StoreId,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExternalBillingMerchant {
+    pub id: MerchantId,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MerchantBalance {
+    pub id: MerchantId,
+    pub amount: f64,
+    pub currency: String,
 }
 
 mod diesel_impl {

@@ -54,6 +54,7 @@ impl ApplicationAcl {
                 permission!(Resource::OrderInfo),
                 permission!(Resource::Merchant),
                 permission!(Resource::UserRoles),
+                permission!(Resource::Invoice),
             ],
         );
         hash.insert(Role::User, vec![permission!(Resource::UserRoles, Action::Read, Scope::Owned)]);
@@ -63,6 +64,7 @@ impl ApplicationAcl {
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::UserRoles, Action::Read, Scope::Owned),
+                permission!(Resource::Invoice, Action::Read, Scope::Owned),
             ],
         );
         ApplicationAcl {

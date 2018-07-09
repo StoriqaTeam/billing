@@ -13,7 +13,7 @@ pub struct Order {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-pub struct CreateOrder {
+pub struct CreateInvoice {
     pub orders: Vec<Order>,
     pub currency_id: CurrencyId,
 }

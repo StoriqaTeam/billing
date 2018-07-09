@@ -7,6 +7,8 @@ use stq_router::RouteParser;
 pub enum Route {
     ExternalBillingCallback { id: CallbackId },
     OrderInfo,
+    UserMerchant,
+    StoreMerchant,
     Roles,
     RoleById { id: RoleId },
     RolesByUserId { user_id: UserId },
@@ -23,6 +25,8 @@ pub fn create_route_parser() -> RouteParser<Route> {
     });
 
     route_parser.add_route(r"^/order_info$", || Route::OrderInfo);
+    route_parser.add_route(r"^/merchants/user$", || Route::UserMerchant);
+    route_parser.add_route(r"^/merchants/store$", || Route::StoreMerchant);
 
     route_parser.add_route(r"^/roles$", || Route::Roles);
     route_parser.add_route_with_params(r"^/roles/by-user-id/(\d+)$", |params| {

@@ -2,14 +2,14 @@
 //! modules of the app
 
 pub mod authorization;
-pub mod external_billing;
+pub mod invoice;
 pub mod merchant;
 pub mod order;
 pub mod order_info;
 pub mod user_role;
 
 pub use self::authorization::*;
-pub use self::external_billing::*;
+pub use self::invoice::*;
 pub use self::merchant::*;
 pub use self::order::*;
 pub use self::order_info::*;
