@@ -1,0 +1,2 @@
+ALTER TABLE order_info ADD COLUMN customer_id INTEGER NOT NULL;
+ALTER TABLE order_info ADD COLUMN store_id INTEGER NOT NULL;

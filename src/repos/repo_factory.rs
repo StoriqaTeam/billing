@@ -378,6 +378,8 @@ pub mod tests {
         OrderInfo {
             id: OrderInfoId::new(),
             order_id: OrderId::new(),
+            customer_id: UserId(1),
+            store_id: StoreId(1),
             callback_id: CallbackId::new(),
             status: OrderStatus::PaimentAwaited,
         }

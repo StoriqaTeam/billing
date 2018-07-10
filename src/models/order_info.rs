@@ -1,10 +1,15 @@
-use stq_static_resources::OrderStatus;
 use uuid::Uuid;
+
+use stq_static_resources::OrderStatus;
+
+use super::{StoreId, UserId};
 
 table! {
     order_info (id) {
         id -> Uuid,
         order_id -> Uuid,
+        store_id -> Integer,
+        customer_id -> Integer,
         callback_id -> Uuid,
         status -> VarChar,
     }
@@ -42,6 +47,8 @@ impl CallbackId {
 pub struct OrderInfo {
     pub id: OrderInfoId,
     pub order_id: OrderId,
+    pub store_id: StoreId,
+    pub customer_id: UserId,
     pub callback_id: CallbackId,
     pub status: OrderStatus,
 }
@@ -51,11 +58,18 @@ pub struct OrderInfo {
 pub struct NewOrderInfo {
     order_id: OrderId,
     callback_id: CallbackId,
+    customer_id: UserId,
+    store_id: StoreId,
 }
 
 impl NewOrderInfo {
-    pub fn new(order_id: OrderId, callback_id: CallbackId) -> Self {
-        Self { order_id, callback_id }
+    pub fn new(order_id: OrderId, callback_id: CallbackId, customer_id: UserId, store_id: StoreId) -> Self {
+        Self {
+            order_id,
+            callback_id,
+            customer_id,
+            store_id,
+        }
     }
 }
 

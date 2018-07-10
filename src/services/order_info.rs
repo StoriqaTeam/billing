@@ -16,8 +16,8 @@ use stq_http::client::ClientHandle;
 use super::types::ServiceFuture;
 use errors::Error;
 use models::{
-    BillingOrder, CallbackId, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewInvoice, NewOrderInfo, OrderId,
-    SagaId, SubjectIdentifier, UserId,
+    BillingOrder, CallbackId, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewInvoice, NewOrderInfo, SagaId,
+    SubjectIdentifier, UserId,
 };
 use repos::repo_factory::ReposFactory;
 use repos::RepoResult;
@@ -108,11 +108,17 @@ impl<
                                 debug!("Creating new order_infos: {:?}", &create_order);
                                 let callback_id = CallbackId::new();
                                 let saga_id = create_order.saga_id.clone();
+                                let customer_id = create_order.customer_id.clone();
                                 create_order
                                     .orders
                                     .iter()
                                     .map(|order| {
-                                        let payload = NewOrderInfo::new(order.id.clone(), callback_id.clone());
+                                        let payload = NewOrderInfo::new(
+                                            order.id.clone(),
+                                            callback_id.clone(),
+                                            customer_id.clone(),
+                                            order.store_id.clone(),
+                                        );
                                         order_info_repo.create(payload).and_then(|_| {
                                             merchant_repo
                                                 .get_by_subject_id(SubjectIdentifier::Store(order.store_id.clone()))
@@ -205,8 +211,7 @@ impl<
                             order_info_repo.set_paid(callback_id)
                         })
                         .and_then(|orders| {
-                            let order_ids: Vec<OrderId> = orders.into_iter().map(|order| order.order_id).collect();
-                            let body = serde_json::to_string(&order_ids)?;
+                            let body = serde_json::to_string(&orders)?;
                             let url = format!("{}/orders/set_paid", saga_url);
                             client
                                 .request::<String>(Post, url, Some(body), None)
@@ -248,6 +253,7 @@ pub mod tests {
         };
         let create_order = CreateInvoice {
             saga_id: SagaId::new(),
+            customer_id: UserId(1),
             orders: vec![order],
             currency_id: CurrencyId(Currency::Stq as i32),
         };
