@@ -14,7 +14,7 @@ use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
 use models::invoice::invoices::dsl::*;
-use models::{Invoice, InvoiceId, NewInvoice, UserId};
+use models::{Invoice, InvoiceId, NewInvoice, SagaId, UserId};
 
 /// Invoices repository, responsible for handling invoice
 pub struct InvoiceRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
@@ -28,6 +28,9 @@ pub trait InvoiceRepo {
 
     /// Creates new invoice
     fn create(&self, payload: NewInvoice) -> RepoResult<Invoice>;
+
+    /// Deletes invoice
+    fn delete(&self, id: SagaId) -> RepoResult<Invoice>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> InvoiceRepoImpl<'a, T> {
@@ -59,6 +62,22 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         query_invoice
             .get_result::<Invoice>(self.db_conn)
             .map_err(|e| e.context(format!("Create a new invoice {:?} error occured", payload)).into())
+    }
+
+    /// Deletes invoice
+    fn delete(&self, id_arg: SagaId) -> RepoResult<Invoice> {
+        debug!("Delete invoice {:?}.", id_arg);
+        let filtered = invoices.filter(id.eq(id_arg));
+
+        let query = diesel::delete(filtered);
+        query
+            .get_result(self.db_conn)
+            .map_err(From::from)
+            .and_then(|invoice| {
+                acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&invoice))?;
+                Ok(invoice)
+            })
+            .map_err(|e: FailureError| e.context(format!("Delete invoice {:?} error occured", id_arg)).into())
     }
 }
 

@@ -7,7 +7,7 @@ use failure::Error as FailureError;
 use failure::Fail;
 use futures::Future;
 use futures_cpupool::CpuPool;
-use hyper::Post;
+use hyper::{Delete, Post};
 use r2d2::{ManageConnection, Pool};
 use serde_json;
 
@@ -15,7 +15,10 @@ use stq_http::client::ClientHandle;
 
 use super::types::ServiceFuture;
 use errors::Error;
-use models::{BillingOrder, CallbackId, CreateInvoicePayload, CreateInvoice, Invoice, NewInvoice, NewOrderInfo, SubjectIdentifier, UserId};
+use models::{
+    BillingOrder, CallbackId, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewInvoice, NewOrderInfo, SagaId,
+    SubjectIdentifier, UserId, OrderId,
+};
 use repos::repo_factory::ReposFactory;
 use repos::RepoResult;
 
@@ -24,6 +27,8 @@ type URL = String;
 pub trait OrderInfoService {
     /// Creates invoice in billing system
     fn create_invoice(&self, create_order: CreateInvoice) -> ServiceFuture<URL>;
+    /// Delete invoice merchant
+    fn delete_invoice(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// Creates orders in billing system, returning url for payment
     fn set_paid(&self, callback_id: CallbackId) -> ServiceFuture<String>;
 }
@@ -39,7 +44,7 @@ pub struct OrderInfoServiceImpl<
     pub http_client: ClientHandle,
     user_id: Option<UserId>,
     pub repo_factory: F,
-    pub create_order_url: String,
+    pub external_billing_address: String,
     pub callback_url: String,
     pub saga_url: String,
 }
@@ -56,7 +61,7 @@ impl<
         http_client: ClientHandle,
         user_id: Option<UserId>,
         repo_factory: F,
-        create_order_url: String,
+        external_billing_address: String,
         callback_url: String,
         saga_url: String,
     ) -> Self {
@@ -66,7 +71,7 @@ impl<
             http_client,
             user_id,
             repo_factory,
-            create_order_url,
+            external_billing_address,
             callback_url,
             saga_url,
         }
@@ -85,7 +90,7 @@ impl<
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.create_order_url.clone();
+        let external_billing_address = self.external_billing_address.clone();
         let callback_url = self.callback_url.clone();
 
         Box::new(
@@ -102,6 +107,7 @@ impl<
                             conn.transaction::<URL, FailureError, _>(move || {
                                 debug!("Creating new order_infos: {:?}", &create_order);
                                 let callback_id = CallbackId::new();
+                                let saga_id = create_order.saga_id.clone();
                                 create_order
                                     .orders
                                     .iter()
@@ -119,9 +125,9 @@ impl<
                                         let billing_payload =
                                             CreateInvoicePayload::new(orders, callback, create_order.currency_id.to_string());
                                         let body = serde_json::to_string(&billing_payload)?;
-                                        let url = format!("{}", external_billing_address);
+                                        let url = format!("{}/invoice", external_billing_address);
                                         client
-                                            .request::<Invoice>(Post, url, Some(body), None)
+                                            .request::<ExternalBillingInvoice>(Post, url, Some(body), None)
                                             .map_err(|e| {
                                                 e.context("Occured an error during invoice creation in external billing.")
                                                     .context(Error::HttpClient)
@@ -130,13 +136,51 @@ impl<
                                             .wait()
                                     })
                                     .and_then(|invoice| {
-                                        let payload = NewInvoice::new(invoice.id.clone(), invoice.billing_url.clone());
+                                        let payload = NewInvoice::new(saga_id, invoice.id, invoice.billing_url);
                                         invoice_repo.create(payload).map(|invoice| invoice.billing_url)
                                     })
                             })
                         })
                 })
                 .map_err(|e: FailureError| e.context("Service order_info, create endpoint error occured.").into()),
+        )
+    }
+
+    /// Delete invoice
+    fn delete_invoice(&self, id: SagaId) -> ServiceFuture<SagaId> {
+        let db_clone = self.db_pool.clone();
+        let user_id = self.user_id;
+        let repo_factory = self.repo_factory.clone();
+        let client = self.http_client.clone();
+        let external_billing_address = self.external_billing_address.clone();
+
+        Box::new(
+            self.cpu_pool
+                .spawn_fn(move || {
+                    db_clone
+                        .get()
+                        .map_err(|e| e.context(Error::Connection).into())
+                        .and_then(move |conn| {
+                            let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
+
+                            conn.transaction::<SagaId, FailureError, _>(move || {
+                                debug!("Deleting invoice: {:?}", &id);
+                                invoice_repo.delete(id).and_then(|invoice| {
+                                    let url = format!("{}/invoice/{}", external_billing_address, invoice.invoice_id);
+                                    client
+                                        .request::<Invoice>(Delete, url, None, None)
+                                        .map_err(|e| {
+                                            e.context("Occured an error during invoice deletion in external billing.")
+                                                .context(Error::HttpClient)
+                                                .into()
+                                        })
+                                        .map(|invoice| invoice.id)
+                                        .wait()
+                                })
+                            })
+                        })
+                })
+                .map_err(|e: FailureError| e.context("Service merchant, delete store endpoint error occured.").into()),
         )
     }
 
@@ -161,7 +205,8 @@ impl<
                             order_info_repo.set_paid(callback_id)
                         })
                         .and_then(|orders| {
-                            let body = serde_json::to_string(&orders)?;
+                            let order_ids : Vec<OrderId> = orders.into_iter().map(|order| order.order_id).collect();
+                            let body = serde_json::to_string(&order_ids)?;
                             let url = format!("{}/orders/set_paid", saga_url);
                             client
                                 .request::<String>(Post, url, Some(body), None)
@@ -202,6 +247,7 @@ pub mod tests {
             currency_id: CurrencyId(1),
         };
         let create_order = CreateInvoice {
+            saga_id: SagaId::new(),
             orders: vec![order],
             currency_id: CurrencyId(Currency::Stq as i32),
         };

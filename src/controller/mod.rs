@@ -123,23 +123,35 @@ impl<
                 debug!("Received request to get external billing callback with id: {:?}", id);
                 serialize_future(order_info_service.set_paid(id))
             }
-            (&Post, Some(Route::UserMerchant)) => serialize_future({
+            (&Post, Some(Route::UserMerchants)) => serialize_future({
                 parse_body::<CreateUserMerchantPayload>(req.body()).and_then(move |data| {
                     debug!("Received request to create user merchant {:?}", data);
                     merchant_service.create_user(data)
                 })
             }),
-            (&Post, Some(Route::StoreMerchant)) => serialize_future({
+            (Delete, Some(Route::UserMerchant { user_id })) => serialize_future({
+                debug!("Received request to delete merchant by user id {}", user_id);
+                serialize_future({ merchant_service.delete_user(user_id) })
+            }),
+            (&Post, Some(Route::StoreMerchants)) => serialize_future({
                 parse_body::<CreateStoreMerchantPayload>(req.body()).and_then(move |data| {
                     debug!("Received request to create store merchant {:?}", data);
                     merchant_service.create_store(data)
                 })
             }),
-            (&Post, Some(Route::OrderInfo)) => serialize_future({
+            (Delete, Some(Route::StoreMerchant { store_id })) => serialize_future({
+                debug!("Received request to delete merchant by store id {}", store_id);
+                serialize_future({ merchant_service.delete_store(store_id) })
+            }),
+            (&Post, Some(Route::Invoices)) => serialize_future({
                 parse_body::<CreateInvoice>(req.body()).and_then(move |data| {
                     debug!("Received request to create orders {:?}", data);
                     order_info_service.create_invoice(data)
                 })
+            }),
+            (Delete, Some(Route::Invoice { id })) => serialize_future({
+                debug!("Received request to delete invoice by id {}", id);
+                serialize_future({ order_info_service.delete_invoice(id) })
             }),
             (Get, Some(Route::RolesByUserId { user_id })) => {
                 debug!("Received request to get roles by user id {}", user_id);

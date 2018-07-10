@@ -6,9 +6,12 @@ use stq_router::RouteParser;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Route {
     ExternalBillingCallback { id: CallbackId },
-    OrderInfo,
-    UserMerchant,
-    StoreMerchant,
+    Invoices,
+    Invoice { id: SagaId },
+    UserMerchants,
+    StoreMerchants,
+    UserMerchant { user_id: UserId },
+    StoreMerchant { store_id: StoreId },
     Roles,
     RoleById { id: RoleId },
     RolesByUserId { user_id: UserId },
@@ -24,9 +27,27 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .map(|id| Route::ExternalBillingCallback { id })
     });
 
-    route_parser.add_route(r"^/order_info$", || Route::OrderInfo);
-    route_parser.add_route(r"^/merchants/user$", || Route::UserMerchant);
-    route_parser.add_route(r"^/merchants/store$", || Route::StoreMerchant);
+    route_parser.add_route(r"^/invoices", || Route::Invoices);
+    route_parser.add_route_with_params(r"^/invoices/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::Invoice { id })
+    });
+    route_parser.add_route(r"^/merchants/user$", || Route::UserMerchants);
+    route_parser.add_route_with_params(r"^/merchants/user/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|user_id| Route::UserMerchant { user_id })
+    });
+    route_parser.add_route(r"^/merchants/store$", || Route::StoreMerchants);
+    route_parser.add_route_with_params(r"^/merchants/store/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|store_id| Route::StoreMerchant { store_id })
+    });
 
     route_parser.add_route(r"^/roles$", || Route::Roles);
     route_parser.add_route_with_params(r"^/roles/by-user-id/(\d+)$", |params| {

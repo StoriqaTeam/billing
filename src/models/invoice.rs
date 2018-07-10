@@ -5,6 +5,7 @@ use models::{MerchantId, Order};
 table! {
     invoices (id) {
         id -> Uuid,
+        invoice_id -> Uuid,
         billing_url -> VarChar,
     }
 }
@@ -18,23 +19,38 @@ impl InvoiceId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct SagaId(pub Uuid);
+
+impl SagaId {
+    pub fn new() -> Self {
+        SagaId(Uuid::new_v4())
+    }
+}
+
 #[derive(Serialize, Deserialize, Queryable, Insertable, Debug, Clone)]
 #[table_name = "invoices"]
 pub struct Invoice {
-    pub id: InvoiceId,
+    pub id: SagaId,
+    pub invoice_id: InvoiceId,
     pub billing_url: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
 #[table_name = "invoices"]
 pub struct NewInvoice {
-    pub id: InvoiceId,
+    pub id: SagaId,
+    pub invoice_id: InvoiceId,
     pub billing_url: String,
 }
 
 impl NewInvoice {
-    pub fn new(id: InvoiceId, billing_url: String) -> Self {
-        Self { id, billing_url }
+    pub fn new(id: SagaId, invoice_id: InvoiceId, billing_url: String) -> Self {
+        Self {
+            id,
+            invoice_id,
+            billing_url,
+        }
     }
 }
 
@@ -70,6 +86,12 @@ impl CreateInvoicePayload {
             currency,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ExternalBillingInvoice {
+    pub id: InvoiceId,
+    pub billing_url: String,
 }
 
 mod diesel_impl {
@@ -122,6 +144,49 @@ mod diesel_impl {
     }
 
     impl Queryable<SqlUuid, Pg> for InvoiceId {
+        type Row = Self;
+
+        fn build(row: Self::Row) -> Self {
+            row
+        }
+    }
+
+    use super::SagaId;
+
+    impl<'a> AsExpression<SqlUuid> for &'a SagaId {
+        type Expression = Bound<SqlUuid, &'a SagaId>;
+
+        fn as_expression(self) -> Self::Expression {
+            Bound::new(self)
+        }
+    }
+
+    impl AsExpression<SqlUuid> for SagaId {
+        type Expression = Bound<SqlUuid, SagaId>;
+
+        fn as_expression(self) -> Self::Expression {
+            Bound::new(self)
+        }
+    }
+
+    impl ToSql<SqlUuid, Pg> for SagaId {
+        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
+            out.write_all(self.0.as_bytes())?;
+            Ok(IsNull::No)
+        }
+    }
+
+    impl FromSqlRow<SqlUuid, Pg> for SagaId {
+        fn build_from_row<T: Row<Pg>>(row: &mut T) -> Result<Self, Box<Error + Send + Sync>> {
+            let uuid = match row.take() {
+                Some(id) => Uuid::from_bytes(id)?,
+                None => Uuid::nil(),
+            };
+            Ok(SagaId(uuid))
+        }
+    }
+
+    impl Queryable<SqlUuid, Pg> for SagaId {
         type Row = Self;
 
         fn build(row: Self::Row) -> Self {

@@ -211,6 +211,11 @@ pub mod tests {
         fn create(&self, _payload: NewInvoice) -> RepoResult<Invoice> {
             Ok(create_invoice())
         }
+
+        /// Deletes invoice
+        fn delete(&self, _id: SagaId) -> RepoResult<Invoice> {
+            Ok(create_invoice())
+        }
     }
 
     #[derive(Clone, Default)]
@@ -262,6 +267,26 @@ pub mod tests {
                 user_id: payload.user_id().clone(),
                 store_id: payload.store_id().clone(),
                 merchant_type: payload.merchant_type().clone(),
+            })
+        }
+
+        /// Delete store merchant
+        fn delete_by_store_id(&self, store_id: StoreId) -> RepoResult<Merchant> {
+            Ok(Merchant {
+                merchant_id: MerchantId(Uuid::new_v4()),
+                user_id: None,
+                store_id: Some(store_id),
+                merchant_type: MerchantType::Store,
+            })
+        }
+
+        /// Delete user merchant
+        fn delete_by_user_id(&self, user_id: UserId) -> RepoResult<Merchant> {
+            Ok(Merchant {
+                merchant_id: MerchantId(Uuid::new_v4()),
+                user_id: Some(user_id),
+                store_id: None,
+                merchant_type: MerchantType::User,
             })
         }
     }
@@ -363,7 +388,8 @@ pub mod tests {
 
     pub fn create_invoice() -> Invoice {
         Invoice {
-            id: InvoiceId::new(),
+            id: SagaId::new(),
+            invoice_id: InvoiceId::new(),
             billing_url: "billing_url".to_string(),
         }
     }

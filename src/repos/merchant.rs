@@ -14,7 +14,7 @@ use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
 use models::merchant::merchants::dsl::*;
-use models::{Merchant, MerchantId, NewStoreMerchant, NewUserMerchant, SubjectIdentifier, UserId};
+use models::{Merchant, MerchantId, NewStoreMerchant, NewUserMerchant, StoreId, SubjectIdentifier, UserId};
 
 /// Merchant repository for handling Merchant
 pub trait MerchantRepo {
@@ -27,8 +27,14 @@ pub trait MerchantRepo {
     /// Create a new store merchant
     fn create_store_merchant(&self, payload: NewStoreMerchant) -> RepoResult<Merchant>;
 
+    /// Delete store merchant
+    fn delete_by_store_id(&self, store_id: StoreId) -> RepoResult<Merchant>;
+
     /// Create a new user merchant
     fn create_user_merchant(&self, payload: NewUserMerchant) -> RepoResult<Merchant>;
+
+    /// Delete user merchant
+    fn delete_by_user_id(&self, user_id: UserId) -> RepoResult<Merchant>;
 }
 
 /// Implementation of Merchant trait
@@ -89,6 +95,22 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .map_err(|e: FailureError| e.context(format!("Create a new store merchant {:?} error occured", payload)).into())
     }
 
+    /// Delete store merchant
+    fn delete_by_store_id(&self, store_id_arg: StoreId) -> RepoResult<Merchant> {
+        debug!("Delete store merchant {:?}.", store_id_arg);
+        let filtered = merchants.filter(store_id.eq(Some(store_id_arg)));
+
+        let query = diesel::delete(filtered);
+        query
+            .get_result(self.db_conn)
+            .map_err(From::from)
+            .and_then(|merch| {
+                acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
+                Ok(merch)
+            })
+            .map_err(|e: FailureError| e.context(format!("Delete store merchant {:?} error occured", store_id_arg)).into())
+    }
+
     /// Create a new user merchant
     fn create_user_merchant(&self, payload: NewUserMerchant) -> RepoResult<Merchant> {
         debug!("create new user merchant {:?}.", payload);
@@ -101,6 +123,22 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 Ok(merch)
             })
             .map_err(|e: FailureError| e.context(format!("Create a new user merchant {:?} error occured", payload)).into())
+    }
+
+    /// Delete user merchant
+    fn delete_by_user_id(&self, user_id_arg: UserId) -> RepoResult<Merchant> {
+        debug!("Delete user merchant {:?}.", user_id_arg);
+        let filtered = merchants.filter(user_id.eq(Some(user_id_arg)));
+
+        let query = diesel::delete(filtered);
+        query
+            .get_result(self.db_conn)
+            .map_err(From::from)
+            .and_then(|merch| {
+                acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
+                Ok(merch)
+            })
+            .map_err(|e: FailureError| e.context(format!("Delete user merchant {:?} error occured", user_id_arg)).into())
     }
 }
 

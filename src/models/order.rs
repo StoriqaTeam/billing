@@ -2,7 +2,7 @@ use std::fmt;
 
 use stq_static_resources::Currency;
 
-use models::OrderId;
+use models::{OrderId, SagaId};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Order {
@@ -16,6 +16,7 @@ pub struct Order {
 pub struct CreateInvoice {
     pub orders: Vec<Order>,
     pub currency_id: CurrencyId,
+    pub saga_id: SagaId,
 }
 
 #[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize)]
