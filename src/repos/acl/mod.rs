@@ -99,6 +99,7 @@ impl<T> Acl<Resource, Action, Scope, FailureError, T> for ApplicationAcl {
 #[cfg(test)]
 mod tests {
     use repos::legacy_acl::{Acl, CheckScope};
+    use stq_static_resources::OrderStatus;
 
     use models::*;
     use repos::*;

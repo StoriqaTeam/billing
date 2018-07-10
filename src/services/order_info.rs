@@ -16,8 +16,8 @@ use stq_http::client::ClientHandle;
 use super::types::ServiceFuture;
 use errors::Error;
 use models::{
-    BillingOrder, CallbackId, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewInvoice, NewOrderInfo, SagaId,
-    SubjectIdentifier, UserId, OrderId,
+    BillingOrder, CallbackId, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewInvoice, NewOrderInfo, OrderId,
+    SagaId, SubjectIdentifier, UserId,
 };
 use repos::repo_factory::ReposFactory;
 use repos::RepoResult;
@@ -205,7 +205,7 @@ impl<
                             order_info_repo.set_paid(callback_id)
                         })
                         .and_then(|orders| {
-                            let order_ids : Vec<OrderId> = orders.into_iter().map(|order| order.order_id).collect();
+                            let order_ids: Vec<OrderId> = orders.into_iter().map(|order| order.order_id).collect();
                             let body = serde_json::to_string(&order_ids)?;
                             let url = format!("{}/orders/set_paid", saga_url);
                             client

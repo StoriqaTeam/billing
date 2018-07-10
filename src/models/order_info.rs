@@ -1,3 +1,4 @@
+use stq_static_resources::OrderStatus;
 use uuid::Uuid;
 
 table! {
@@ -36,12 +37,6 @@ impl CallbackId {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum OrderStatus {
-    PaimentAwaited,
-    PaimentReceived,
-}
-
 #[derive(Serialize, Queryable, Insertable, Debug)]
 #[table_name = "order_info"]
 pub struct OrderInfo {
@@ -72,9 +67,7 @@ pub struct SetOrderInfoPaid {
 
 impl SetOrderInfoPaid {
     pub fn new() -> Self {
-        Self {
-            status: OrderStatus::PaimentReceived,
-        }
+        Self { status: OrderStatus::Paid }
     }
 }
 
@@ -85,12 +78,10 @@ mod diesel_impl {
     use diesel::row::Row;
     use diesel::serialize::Output;
     use diesel::sql_types::Uuid as SqlUuid;
-    use diesel::sql_types::VarChar;
-    use diesel::types::{FromSqlRow, IsNull, NotNull, SingleValue, ToSql};
+    use diesel::types::{FromSqlRow, IsNull, ToSql};
     use diesel::Queryable;
     use std::error::Error;
     use std::io::Write;
-    use std::str;
 
     use uuid::Uuid;
 
@@ -177,56 +168,6 @@ mod diesel_impl {
 
         fn build(row: Self::Row) -> Self {
             row
-        }
-    }
-
-    use super::OrderStatus;
-
-    impl NotNull for OrderStatus {}
-    impl SingleValue for OrderStatus {}
-
-    impl FromSqlRow<VarChar, Pg> for OrderStatus {
-        fn build_from_row<R: Row<Pg>>(row: &mut R) -> Result<Self, Box<Error + Send + Sync>> {
-            match row.take() {
-                Some(b"payment_awaited") => Ok(OrderStatus::PaimentAwaited),
-                Some(b"payment_received") => Ok(OrderStatus::PaimentReceived),
-                Some(value) => Err(format!(
-                    "Unrecognized enum variant for OrderStatus: {}",
-                    str::from_utf8(value).unwrap_or("unreadable value")
-                ).into()),
-                None => Err("Unexpected null for non-null column `status`".into()),
-            }
-        }
-    }
-
-    impl Queryable<VarChar, Pg> for OrderStatus {
-        type Row = OrderStatus;
-        fn build(row: Self::Row) -> Self {
-            row
-        }
-    }
-
-    impl ToSql<VarChar, Pg> for OrderStatus {
-        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
-            match *self {
-                OrderStatus::PaimentAwaited => out.write_all(b"payment_awaited")?,
-                OrderStatus::PaimentReceived => out.write_all(b"payment_received")?,
-            }
-            Ok(IsNull::No)
-        }
-    }
-
-    impl AsExpression<VarChar> for OrderStatus {
-        type Expression = Bound<VarChar, OrderStatus>;
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl<'a> AsExpression<VarChar> for &'a OrderStatus {
-        type Expression = Bound<VarChar, &'a OrderStatus>;
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
         }
     }
 

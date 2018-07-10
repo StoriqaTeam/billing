@@ -3,9 +3,8 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use failure::Error as FailureError;
 
-use repos::legacy_acl::{Acl, SystemACL, UnauthorizedACL};
-
 use models::*;
+use repos::legacy_acl::{Acl, SystemACL, UnauthorizedACL};
 use repos::*;
 
 pub trait ReposFactory<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>:
@@ -115,11 +114,6 @@ pub mod tests {
     use std::fmt;
     use std::sync::Arc;
 
-    use futures_cpupool::CpuPool;
-    use tokio_core::reactor::Handle;
-
-    use r2d2::ManageConnection;
-
     use diesel::connection::AnsiTransactionManager;
     use diesel::connection::SimpleConnection;
     use diesel::deserialize::QueryableByName;
@@ -132,10 +126,13 @@ pub mod tests {
     use diesel::ConnectionResult;
     use diesel::QueryResult;
     use diesel::Queryable;
-
+    use futures_cpupool::CpuPool;
+    use r2d2::ManageConnection;
+    use tokio_core::reactor::Handle;
     use uuid::Uuid;
 
     use stq_http::client::Config as HttpConfig;
+    use stq_static_resources::OrderStatus;
 
     use config::Config;
     use models::*;
