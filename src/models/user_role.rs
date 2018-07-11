@@ -14,7 +14,7 @@ table! {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display, FromStr, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Display, FromStr, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
 pub struct RoleId(pub Uuid);
 
 impl RoleId {
@@ -23,7 +23,7 @@ impl RoleId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Display, FromStr, PartialEq, Hash, Serialize, Deserialize, Eq)]
+#[derive(Clone, Copy, Debug, Display, FromStr, PartialEq, Hash, Serialize, Deserialize, Eq, DieselTypes)]
 pub struct UserId(pub i32);
 
 #[derive(Serialize, Queryable, Insertable, Debug)]
@@ -49,125 +49,4 @@ pub struct NewUserRole {
 pub struct OldUserRole {
     pub user_id: UserId,
     pub role: Role,
-}
-
-mod diesel_impl {
-    use diesel::deserialize::FromSql;
-    use diesel::deserialize::FromSqlRow;
-    use diesel::expression::bound::Bound;
-    use diesel::expression::AsExpression;
-    use diesel::pg::Pg;
-    use diesel::row::Row;
-    use diesel::serialize::Output;
-    use diesel::serialize::{IsNull, ToSql};
-    use diesel::sql_types::Uuid as SqlUuid;
-    use diesel::sql_types::*;
-    use diesel::Queryable;
-    use std::error::Error;
-    use std::io::Write;
-
-    use uuid::Uuid;
-
-    use super::RoleId;
-
-    impl<'a> AsExpression<SqlUuid> for &'a RoleId {
-        type Expression = Bound<SqlUuid, &'a RoleId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl AsExpression<SqlUuid> for RoleId {
-        type Expression = Bound<SqlUuid, RoleId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl ToSql<SqlUuid, Pg> for RoleId {
-        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
-            out.write_all(self.0.as_bytes())?;
-            Ok(IsNull::No)
-        }
-    }
-
-    impl FromSqlRow<SqlUuid, Pg> for RoleId {
-        fn build_from_row<T: Row<Pg>>(row: &mut T) -> Result<Self, Box<Error + Send + Sync>> {
-            let uuid = match row.take() {
-                Some(id) => Uuid::from_bytes(id)?,
-                None => Uuid::nil(),
-            };
-            Ok(RoleId(uuid))
-        }
-    }
-
-    impl Queryable<SqlUuid, Pg> for RoleId {
-        type Row = Self;
-
-        fn build(row: Self::Row) -> Self {
-            row
-        }
-    }
-
-    use super::UserId;
-
-    impl<'a> AsExpression<Integer> for &'a UserId {
-        type Expression = Bound<Integer, &'a UserId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl AsExpression<Integer> for UserId {
-        type Expression = Bound<Integer, UserId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl ToSql<Integer, Pg> for UserId {
-        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
-            ToSql::<Integer, Pg>::to_sql(&self.0, out)
-        }
-    }
-
-    impl FromSqlRow<Integer, Pg> for UserId {
-        fn build_from_row<T: Row<Pg>>(row: &mut T) -> Result<Self, Box<Error + Send + Sync>> {
-            FromSql::<Integer, Pg>::from_sql(row.take()).map(UserId)
-        }
-    }
-
-    impl Queryable<Integer, Pg> for UserId {
-        type Row = Self;
-
-        fn build(row: Self::Row) -> Self {
-            row
-        }
-    }
-
-    impl<'a> AsExpression<Nullable<Integer>> for &'a UserId {
-        type Expression = Bound<Nullable<Integer>, &'a UserId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl AsExpression<Nullable<Integer>> for UserId {
-        type Expression = Bound<Nullable<Integer>, UserId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl ToSql<Nullable<Integer>, Pg> for UserId {
-        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
-            ToSql::<Nullable<Integer>, Pg>::to_sql(&self.0, out)
-        }
-    }
 }

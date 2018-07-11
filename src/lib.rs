@@ -35,6 +35,8 @@ extern crate stq_static_resources;
 extern crate tokio_core;
 extern crate uuid;
 extern crate validator;
+#[macro_use]
+extern crate diesel_macro_derive;
 
 #[macro_use]
 pub mod macros;

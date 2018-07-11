@@ -30,3 +30,4 @@ stq_http = { path = "vendor/libstqbackend/http" }
 stq_router = { path = "vendor/libstqbackend/router" }
 stq_static_resources = { path = "vendor/libstqbackend/static_resources" }
 uuid = { version = "*", features = ["use_std", "v4", "serde"] }
+diesel_macro_derive = { path = "diesel_macro_derive" }

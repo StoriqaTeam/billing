@@ -10,7 +10,7 @@ table! {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
 pub struct InvoiceId(pub Uuid);
 
 impl InvoiceId {
@@ -19,7 +19,7 @@ impl InvoiceId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
 pub struct SagaId(pub Uuid);
 
 impl SagaId {
@@ -92,105 +92,4 @@ impl CreateInvoicePayload {
 pub struct ExternalBillingInvoice {
     pub id: InvoiceId,
     pub billing_url: String,
-}
-
-mod diesel_impl {
-    use diesel::expression::bound::Bound;
-    use diesel::expression::AsExpression;
-    use diesel::pg::Pg;
-    use diesel::row::Row;
-    use diesel::serialize::Output;
-    use diesel::sql_types::Uuid as SqlUuid;
-    use diesel::types::{FromSqlRow, IsNull, ToSql};
-    use diesel::Queryable;
-    use std::error::Error;
-    use std::io::Write;
-
-    use uuid::Uuid;
-
-    use super::InvoiceId;
-
-    impl<'a> AsExpression<SqlUuid> for &'a InvoiceId {
-        type Expression = Bound<SqlUuid, &'a InvoiceId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl AsExpression<SqlUuid> for InvoiceId {
-        type Expression = Bound<SqlUuid, InvoiceId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl ToSql<SqlUuid, Pg> for InvoiceId {
-        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
-            out.write_all(self.0.as_bytes())?;
-            Ok(IsNull::No)
-        }
-    }
-
-    impl FromSqlRow<SqlUuid, Pg> for InvoiceId {
-        fn build_from_row<T: Row<Pg>>(row: &mut T) -> Result<Self, Box<Error + Send + Sync>> {
-            let uuid = match row.take() {
-                Some(id) => Uuid::from_bytes(id)?,
-                None => Uuid::nil(),
-            };
-            Ok(InvoiceId(uuid))
-        }
-    }
-
-    impl Queryable<SqlUuid, Pg> for InvoiceId {
-        type Row = Self;
-
-        fn build(row: Self::Row) -> Self {
-            row
-        }
-    }
-
-    use super::SagaId;
-
-    impl<'a> AsExpression<SqlUuid> for &'a SagaId {
-        type Expression = Bound<SqlUuid, &'a SagaId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl AsExpression<SqlUuid> for SagaId {
-        type Expression = Bound<SqlUuid, SagaId>;
-
-        fn as_expression(self) -> Self::Expression {
-            Bound::new(self)
-        }
-    }
-
-    impl ToSql<SqlUuid, Pg> for SagaId {
-        fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> Result<IsNull, Box<Error + Send + Sync>> {
-            out.write_all(self.0.as_bytes())?;
-            Ok(IsNull::No)
-        }
-    }
-
-    impl FromSqlRow<SqlUuid, Pg> for SagaId {
-        fn build_from_row<T: Row<Pg>>(row: &mut T) -> Result<Self, Box<Error + Send + Sync>> {
-            let uuid = match row.take() {
-                Some(id) => Uuid::from_bytes(id)?,
-                None => Uuid::nil(),
-            };
-            Ok(SagaId(uuid))
-        }
-    }
-
-    impl Queryable<SqlUuid, Pg> for SagaId {
-        type Row = Self;
-
-        fn build(row: Self::Row) -> Self {
-            row
-        }
-    }
 }
