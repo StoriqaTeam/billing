@@ -1,30 +1,12 @@
-use uuid::Uuid;
+use stq_types::{InvoiceId, MerchantId, SagaId};
 
-use models::{MerchantId, Order};
+use models::Order;
 
 table! {
     invoices (id) {
         id -> Uuid,
         invoice_id -> Uuid,
         billing_url -> VarChar,
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
-pub struct InvoiceId(pub Uuid);
-
-impl InvoiceId {
-    pub fn new() -> Self {
-        InvoiceId(Uuid::new_v4())
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
-pub struct SagaId(pub Uuid);
-
-impl SagaId {
-    pub fn new() -> Self {
-        SagaId(Uuid::new_v4())
     }
 }
 

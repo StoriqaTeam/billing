@@ -14,10 +14,11 @@ use errors::Error;
 use failure::Error as FailureError;
 use failure::Fail;
 
+use stq_types::{StoresRole, UserId};
+
 use super::legacy_acl::{Acl, CheckScope};
 
 use models::authorization::*;
-use models::UserId;
 
 pub fn check<T>(
     acl: &Acl<Resource, Action, Scope, FailureError, T>,
@@ -40,16 +41,16 @@ pub fn check<T>(
 /// ApplicationAcl contains main logic for manipulation with recources
 #[derive(Clone)]
 pub struct ApplicationAcl {
-    acls: Rc<HashMap<Role, Vec<Permission>>>,
-    roles: Vec<Role>,
+    acls: Rc<HashMap<StoresRole, Vec<Permission>>>,
+    roles: Vec<StoresRole>,
     user_id: UserId,
 }
 
 impl ApplicationAcl {
-    pub fn new(roles: Vec<Role>, user_id: UserId) -> Self {
+    pub fn new(roles: Vec<StoresRole>, user_id: UserId) -> Self {
         let mut hash = ::std::collections::HashMap::new();
         hash.insert(
-            Role::Superuser,
+            StoresRole::Superuser,
             vec![
                 permission!(Resource::OrderInfo),
                 permission!(Resource::Merchant),
@@ -57,9 +58,9 @@ impl ApplicationAcl {
                 permission!(Resource::Invoice),
             ],
         );
-        hash.insert(Role::User, vec![permission!(Resource::UserRoles, Action::Read, Scope::Owned)]);
+        hash.insert(StoresRole::User, vec![permission!(Resource::UserRoles, Action::Read, Scope::Owned)]);
         hash.insert(
-            Role::StoreManager,
+            StoresRole::StoreManager,
             vec![
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
@@ -99,7 +100,8 @@ impl<T> Acl<Resource, Action, Scope, FailureError, T> for ApplicationAcl {
 #[cfg(test)]
 mod tests {
     use repos::legacy_acl::{Acl, CheckScope};
-    use stq_static_resources::OrderStatus;
+    use stq_static_resources::OrderState;
+    use stq_types::{CallbackId, OrderId, OrderInfoId, RoleId, StoreId, StoresRole, UserId};
 
     use models::*;
     use repos::*;
@@ -111,7 +113,7 @@ mod tests {
             customer_id: UserId(1),
             store_id: StoreId(1),
             callback_id: CallbackId::new(),
-            status: OrderStatus::PaimentAwaited,
+            status: OrderState::PaymentAwaited,
         }
     }
 
@@ -144,7 +146,7 @@ mod tests {
 
     #[test]
     fn test_super_user_for_users() {
-        let acl = ApplicationAcl::new(vec![Role::Superuser], UserId(1232));
+        let acl = ApplicationAcl::new(vec![StoresRole::Superuser], UserId(1232));
         let s = ScopeChecker::default();
         let resource = create_order();
 
@@ -155,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_ordinary_user_for_users() {
-        let acl = ApplicationAcl::new(vec![Role::User], UserId(2));
+        let acl = ApplicationAcl::new(vec![StoresRole::User], UserId(2));
         let s = ScopeChecker::default();
         let resource = create_order();
 
@@ -166,13 +168,13 @@ mod tests {
 
     #[test]
     fn test_super_user_for_user_roles() {
-        let acl = ApplicationAcl::new(vec![Role::Superuser], UserId(1232));
+        let acl = ApplicationAcl::new(vec![StoresRole::Superuser], UserId(1232));
         let s = ScopeChecker::default();
 
         let resource = UserRole {
             id: RoleId::new(),
             user_id: UserId(1),
-            role: Role::User,
+            role: StoresRole::User,
             data: None,
         };
 
@@ -183,13 +185,13 @@ mod tests {
 
     #[test]
     fn test_user_for_user_roles() {
-        let acl = ApplicationAcl::new(vec![Role::User], UserId(2));
+        let acl = ApplicationAcl::new(vec![StoresRole::User], UserId(2));
         let s = ScopeChecker::default();
 
         let resource = UserRole {
             id: RoleId::new(),
             user_id: UserId(1),
-            role: Role::User,
+            role: StoresRole::User,
             data: None,
         };
 

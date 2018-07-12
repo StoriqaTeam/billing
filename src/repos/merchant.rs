@@ -8,13 +8,15 @@ use diesel::query_dsl::RunQueryDsl;
 use diesel::Connection;
 use failure::Error as FailureError;
 
+use stq_types::{MerchantId, StoreId, UserId};
+
 use repos::legacy_acl::*;
 
 use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
 use models::merchant::merchants::dsl::*;
-use models::{Merchant, MerchantId, NewStoreMerchant, NewUserMerchant, StoreId, SubjectIdentifier, UserId};
+use models::{Merchant, NewStoreMerchant, NewUserMerchant, SubjectIdentifier};
 
 /// Merchant repository for handling Merchant
 pub trait MerchantRepo {

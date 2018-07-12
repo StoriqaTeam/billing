@@ -13,8 +13,6 @@ extern crate config as config_crate;
 extern crate diesel;
 extern crate env_logger;
 #[macro_use]
-extern crate derive_more;
-#[macro_use]
 extern crate failure;
 extern crate chrono;
 extern crate futures;
@@ -32,11 +30,10 @@ extern crate serde_json;
 extern crate stq_http;
 extern crate stq_router;
 extern crate stq_static_resources;
+extern crate stq_types;
 extern crate tokio_core;
 extern crate uuid;
 extern crate validator;
-#[macro_use]
-extern crate diesel_macro_derive;
 
 #[macro_use]
 pub mod macros;

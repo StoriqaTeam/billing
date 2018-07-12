@@ -8,13 +8,15 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 
+use stq_types::{CallbackId, OrderInfoId, UserId};
+
 use repos::legacy_acl::*;
 
 use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
 use models::order_info::order_info::dsl::*;
-use models::{CallbackId, NewOrderInfo, OrderInfo, OrderInfoId, SetOrderInfoPaid, UserId};
+use models::{NewOrderInfo, OrderInfo, SetOrderInfoPaid};
 
 /// OrderInfos repository, responsible for handling order_info
 pub struct OrderInfoRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {

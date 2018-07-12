@@ -1,6 +1,5 @@
-use models::*;
-
 use stq_router::RouteParser;
+use stq_types::{CallbackId, RoleId, SagaId, StoreId, UserId};
 
 /// List of all routes with params for the app
 #[derive(Clone, Debug, PartialEq)]

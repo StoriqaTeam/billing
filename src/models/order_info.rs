@@ -1,8 +1,5 @@
-use uuid::Uuid;
-
-use stq_static_resources::OrderStatus;
-
-use super::{StoreId, UserId};
+use stq_static_resources::OrderState;
+use stq_types::{CallbackId, OrderId, OrderInfoId, StoreId, UserId};
 
 table! {
     order_info (id) {
@@ -15,33 +12,6 @@ table! {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
-pub struct OrderId(pub Uuid);
-
-impl OrderId {
-    pub fn new() -> Self {
-        OrderId(Uuid::new_v4())
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
-pub struct OrderInfoId(pub Uuid);
-
-impl OrderInfoId {
-    pub fn new() -> Self {
-        OrderInfoId(Uuid::new_v4())
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
-pub struct CallbackId(pub Uuid);
-
-impl CallbackId {
-    pub fn new() -> Self {
-        CallbackId(Uuid::new_v4())
-    }
-}
-
 #[derive(Serialize, Queryable, Insertable, Debug)]
 #[table_name = "order_info"]
 pub struct OrderInfo {
@@ -50,7 +20,7 @@ pub struct OrderInfo {
     pub store_id: StoreId,
     pub customer_id: UserId,
     pub callback_id: CallbackId,
-    pub status: OrderStatus,
+    pub status: OrderState,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
@@ -76,11 +46,11 @@ impl NewOrderInfo {
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable, AsChangeset)]
 #[table_name = "order_info"]
 pub struct SetOrderInfoPaid {
-    status: OrderStatus,
+    status: OrderState,
 }
 
 impl SetOrderInfoPaid {
     pub fn new() -> Self {
-        Self { status: OrderStatus::Paid }
+        Self { status: OrderState::Paid }
     }
 }

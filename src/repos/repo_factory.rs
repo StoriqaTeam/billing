@@ -3,6 +3,8 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use failure::Error as FailureError;
 
+use stq_types::{StoresRole, UserId};
+
 use models::*;
 use repos::legacy_acl::{Acl, SystemACL, UnauthorizedACL};
 use repos::*;
@@ -33,7 +35,7 @@ impl ReposFactoryImpl {
         &self,
         id: UserId,
         db_conn: &'a C,
-    ) -> Vec<Role> {
+    ) -> Vec<StoresRole> {
         self.create_user_roles_repo(db_conn).list_for_user(id).ok().unwrap_or_default()
     }
 
@@ -132,7 +134,8 @@ pub mod tests {
     use uuid::Uuid;
 
     use stq_http::client::Config as HttpConfig;
-    use stq_static_resources::OrderStatus;
+    use stq_static_resources::OrderState;
+    use stq_types::{CallbackId, InvoiceId, MerchantId, MerchantType, OrderId, OrderInfoId, RoleId, SagaId, StoreId, StoresRole, UserId};
 
     use config::Config;
     use models::*;
@@ -292,10 +295,10 @@ pub mod tests {
     pub struct UserRolesRepoMock;
 
     impl UserRolesRepo for UserRolesRepoMock {
-        fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<Role>> {
+        fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<StoresRole>> {
             Ok(match user_id_value.0 {
-                1 => vec![Role::Superuser],
-                _ => vec![Role::User],
+                1 => vec![StoresRole::Superuser],
+                _ => vec![StoresRole::User],
             })
         }
 
@@ -312,7 +315,7 @@ pub mod tests {
             Ok(vec![UserRole {
                 id: RoleId::new(),
                 user_id: user_id_arg,
-                role: Role::User,
+                role: StoresRole::User,
                 data: None,
             }])
         }
@@ -321,7 +324,7 @@ pub mod tests {
             Ok(UserRole {
                 id: id,
                 user_id: UserId(1),
-                role: Role::User,
+                role: StoresRole::User,
                 data: None,
             })
         }
@@ -381,7 +384,7 @@ pub mod tests {
             customer_id: UserId(1),
             store_id: StoreId(1),
             callback_id: CallbackId::new(),
-            status: OrderStatus::PaimentAwaited,
+            status: OrderState::PaymentAwaited,
         }
     }
 

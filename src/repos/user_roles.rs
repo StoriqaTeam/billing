@@ -11,18 +11,20 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 
+use stq_types::{RoleId, StoresRole, UserId};
+
 use repos::legacy_acl::*;
 
 use super::types::RepoResult;
 use models::authorization::*;
 use models::user_role::user_roles::dsl::*;
-use models::{NewUserRole, Role, RoleId, UserId, UserRole};
+use models::{NewUserRole, UserRole};
 use repos::RolesCacheImpl;
 
 /// UserRoles repository for handling UserRoles
 pub trait UserRolesRepo {
     /// Returns list of user_roles for a specific user
-    fn list_for_user(&self, user_id: UserId) -> RepoResult<Vec<Role>>;
+    fn list_for_user(&self, user_id: UserId) -> RepoResult<Vec<StoresRole>>;
 
     /// Create a new user role
     fn create(&self, payload: NewUserRole) -> RepoResult<UserRole>;
@@ -53,7 +55,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> UserRolesRepo for UserRolesRepoImpl<'a, T> {
     /// Returns list of user_roles for a specific user
-    fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<Role>> {
+    fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<StoresRole>> {
         debug!("list user roles for id {}.", user_id_value);
         if self.cached_roles.contains(user_id_value) {
             let roles = self.cached_roles.get(user_id_value);
@@ -63,7 +65,10 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             query
                 .get_results::<UserRole>(self.db_conn)
                 .and_then(|user_roles_arg| {
-                    let roles = user_roles_arg.into_iter().map(|user_role| user_role.role).collect::<Vec<Role>>();
+                    let roles = user_roles_arg
+                        .into_iter()
+                        .map(|user_role| user_role.role)
+                        .collect::<Vec<StoresRole>>();
                     Ok(roles)
                 })
                 .and_then(|roles| {

@@ -1,4 +1,4 @@
-use models::UserId;
+use stq_types::UserId;
 
 /// Implement this trait on resource to signal if it's in the current scope
 pub trait CheckScope<Scope, T> {

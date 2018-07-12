@@ -9,7 +9,6 @@ path = "src/lib.rs"
 [dependencies]
 config = "0.7"
 log = "0.4"
-derive_more = "0.11"
 env_logger = "0.5.6"
 hyper = "0.11"
 futures = "0.1.17"
@@ -29,5 +28,5 @@ failure = "0.1.1"
 stq_http = { path = "vendor/libstqbackend/http" }
 stq_router = { path = "vendor/libstqbackend/router" }
 stq_static_resources = { path = "vendor/libstqbackend/static_resources" }
+stq_types = { path = "vendor/libstqbackend/types" }
 uuid = { version = "*", features = ["use_std", "v4", "serde"] }
-diesel_macro_derive = { path = "diesel_macro_derive" }

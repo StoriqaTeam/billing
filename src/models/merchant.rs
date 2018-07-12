@@ -1,5 +1,4 @@
-use models::{StoreId, UserId};
-use uuid::Uuid;
+use stq_types::{MerchantId, MerchantType, StoreId, UserId};
 
 table! {
     merchants (merchant_id) {
@@ -9,21 +8,6 @@ table! {
         #[sql_name = "type"]
         merchant_type -> VarChar,
     }
-}
-
-#[derive(Clone, Copy, Debug, Default, FromStr, Display, Eq, PartialEq, Hash, Serialize, Deserialize, DieselTypes)]
-pub struct MerchantId(pub Uuid);
-
-impl MerchantId {
-    pub fn new() -> Self {
-        MerchantId(Uuid::new_v4())
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash, DieselTypes)]
-pub enum MerchantType {
-    Store,
-    User,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]

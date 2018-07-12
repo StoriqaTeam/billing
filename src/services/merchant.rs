@@ -12,6 +12,7 @@ use r2d2::{ManageConnection, Pool};
 use serde_json;
 
 use stq_http::client::ClientHandle;
+use stq_types::{MerchantId, StoreId, UserId};
 
 use super::types::ServiceFuture;
 use errors::Error;
@@ -266,6 +267,8 @@ pub mod tests {
 
     use std::sync::Arc;
     use tokio_core::reactor::Core;
+
+    use stq_types::{MerchantId, StoreId, UserId};
 
     use models::*;
     use repos::repo_factory::tests::*;

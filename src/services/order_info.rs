@@ -12,12 +12,12 @@ use r2d2::{ManageConnection, Pool};
 use serde_json;
 
 use stq_http::client::ClientHandle;
+use stq_types::{CallbackId, SagaId, UserId};
 
 use super::types::ServiceFuture;
 use errors::Error;
 use models::{
-    BillingOrder, CallbackId, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewInvoice, NewOrderInfo, SagaId,
-    SubjectIdentifier, UserId,
+    BillingOrder, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewInvoice, NewOrderInfo, SubjectIdentifier,
 };
 use repos::repo_factory::ReposFactory;
 use repos::RepoResult;
@@ -235,6 +235,7 @@ pub mod tests {
     use tokio_core::reactor::Core;
 
     use stq_static_resources::Currency;
+    use stq_types::{CallbackId, CurrencyId, OrderId, SagaId, StoreId, UserId};
 
     use models::*;
     use repos::repo_factory::tests::*;

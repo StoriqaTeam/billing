@@ -8,13 +8,15 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 
+use stq_types::{InvoiceId, SagaId, UserId};
+
 use repos::legacy_acl::*;
 
 use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
 use models::invoice::invoices::dsl::*;
-use models::{Invoice, InvoiceId, NewInvoice, SagaId, UserId};
+use models::{Invoice, NewInvoice};
 
 /// Invoices repository, responsible for handling invoice
 pub struct InvoiceRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {

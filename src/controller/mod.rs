@@ -25,6 +25,7 @@ use stq_http::controller::ControllerFuture;
 use stq_http::request_util::parse_body;
 use stq_http::request_util::serialize_future;
 use stq_router::RouteParser;
+use stq_types::UserId;
 
 use self::routes::Route;
 use config::Config;
