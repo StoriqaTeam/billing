@@ -115,6 +115,7 @@ pub mod tests {
     use std::error::Error;
     use std::fmt;
     use std::sync::Arc;
+    use std::time::SystemTime;
 
     use diesel::connection::AnsiTransactionManager;
     use diesel::connection::SimpleConnection;
@@ -135,13 +136,13 @@ pub mod tests {
 
     use stq_http::client::Config as HttpConfig;
     use stq_static_resources::OrderState;
-    use stq_types::{CallbackId, InvoiceId, MerchantId, MerchantType, OrderId, OrderInfoId, RoleId, SagaId, StoreId, StoresRole, UserId};
+    use stq_types::*;
 
     use config::Config;
     use models::*;
     use repos::*;
+    use services::invoice::InvoiceServiceImpl;
     use services::merchant::MerchantServiceImpl;
-    use services::order_info::OrderInfoServiceImpl;
 
     #[derive(Default, Copy, Clone)]
     pub struct ReposFactoryMock;
@@ -185,15 +186,33 @@ pub mod tests {
             Ok(Some(create_order_info()))
         }
 
+        /// Find specific order_info by order ID
+        fn find_by_order_id(&self, _order_id: OrderId) -> RepoResult<Option<OrderInfo>> {
+            Ok(Some(create_order_info()))
+        }
+
+        /// Find order_infos by saga ID
+        fn find_by_saga_id(&self, _saga_id: SagaId) -> RepoResult<Vec<OrderInfo>> {
+            Ok(vec![create_order_info()])
+        }
+
         /// Creates new order_info
         fn create(&self, _payload: NewOrderInfo) -> RepoResult<OrderInfo> {
             Ok(create_order_info())
         }
 
         /// Updates specific order_info
-        fn set_paid(&self, callback_id_arg: CallbackId) -> RepoResult<Vec<OrderInfo>> {
+        fn update_status(&self, saga_id_arg: SagaId, new_status: OrderState) -> RepoResult<Vec<OrderInfo>> {
             let mut order_info = create_order_info();
-            order_info.callback_id = callback_id_arg;
+            order_info.saga_id = saga_id_arg;
+            order_info.status = new_status;
+            Ok(vec![order_info])
+        }
+
+        /// Delete order_infos by saga ID
+        fn delete_by_saga_id(&self, saga_id_arg: SagaId) -> RepoResult<Vec<OrderInfo>> {
+            let mut order_info = create_order_info();
+            order_info.saga_id = saga_id_arg;
             Ok(vec![order_info])
         }
     }
@@ -207,8 +226,18 @@ pub mod tests {
             Ok(Some(create_invoice()))
         }
 
+        /// Find specific invoice by saga ID
+        fn find_by_saga_id(&self, _saga_id: SagaId) -> RepoResult<Option<Invoice>> {
+            Ok(Some(create_invoice()))
+        }
+
         /// Creates new invoice
-        fn create(&self, _payload: NewInvoice) -> RepoResult<Invoice> {
+        fn create(&self, _payload: Invoice) -> RepoResult<Invoice> {
+            Ok(create_invoice())
+        }
+
+        /// update new invoice
+        fn update(&self, _payload: UpdateInvoice) -> RepoResult<Invoice> {
             Ok(create_invoice())
         }
 
@@ -306,7 +335,7 @@ pub mod tests {
             Ok(UserRole {
                 id: RoleId::new(),
                 user_id: payload.user_id,
-                role: payload.role,
+                name: payload.name,
                 data: None,
             })
         }
@@ -315,7 +344,7 @@ pub mod tests {
             Ok(vec![UserRole {
                 id: RoleId::new(),
                 user_id: user_id_arg,
-                role: StoresRole::User,
+                name: StoresRole::User,
                 data: None,
             }])
         }
@@ -324,16 +353,16 @@ pub mod tests {
             Ok(UserRole {
                 id: id,
                 user_id: UserId(1),
-                role: StoresRole::User,
+                name: StoresRole::User,
                 data: None,
             })
         }
     }
 
-    pub fn create_order_info_service(
+    pub fn create_invoice_service(
         user_id: Option<UserId>,
         handle: Arc<Handle>,
-    ) -> OrderInfoServiceImpl<MockConnection, MockConnectionManager, ReposFactoryMock> {
+    ) -> InvoiceServiceImpl<MockConnection, MockConnectionManager, ReposFactoryMock> {
         let manager = MockConnectionManager::default();
         let db_pool = r2d2::Pool::builder().build(manager).expect("Failed to create connection pool");
         let cpu_pool = CpuPool::new(1);
@@ -346,7 +375,7 @@ pub mod tests {
         let client = stq_http::client::Client::new(&http_config, &handle);
         let client_handle = client.handle();
 
-        OrderInfoServiceImpl::new(
+        InvoiceServiceImpl::new(
             db_pool,
             cpu_pool,
             client_handle,
@@ -383,7 +412,7 @@ pub mod tests {
             order_id: OrderId::new(),
             customer_id: UserId(1),
             store_id: StoreId(1),
-            callback_id: CallbackId::new(),
+            saga_id: SagaId::new(),
             status: OrderState::PaymentAwaited,
         }
     }
@@ -393,6 +422,13 @@ pub mod tests {
             id: SagaId::new(),
             invoice_id: InvoiceId::new(),
             billing_url: "billing_url".to_string(),
+            transaction_id: None,
+            transaction_captured_amount: None,
+            amount: ProductPrice(1f64),
+            currency_id: CurrencyId(1),
+            price_reserved: SystemTime::now(),
+            state: OrderState::PaymentAwaited,
+            wallet: Uuid::new_v4().to_string(),
         }
     }
 

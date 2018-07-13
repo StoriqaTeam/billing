@@ -135,7 +135,7 @@ impl<
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
 
                             conn.transaction::<ExternalBillingMerchant, FailureError, _>(move || {
-                                debug!("Deleting user merchant: {:?}", &user_id_arg);
+                                debug!("Deleting user merchant with user id {}", &user_id_arg);
                                 merchant_repo.delete_by_user_id(user_id_arg).and_then(|merchant| {
                                     let url = format!("{}/merchant/{}", external_billing_address, merchant.merchant_id);
                                     client
@@ -211,7 +211,7 @@ impl<
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
 
                             conn.transaction::<ExternalBillingMerchant, FailureError, _>(move || {
-                                debug!("Deleting store merchant: {:?}", &store_id_arg);
+                                debug!("Deleting store merchant with store id {}", &store_id_arg);
                                 merchant_repo.delete_by_store_id(store_id_arg).and_then(|merchant| {
                                     let url = format!("{}/merchant/{}", external_billing_address, merchant.merchant_id);
                                     client

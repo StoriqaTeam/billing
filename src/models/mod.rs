@@ -6,11 +6,11 @@ pub mod invoice;
 pub mod merchant;
 pub mod order;
 pub mod order_info;
-pub mod user_role;
+pub mod role;
 
 pub use self::authorization::*;
 pub use self::invoice::*;
 pub use self::merchant::*;
 pub use self::order::*;
 pub use self::order_info::*;
-pub use self::user_role::*;
+pub use self::role::*;

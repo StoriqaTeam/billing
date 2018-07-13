@@ -58,14 +58,19 @@ impl ApplicationAcl {
                 permission!(Resource::Invoice),
             ],
         );
-        hash.insert(StoresRole::User, vec![permission!(Resource::UserRoles, Action::Read, Scope::Owned)]);
+        hash.insert(
+            StoresRole::User,
+            vec![
+                permission!(Resource::UserRoles, Action::Read, Scope::Owned),
+                permission!(Resource::Invoice, Action::Read, Scope::Owned),
+            ],
+        );
         hash.insert(
             StoresRole::StoreManager,
             vec![
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::UserRoles, Action::Read, Scope::Owned),
-                permission!(Resource::Invoice, Action::Read, Scope::Owned),
             ],
         );
         ApplicationAcl {
@@ -101,7 +106,7 @@ impl<T> Acl<Resource, Action, Scope, FailureError, T> for ApplicationAcl {
 mod tests {
     use repos::legacy_acl::{Acl, CheckScope};
     use stq_static_resources::OrderState;
-    use stq_types::{CallbackId, OrderId, OrderInfoId, RoleId, StoreId, StoresRole, UserId};
+    use stq_types::*;
 
     use models::*;
     use repos::*;
@@ -112,7 +117,7 @@ mod tests {
             order_id: OrderId::new(),
             customer_id: UserId(1),
             store_id: StoreId(1),
-            callback_id: CallbackId::new(),
+            saga_id: SagaId::new(),
             status: OrderState::PaymentAwaited,
         }
     }
@@ -174,7 +179,7 @@ mod tests {
         let resource = UserRole {
             id: RoleId::new(),
             user_id: UserId(1),
-            role: StoresRole::User,
+            name: StoresRole::User,
             data: None,
         };
 
@@ -191,7 +196,7 @@ mod tests {
         let resource = UserRole {
             id: RoleId::new(),
             user_id: UserId(1),
-            role: StoresRole::User,
+            name: StoresRole::User,
             data: None,
         };
 

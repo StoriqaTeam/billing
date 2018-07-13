@@ -26,6 +26,7 @@ extern crate r2d2_diesel;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
 extern crate serde_json;
 extern crate stq_http;
 extern crate stq_router;

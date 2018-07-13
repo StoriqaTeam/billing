@@ -33,8 +33,8 @@ use errors::Error;
 use models::*;
 use repos::acl::RolesCacheImpl;
 use repos::repo_factory::*;
+use services::invoice::{InvoiceService, InvoiceServiceImpl};
 use services::merchant::{MerchantService, MerchantServiceImpl};
-use services::order_info::{OrderInfoService, OrderInfoServiceImpl};
 use services::user_roles::{UserRolesService, UserRolesServiceImpl};
 
 /// Controller handles route parsing and calling `Service` layer
@@ -96,7 +96,7 @@ impl<
             .and_then(|id| i32::from_str(&id).ok())
             .map(UserId);
         let cached_roles = self.roles_cache.clone();
-        let order_info_service = OrderInfoServiceImpl::new(
+        let invoice_service = InvoiceServiceImpl::new(
             self.db_pool.clone(),
             self.cpu_pool.clone(),
             self.client_handle.clone(),
@@ -120,10 +120,12 @@ impl<
         let path = req.path().to_string();
 
         match (&req.method().clone(), self.route_parser.test(req.path())) {
-            (&Get, Some(Route::ExternalBillingCallback { id })) => {
-                debug!("Received request to get external billing callback with id: {:?}", id);
-                serialize_future(order_info_service.set_paid(id))
-            }
+            (&Post, Some(Route::ExternalBillingCallback)) => serialize_future({
+                parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| {
+                    debug!("Received request to update invoice {:?}", data);
+                    invoice_service.update(data)
+                })
+            }),
             (&Post, Some(Route::UserMerchants)) => serialize_future({
                 parse_body::<CreateUserMerchantPayload>(req.body()).and_then(move |data| {
                     debug!("Received request to create user merchant {:?}", data);
@@ -146,14 +148,26 @@ impl<
             }),
             (&Post, Some(Route::Invoices)) => serialize_future({
                 parse_body::<CreateInvoice>(req.body()).and_then(move |data| {
-                    debug!("Received request to create orders {:?}", data);
-                    order_info_service.create_invoice(data)
+                    debug!("Received request to create invoice {}", data);
+                    invoice_service.create(data)
                 })
             }),
-            (Delete, Some(Route::Invoice { id })) => serialize_future({
-                debug!("Received request to delete invoice by id {}", id);
-                serialize_future({ order_info_service.delete_invoice(id) })
+            (Delete, Some(Route::InvoiceBySagaId { id })) => serialize_future({
+                debug!("Received request to delete invoice by saga id {}", id);
+                serialize_future({ invoice_service.delete(id) })
             }),
+            (Get, Some(Route::InvoiceByOrderId { id })) => {
+                debug!("Received request to get invoice by order id {}", id);
+                serialize_future({ invoice_service.get_by_order_id(id) })
+            }
+            (Get, Some(Route::InvoiceById { id })) => {
+                debug!("Received request to get invoice by id {}", id);
+                serialize_future({ invoice_service.get_by_id(id) })
+            }
+            (Get, Some(Route::InvoiceOrdersIds { id })) => {
+                debug!("Received request to get invoice orders ids by id {}", id);
+                serialize_future({ invoice_service.get_orders_ids(id) })
+            }
             (Get, Some(Route::RolesByUserId { user_id })) => {
                 debug!("Received request to get roles by user id {}", user_id);
                 serialize_future({ user_roles_service.get_roles(user_id) })

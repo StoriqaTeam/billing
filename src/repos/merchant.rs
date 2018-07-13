@@ -16,7 +16,8 @@ use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
 use models::merchant::merchants::dsl::*;
-use models::{Merchant, NewStoreMerchant, NewUserMerchant, SubjectIdentifier};
+use models::role::roles::dsl as Roles;
+use models::{Merchant, NewStoreMerchant, NewUserMerchant, SubjectIdentifier, UserRole};
 
 /// Merchant repository for handling Merchant
 pub trait MerchantRepo {
@@ -72,7 +73,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Returns merchant by merchant identifier
     fn get_by_merchant_id(&self, id: MerchantId) -> RepoResult<Merchant> {
-        debug!("Returns merchant by merchant id {:?} ", id);
+        debug!("Returns merchant by merchant id {} ", id);
         let query = merchants.filter(merchant_id.eq(id)).get_result::<Merchant>(self.db_conn);
         query
             .map_err(From::from)
@@ -99,7 +100,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Delete store merchant
     fn delete_by_store_id(&self, store_id_arg: StoreId) -> RepoResult<Merchant> {
-        debug!("Delete store merchant {:?}.", store_id_arg);
+        debug!("Delete store {} merchant.", store_id_arg);
         let filtered = merchants.filter(store_id.eq(Some(store_id_arg)));
 
         let query = diesel::delete(filtered);
@@ -110,7 +111,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
                 Ok(merch)
             })
-            .map_err(|e: FailureError| e.context(format!("Delete store merchant {:?} error occured", store_id_arg)).into())
+            .map_err(|e: FailureError| e.context(format!("Delete store {} merchant error occured", store_id_arg)).into())
     }
 
     /// Create a new user merchant
@@ -129,7 +130,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Delete user merchant
     fn delete_by_user_id(&self, user_id_arg: UserId) -> RepoResult<Merchant> {
-        debug!("Delete user merchant {:?}.", user_id_arg);
+        debug!("Delete user {} merchant.", user_id_arg);
         let filtered = merchants.filter(user_id.eq(Some(user_id_arg)));
 
         let query = diesel::delete(filtered);
@@ -140,17 +141,43 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
                 Ok(merch)
             })
-            .map_err(|e: FailureError| e.context(format!("Delete user merchant {:?} error occured", user_id_arg)).into())
+            .map_err(|e: FailureError| e.context(format!("Delete user {} merchant error occured", user_id_arg)).into())
     }
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, Merchant>
     for MerchantRepoImpl<'a, T>
 {
-    fn is_in_scope(&self, _user_id_arg: UserId, scope: &Scope, _obj: Option<&Merchant>) -> bool {
+    fn is_in_scope(&self, user_id_arg: UserId, scope: &Scope, obj: Option<&Merchant>) -> bool {
         match *scope {
             Scope::All => true,
-            Scope::Owned => false,
+            Scope::Owned => {
+                if let Some(obj) = obj {
+                    if let Some(obj_user_id) = obj.user_id {
+                        user_id_arg == obj_user_id
+                    } else if let Some(obj_store_id) = obj.store_id {
+                        let res = Roles::roles
+                            .filter(Roles::user_id.eq(user_id_arg))
+                            .get_results::<UserRole>(self.db_conn)
+                            .map_err(From::from)
+                            .map(|user_roles_arg| {
+                                user_roles_arg.iter().any(|user_role_arg| {
+                                    if let Some(data) = user_role_arg.data.clone() {
+                                        data == json!(obj_store_id)
+                                    } else {
+                                        false
+                                    }
+                                })
+                            })
+                            .unwrap_or_else(|_: FailureError| false);
+                        res
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
         }
     }
 }
