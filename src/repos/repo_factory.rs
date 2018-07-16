@@ -375,16 +375,7 @@ pub mod tests {
         let client = stq_http::client::Client::new(&http_config, &handle);
         let client_handle = client.handle();
 
-        InvoiceServiceImpl::new(
-            db_pool,
-            cpu_pool,
-            client_handle,
-            user_id,
-            MOCK_REPO_FACTORY,
-            "".to_string(),
-            "".to_string(),
-            "".to_string(),
-        )
+        InvoiceServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, config)
     }
 
     pub fn create_merchant_service(
@@ -403,7 +394,7 @@ pub mod tests {
         let client = stq_http::client::Client::new(&http_config, &handle);
         let client_handle = client.handle();
 
-        MerchantServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, "".to_string())
+        MerchantServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, config)
     }
 
     pub fn create_order_info() -> OrderInfo {
@@ -421,14 +412,13 @@ pub mod tests {
         Invoice {
             id: SagaId::new(),
             invoice_id: InvoiceId::new(),
-            billing_url: "billing_url".to_string(),
             transaction_id: None,
-            transaction_captured_amount: None,
+            transaction_captured_amount: ProductPrice(0f64),
             amount: ProductPrice(1f64),
             currency_id: CurrencyId(1),
             price_reserved: SystemTime::now(),
             state: OrderState::PaymentAwaited,
-            wallet: Uuid::new_v4().to_string(),
+            wallet: Some(Uuid::new_v4().to_string()),
         }
     }
 

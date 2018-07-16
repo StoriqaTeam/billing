@@ -1,3 +1,5 @@
+use std::fmt;
+
 use stq_types::{MerchantId, MerchantType, StoreId, UserId};
 
 table! {
@@ -34,6 +36,16 @@ pub struct NewStoreMerchant {
     merchant_type: MerchantType,
 }
 
+impl fmt::Display for NewStoreMerchant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "New Store Merchant - merchant_id: '{}'; user id: {:?}, store id: {:?}, merchant_type : {:?}",
+            self.merchant_id, self.user_id, self.store_id, self.merchant_type
+        )
+    }
+}
+
 impl NewStoreMerchant {
     pub fn new(merchant_id: MerchantId, store_id: StoreId) -> Self {
         Self {
@@ -64,6 +76,16 @@ pub struct NewUserMerchant {
     user_id: Option<UserId>,
     store_id: Option<StoreId>,
     merchant_type: MerchantType,
+}
+
+impl fmt::Display for NewUserMerchant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "New User Merchant - merchant_id: '{}'; user id: {:?}, store id: {:?}, merchant_type : {:?}",
+            self.merchant_id, self.user_id, self.store_id, self.merchant_type
+        )
+    }
 }
 
 impl NewUserMerchant {

@@ -7,6 +7,8 @@ use failure::Error as FailureError;
 use failure::Fail;
 use futures::Future;
 use futures_cpupool::CpuPool;
+use hyper::header::{Authorization, Bearer, ContentType};
+use hyper::Headers;
 use hyper::{Delete, Get, Post};
 use r2d2::{ManageConnection, Pool};
 use serde_json;
@@ -15,6 +17,7 @@ use stq_http::client::ClientHandle;
 use stq_types::{MerchantId, StoreId, UserId};
 
 use super::types::ServiceFuture;
+use config::Config;
 use errors::Error;
 use models::*;
 use repos::repo_factory::ReposFactory;
@@ -43,7 +46,9 @@ pub struct MerchantServiceImpl<
     pub http_client: ClientHandle,
     user_id: Option<UserId>,
     pub repo_factory: F,
-    pub external_billing_address: String,
+    pub merchant_url: String,
+    pub login_url: String,
+    pub credentials: ExternalBillingCredentials,
 }
 
 impl<
@@ -58,15 +63,18 @@ impl<
         http_client: ClientHandle,
         user_id: Option<UserId>,
         repo_factory: F,
-        external_billing_address: String,
+        config: Config,
     ) -> Self {
+        let credentials = ExternalBillingCredentials::new(config.external_billing.username, config.external_billing.password);
         Self {
             db_pool,
             cpu_pool,
             http_client,
             user_id,
             repo_factory,
-            external_billing_address,
+            merchant_url: config.external_billing.merchant_url,
+            login_url: config.external_billing.login_url,
+            credentials,
         }
     }
 }
@@ -83,7 +91,9 @@ impl<
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.external_billing_address.clone();
+        let merchant_url = self.merchant_url.clone();
+        let login_url = self.login_url.clone();
+        let credentials = self.credentials.clone();
 
         Box::new(
             self.cpu_pool
@@ -92,20 +102,39 @@ impl<
                         .get()
                         .map_err(|e| e.context(Error::Connection).into())
                         .and_then(move |conn| {
+                            debug!("user id: {:?}", user_id);
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
 
                             conn.transaction::<Merchant, FailureError, _>(move || {
                                 debug!("Creating new user merchant: {:?}", &user);
-                                let body = serde_json::to_string(&user)?;
-                                let url = format!("{}/merchant", external_billing_address);
+
+                                let body = serde_json::to_string(&credentials)?;
+                                let url = format!("{}", login_url);
+                                let mut headers = Headers::new();
+                                headers.set(ContentType::json());
                                 client
-                                    .request::<ExternalBillingMerchant>(Post, url, Some(body), None)
+                                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                                     .map_err(|e| {
-                                        e.context("Occured an error during user merchant creation in external billing.")
+                                        e.context("Occured an error during receiving authorization token in external billing.")
                                             .context(Error::HttpClient)
                                             .into()
                                     })
                                     .wait()
+                                    .and_then(|ext_token| {
+                                        let body = serde_json::to_string(&user)?;
+                                        let url = format!("{}", merchant_url);
+                                        let mut headers = Headers::new();
+                                        headers.set(Authorization(Bearer { token: ext_token.token }));
+                                        headers.set(ContentType::json());
+                                        client
+                                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
+                                            .map_err(|e| {
+                                                e.context("Occured an error during user merchant creation in external billing.")
+                                                    .context(Error::HttpClient)
+                                                    .into()
+                                            })
+                                            .wait()
+                                    })
                                     .and_then(|merchant| {
                                         let payload = NewUserMerchant::new(merchant.id, user.id);
                                         merchant_repo.create_user_merchant(payload)
@@ -123,7 +152,7 @@ impl<
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.external_billing_address.clone();
+        let merchant_url = self.merchant_url.clone();
 
         Box::new(
             self.cpu_pool
@@ -137,7 +166,7 @@ impl<
                             conn.transaction::<ExternalBillingMerchant, FailureError, _>(move || {
                                 debug!("Deleting user merchant with user id {}", &user_id_arg);
                                 merchant_repo.delete_by_user_id(user_id_arg).and_then(|merchant| {
-                                    let url = format!("{}/merchant/{}", external_billing_address, merchant.merchant_id);
+                                    let url = format!("{}/{}", merchant_url, merchant.merchant_id);
                                     client
                                         .request::<ExternalBillingMerchant>(Delete, url, None, None)
                                         .map_err(|e| {
@@ -160,7 +189,9 @@ impl<
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.external_billing_address.clone();
+        let merchant_url = self.merchant_url.clone();
+        let login_url = self.login_url.clone();
+        let credentials = self.credentials.clone();
 
         Box::new(
             self.cpu_pool
@@ -172,16 +203,34 @@ impl<
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
                             conn.transaction::<Merchant, FailureError, _>(move || {
                                 debug!("Creating new store merchant: {:?}", &store);
-                                let body = serde_json::to_string(&store)?;
-                                let url = format!("{}/merchant", external_billing_address);
+
+                                let body = serde_json::to_string(&credentials)?;
+                                let url = format!("{}", login_url);
+                                let mut headers = Headers::new();
+                                headers.set(ContentType::json());
                                 client
-                                    .request::<ExternalBillingMerchant>(Post, url, Some(body), None)
+                                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                                     .map_err(|e| {
-                                        e.context("Occured an error during store merchant creation in external billing.")
+                                        e.context("Occured an error during receiving authorization token in external billing.")
                                             .context(Error::HttpClient)
                                             .into()
                                     })
                                     .wait()
+                                    .and_then(|ext_token| {
+                                        let body = serde_json::to_string(&store)?;
+                                        let url = format!("{}", merchant_url);
+                                        let mut headers = Headers::new();
+                                        headers.set(Authorization(Bearer { token: ext_token.token }));
+                                        headers.set(ContentType::json());
+                                        client
+                                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
+                                            .map_err(|e| {
+                                                e.context("Occured an error during store merchant creation in external billing.")
+                                                    .context(Error::HttpClient)
+                                                    .into()
+                                            })
+                                            .wait()
+                                    })
                                     .and_then(|merchant| {
                                         let payload = NewStoreMerchant::new(merchant.id, store.id);
                                         merchant_repo.create_store_merchant(payload)
@@ -199,7 +248,7 @@ impl<
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.external_billing_address.clone();
+        let merchant_url = self.merchant_url.clone();
 
         Box::new(
             self.cpu_pool
@@ -213,7 +262,7 @@ impl<
                             conn.transaction::<ExternalBillingMerchant, FailureError, _>(move || {
                                 debug!("Deleting store merchant with store id {}", &store_id_arg);
                                 merchant_repo.delete_by_store_id(store_id_arg).and_then(|merchant| {
-                                    let url = format!("{}/merchant/{}", external_billing_address, merchant.merchant_id);
+                                    let url = format!("{}/{}", merchant_url, merchant.merchant_id);
                                     client
                                         .request::<ExternalBillingMerchant>(Delete, url, None, None)
                                         .map_err(|e| {
@@ -234,7 +283,7 @@ impl<
     fn get_balance(&self, id: MerchantId) -> ServiceFuture<MerchantBalance> {
         let db_clone = self.db_pool.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.external_billing_address.clone();
+        let merchant_url = self.merchant_url.clone();
 
         Box::new(
             self.cpu_pool
@@ -245,7 +294,7 @@ impl<
                         .and_then(move |conn| {
                             conn.transaction::<MerchantBalance, FailureError, _>(move || {
                                 debug!("Get merchant balance by merchant id {:?}", &id);
-                                let url = format!("{}/merchant/{}", external_billing_address, id);
+                                let url = format!("{}/{}", merchant_url, id);
                                 client
                                     .request::<MerchantBalance>(Get, url, None, None)
                                     .map_err(|e| {

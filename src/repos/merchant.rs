@@ -55,7 +55,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> MerchantRepo for MerchantRepoImpl<'a, T> {
     /// Returns merchant by subject identifier
     fn get_by_subject_id(&self, id: SubjectIdentifier) -> RepoResult<Merchant> {
-        debug!("Returns merchant by id {:?} ", id);
+        debug!("Returns merchant by id {:?} from db.", id);
         let query = match id {
             SubjectIdentifier::Store(store_ident) => merchants
                 .filter(store_id.eq(Some(store_ident)))
@@ -73,7 +73,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Returns merchant by merchant identifier
     fn get_by_merchant_id(&self, id: MerchantId) -> RepoResult<Merchant> {
-        debug!("Returns merchant by merchant id {} ", id);
+        debug!("Returns merchant by merchant id {} from db.", id);
         let query = merchants.filter(merchant_id.eq(id)).get_result::<Merchant>(self.db_conn);
         query
             .map_err(From::from)
@@ -86,7 +86,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Create a new store merchant
     fn create_store_merchant(&self, payload: NewStoreMerchant) -> RepoResult<Merchant> {
-        debug!("create new store merchant {:?}.", payload);
+        debug!("create new store merchant {} in db.", payload);
         let query = diesel::insert_into(merchants).values(&payload);
         query
             .get_result(self.db_conn)
@@ -100,7 +100,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Delete store merchant
     fn delete_by_store_id(&self, store_id_arg: StoreId) -> RepoResult<Merchant> {
-        debug!("Delete store {} merchant.", store_id_arg);
+        debug!("Delete store {} merchant from db.", store_id_arg);
         let filtered = merchants.filter(store_id.eq(Some(store_id_arg)));
 
         let query = diesel::delete(filtered);
@@ -116,7 +116,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Create a new user merchant
     fn create_user_merchant(&self, payload: NewUserMerchant) -> RepoResult<Merchant> {
-        debug!("create new user merchant {:?}.", payload);
+        debug!("Create new user merchant {} in db.", payload);
         let query = diesel::insert_into(merchants).values(&payload);
         query
             .get_result(self.db_conn)
@@ -130,7 +130,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Delete user merchant
     fn delete_by_user_id(&self, user_id_arg: UserId) -> RepoResult<Merchant> {
-        debug!("Delete user {} merchant.", user_id_arg);
+        debug!("Delete user {} merchant in db.", user_id_arg);
         let filtered = merchants.filter(user_id.eq(Some(user_id_arg)));
 
         let query = diesel::delete(filtered);

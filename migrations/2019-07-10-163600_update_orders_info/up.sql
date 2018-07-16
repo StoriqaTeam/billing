@@ -1,4 +1,3 @@
 ALTER TABLE orders_info ADD COLUMN customer_id INTEGER NOT NULL;
 ALTER TABLE orders_info ADD COLUMN store_id INTEGER NOT NULL;
-ALTER TABLE orders_info DROP COLUMN callback_id;
 ALTER TABLE orders_info ADD COLUMN saga_id VARCHAR NOT NULL;

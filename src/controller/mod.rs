@@ -102,9 +102,7 @@ impl<
             self.client_handle.clone(),
             user_id,
             self.repo_factory.clone(),
-            self.config.external_billing.create_order_url.clone(),
-            self.config.callback.url.clone(),
-            self.config.saga_addr.url.clone(),
+            self.config.clone(),
         );
         let merchant_service = MerchantServiceImpl::new(
             self.db_pool.clone(),
@@ -112,7 +110,7 @@ impl<
             self.client_handle.clone(),
             user_id,
             self.repo_factory.clone(),
-            self.config.external_billing.create_order_url.clone(),
+            self.config.clone(),
         );
         let user_roles_service =
             UserRolesServiceImpl::new(self.db_pool.clone(), self.cpu_pool.clone(), cached_roles, self.repo_factory.clone());

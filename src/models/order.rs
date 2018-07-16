@@ -4,6 +4,7 @@ use stq_types::{CurrencyId, OrderId, SagaId, StoreId, UserId};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Order {
     pub id: OrderId,
+    #[serde(rename = "store")]
     pub store_id: StoreId,
     pub price: f64,
     pub currency_id: CurrencyId,
@@ -35,5 +36,22 @@ impl fmt::Display for CreateInvoice {
             "Create invoice - orders: '{}'; customer id: {}, currency id: {}, saga id : {}",
             orders_comma_separated, self.customer_id, self.currency_id, self.saga_id
         )
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct ExternalBillingToken {
+    pub token: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct ExternalBillingCredentials {
+    username: String,
+    password: String,
+}
+
+impl ExternalBillingCredentials {
+    pub fn new(username: String, password: String) -> Self {
+        Self { username, password }
     }
 }

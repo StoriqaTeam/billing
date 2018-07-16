@@ -7,6 +7,8 @@ use failure::Error as FailureError;
 use failure::Fail;
 use futures::Future;
 use futures_cpupool::CpuPool;
+use hyper::header::{Authorization, Bearer, ContentType};
+use hyper::Headers;
 use hyper::{Delete, Post};
 use r2d2::{ManageConnection, Pool};
 use serde_json;
@@ -15,8 +17,9 @@ use stq_http::client::ClientHandle;
 use stq_types::{InvoiceId, OrderId, SagaId, UserId};
 
 use super::types::ServiceFuture;
+use config::Config;
 use errors::Error;
-use models::{BillingOrder, CreateInvoice, CreateInvoicePayload, ExternalBillingInvoice, Invoice, NewOrderInfo, SubjectIdentifier};
+use models::*;
 use repos::repo_factory::ReposFactory;
 use repos::RepoResult;
 
@@ -46,9 +49,12 @@ pub struct InvoiceServiceImpl<
     pub http_client: ClientHandle,
     user_id: Option<UserId>,
     pub repo_factory: F,
-    pub external_billing_address: String,
+    pub invoice_url: String,
     pub callback_url: String,
     pub saga_url: String,
+    pub login_url: String,
+    pub credentials: ExternalBillingCredentials,
+    pub timeout_s: i32,
 }
 
 impl<
@@ -63,19 +69,21 @@ impl<
         http_client: ClientHandle,
         user_id: Option<UserId>,
         repo_factory: F,
-        external_billing_address: String,
-        callback_url: String,
-        saga_url: String,
+        config: Config,
     ) -> Self {
+        let credentials = ExternalBillingCredentials::new(config.external_billing.username, config.external_billing.password);
         Self {
             db_pool,
             cpu_pool,
             http_client,
             user_id,
             repo_factory,
-            external_billing_address,
-            callback_url,
-            saga_url,
+            invoice_url: config.external_billing.invoice_url,
+            callback_url: config.callback.url,
+            saga_url: config.saga_addr.url,
+            login_url: config.external_billing.login_url,
+            credentials,
+            timeout_s: config.external_billing.amount_recalculate_timeout_sec,
         }
     }
 }
@@ -92,8 +100,11 @@ impl<
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.external_billing_address.clone();
+        let invoice_url = self.invoice_url.clone();
         let callback_url = self.callback_url.clone();
+        let login_url = self.login_url.clone();
+        let credentials = self.credentials.clone();
+        let timeout_s = self.timeout_s.clone();
 
         Box::new(
             self.cpu_pool
@@ -128,19 +139,36 @@ impl<
                                     })
                                     .collect::<RepoResult<Vec<BillingOrder>>>()
                                     .and_then(|orders| {
-                                        let callback = format!("{}", callback_url);
-                                        let billing_payload =
-                                            CreateInvoicePayload::new(orders, callback, create_invoice.currency_id.to_string());
-                                        let body = serde_json::to_string(&billing_payload)?;
-                                        let url = format!("{}/invoice", external_billing_address);
+                                        let body = serde_json::to_string(&credentials)?;
+                                        let url = format!("{}", login_url);
+                                        let mut headers = Headers::new();
+                                        headers.set(ContentType::json());
                                         client
-                                            .request::<ExternalBillingInvoice>(Post, url, Some(body), None)
+                                            .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                                             .map_err(|e| {
-                                                e.context("Occured an error during invoice creation in external billing.")
+                                                e.context("Occured an error during receiving authorization token in external billing.")
                                                     .context(Error::HttpClient)
                                                     .into()
                                             })
                                             .wait()
+                                            .and_then(|ext_token| {
+                                                let mut headers = Headers::new();
+                                                headers.set(Authorization(Bearer { token: ext_token.token }));
+                                                headers.set(ContentType::json());
+                                                let callback = format!("{}", callback_url);
+                                                let billing_payload =
+                                                    CreateInvoicePayload::new(orders, callback, create_invoice.currency_id.to_string(), timeout_s);
+                                                let body = serde_json::to_string(&billing_payload)?;
+                                                let url = format!("{}", invoice_url);
+                                                client
+                                                    .request::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
+                                                    .map_err(|e| {
+                                                        e.context("Occured an error during invoice creation in external billing.")
+                                                            .context(Error::HttpClient)
+                                                            .into()
+                                                    })
+                                                    .wait()
+                                            })
                                     })
                                     .and_then(|invoice| {
                                         let payload = Invoice::new(saga_id, invoice);
@@ -159,7 +187,7 @@ impl<
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
-        let external_billing_address = self.external_billing_address.clone();
+        let invoice_url = self.invoice_url.clone();
 
         Box::new(
             self.cpu_pool
@@ -176,7 +204,7 @@ impl<
                                     .delete(id)
                                     .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice))
                                     .and_then(|invoice| {
-                                        let url = format!("{}/invoices/{}", external_billing_address, invoice.invoice_id);
+                                        let url = format!("{}s/{}", invoice_url, invoice.invoice_id);
                                         client
                                             .request::<Invoice>(Delete, url, None, None)
                                             .map_err(|e| {
@@ -321,7 +349,6 @@ impl<
 pub mod tests {
 
     use std::sync::Arc;
-    use std::time::SystemTime;
     use tokio_core::reactor::Core;
 
     use stq_static_resources::*;
@@ -359,13 +386,12 @@ pub mod tests {
         let service = create_invoice_service(Some(UserId(1)), handle);
         let invoice = ExternalBillingInvoice {
             id: InvoiceId::new(),
-            billing_url: "bla".to_string(),
-            transaction: None,
-            amount: ProductPrice(1f64),
-            currency_id: CurrencyId(1),
-            price_reserved: SystemTime::now(),
-            state: OrderState::TransactionPending,
-            wallet: "wallet".to_string(),
+            amount: "0.000000000".to_string(),
+            status: ExternalBillingStatus::New,
+            wallet: Some("wallet".to_string()),
+            amount_captured: "0.000000000".to_string(),
+            transaction_id: None,
+            currency: "stq".to_string(),
         };
         let work = service.update(invoice);
         let _result = core.run(work).unwrap();
