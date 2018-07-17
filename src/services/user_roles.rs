@@ -10,15 +10,17 @@ use failure::Fail;
 use futures::Future;
 use r2d2::{ManageConnection, Pool};
 
+use stq_types::{RoleId, StoresRole, UserId};
+
 use super::types::ServiceFuture;
 use errors::Error;
-use models::{NewUserRole, Role, RoleId, UserId, UserRole};
+use models::{NewUserRole, UserRole};
 use repos::roles_cache::RolesCacheImpl;
 use repos::ReposFactory;
 
 pub trait UserRolesService {
     /// Returns role by user ID
-    fn get_roles(&self, user_id: UserId) -> ServiceFuture<Vec<Role>>;
+    fn get_roles(&self, user_id: UserId) -> ServiceFuture<Vec<StoresRole>>;
     /// Creates new user_role
     fn create(&self, payload: NewUserRole) -> ServiceFuture<UserRole>;
     /// Deletes roles for user
@@ -62,7 +64,7 @@ impl<
     > UserRolesService for UserRolesServiceImpl<T, M, F>
 {
     /// Returns role by user ID
-    fn get_roles(&self, user_id: UserId) -> ServiceFuture<Vec<Role>> {
+    fn get_roles(&self, user_id: UserId) -> ServiceFuture<Vec<StoresRole>> {
         let db_pool = self.db_pool.clone();
         let repo_factory = self.repo_factory.clone();
 

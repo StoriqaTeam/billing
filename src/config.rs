@@ -9,6 +9,7 @@ pub struct Config {
     pub server: Server,
     pub client: Client,
     pub saga_addr: SagaAddr,
+    pub callback: Callback,
     pub external_billing: ExternalBilling,
 }
 
@@ -35,11 +36,20 @@ pub struct SagaAddr {
     pub url: String,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct Callback {
+    pub url: String,
+}
+
 /// External billing service url
 #[derive(Debug, Deserialize, Clone)]
 pub struct ExternalBilling {
-    pub create_order_url: String,
-    pub create_merchant_url: String,
+    pub invoice_url: String,
+    pub merchant_url: String,
+    pub login_url: String,
+    pub username: String,
+    pub password: String,
+    pub amount_recalculate_timeout_sec: i32,
 }
 
 /// Creates new app config struct

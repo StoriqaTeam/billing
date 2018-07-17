@@ -1,6 +1,8 @@
+use stq_types::UserId;
+
 /// Implement this trait on resource to signal if it's in the current scope
 pub trait CheckScope<Scope, T> {
-    fn is_in_scope(&self, user_id: i32, scope: &Scope, obj: Option<&T>) -> bool;
+    fn is_in_scope(&self, user_id: UserId, scope: &Scope, obj: Option<&T>) -> bool;
 }
 
 /// Access control layer for repos. It tells if a user can do a certain action with

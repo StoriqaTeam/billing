@@ -5,6 +5,8 @@ use std::fmt;
 pub enum Resource {
     OrderInfo,
     UserRoles,
+    Merchant,
+    Invoice,
 }
 
 impl fmt::Display for Resource {
@@ -12,6 +14,8 @@ impl fmt::Display for Resource {
         match *self {
             Resource::OrderInfo => write!(f, "order info"),
             Resource::UserRoles => write!(f, "user roles"),
+            Resource::Merchant => write!(f, "merchant"),
+            Resource::Invoice => write!(f, "invoice"),
         }
     }
 }

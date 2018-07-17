@@ -2,12 +2,16 @@
 
 #[macro_use]
 pub mod acl;
+pub mod invoice;
+pub mod merchant;
 pub mod order_info;
 pub mod repo_factory;
 pub mod types;
 pub mod user_roles;
 
 pub use self::acl::*;
+pub use self::invoice::*;
+pub use self::merchant::*;
 pub use self::order_info::*;
 pub use self::repo_factory::*;
 pub use self::types::*;
