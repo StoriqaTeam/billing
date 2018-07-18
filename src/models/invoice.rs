@@ -1,5 +1,5 @@
-use std::time::SystemTime;
 use std::str::FromStr;
+use std::time::SystemTime;
 
 use stq_static_resources::*;
 use stq_types::*;
@@ -36,7 +36,7 @@ pub struct Invoice {
 
 impl Invoice {
     pub fn new(id: SagaId, external_invoice: ExternalBillingInvoice) -> Self {
-        let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq ) as i32);
+        let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
         let state = match external_invoice.status {
             ExternalBillingStatus::New | ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
             ExternalBillingStatus::Waiting => OrderState::TransactionPending,
@@ -73,7 +73,7 @@ pub struct UpdateInvoice {
 
 impl From<ExternalBillingInvoice> for UpdateInvoice {
     fn from(external_invoice: ExternalBillingInvoice) -> Self {
-        let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq ) as i32);
+        let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
         let state = match external_invoice.status {
             ExternalBillingStatus::New | ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
             ExternalBillingStatus::Waiting => OrderState::TransactionPending,
@@ -97,7 +97,7 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BillingOrder {
     pub merchant: MerchantId,
-    pub amount: f64,
+    pub amount: ProductPrice,
     pub currency: String,
     pub description: Option<String>,
 }
@@ -108,7 +108,7 @@ impl BillingOrder {
             merchant,
             amount: order.price,
             currency: order.currency_id.to_string(),
-            description: Some(format!("Order - id : {}",order.id)),
+            description: Some(format!("Order - id : {}", order.id)),
         }
     }
 }
@@ -117,14 +117,15 @@ impl BillingOrder {
 pub struct CreateInvoicePayload {
     callback_url: String,
     currency: String,
-    amount: f64,
+    amount: ProductPrice,
     timeout_s: i32,
     purchases: Vec<BillingOrder>,
 }
 
 impl CreateInvoicePayload {
     pub fn new(purchases: Vec<BillingOrder>, callback_url: String, currency: String, timeout_s: i32) -> Self {
-        let amount = purchases.iter().fold(0.0, |acc, x| acc + x.amount); //TODO: ON EXTERNAL BILLING SIDE
+        let amount = purchases.iter().fold(0.0, |acc, x| acc + x.amount.0); //TODO: ON EXTERNAL BILLING SIDE
+        let amount = ProductPrice(amount);
         Self {
             purchases,
             callback_url,
@@ -147,11 +148,10 @@ pub struct ExternalBillingInvoice {
     //pub price_reserved: SystemTime,
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ExternalBillingStatus {
-    New, 
+    New,
     Wallet,
-    Waiting, 
-    Done, 
+    Waiting,
+    Done,
 }
