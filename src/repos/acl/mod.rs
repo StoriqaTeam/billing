@@ -63,6 +63,9 @@ impl ApplicationAcl {
             vec![
                 permission!(Resource::UserRoles, Action::Read, Scope::Owned),
                 permission!(Resource::Invoice, Action::Read, Scope::Owned),
+                permission!(Resource::Invoice, Action::Write, Scope::Owned),
+                permission!(Resource::OrderInfo, Action::Write, Scope::Owned),
+                permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
             ],
         );
         hash.insert(
