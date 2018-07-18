@@ -156,8 +156,12 @@ impl<
                                                 headers.set(Authorization(Bearer { token: ext_token.token }));
                                                 headers.set(ContentType::json());
                                                 let callback = format!("{}", callback_url);
-                                                let billing_payload =
-                                                    CreateInvoicePayload::new(orders, callback, create_invoice.currency_id.to_string(), timeout_s);
+                                                let billing_payload = CreateInvoicePayload::new(
+                                                    orders,
+                                                    callback,
+                                                    create_invoice.currency_id.to_string(),
+                                                    timeout_s,
+                                                );
                                                 let body = serde_json::to_string(&billing_payload)?;
                                                 let url = format!("{}", invoice_url);
                                                 client
@@ -366,7 +370,7 @@ pub mod tests {
         let order = Order {
             id: OrderId::new(),
             store_id: StoreId(1),
-            price: 3232.32,
+            price: ProductPrice(3232.32),
             currency_id: CurrencyId(1),
         };
         let create_order = CreateInvoice {

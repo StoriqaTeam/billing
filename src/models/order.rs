@@ -1,12 +1,12 @@
 use std::fmt;
-use stq_types::{CurrencyId, OrderId, SagaId, StoreId, UserId};
+use stq_types::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Order {
     pub id: OrderId,
     #[serde(rename = "store")]
     pub store_id: StoreId,
-    pub price: f64,
+    pub price: ProductPrice,
     pub currency_id: CurrencyId,
 }
 
