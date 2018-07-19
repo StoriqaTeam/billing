@@ -9,7 +9,7 @@ use futures::Future;
 use futures_cpupool::CpuPool;
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::Headers;
-use hyper::{Delete, Post};
+use hyper::Post;
 use r2d2::{ManageConnection, Pool};
 use serde_json;
 
@@ -190,8 +190,6 @@ impl<
         let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
-        let client = self.http_client.clone();
-        let invoice_url = self.invoice_url.clone();
 
         Box::new(
             self.cpu_pool
@@ -206,19 +204,7 @@ impl<
                                 debug!("Deleting invoice: {}", &id);
                                 invoice_repo
                                     .delete(id)
-                                    .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice))
-                                    .and_then(|invoice| {
-                                        let url = format!("{}s/{}", invoice_url, invoice.invoice_id);
-                                        client
-                                            .request::<Invoice>(Delete, url, None, None)
-                                            .map_err(|e| {
-                                                e.context("Occured an error during invoice deletion in external billing.")
-                                                    .context(Error::HttpClient)
-                                                    .into()
-                                            })
-                                            .map(|invoice| invoice.id)
-                                            .wait()
-                                    })
+                                    .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice.id))
                             })
                         })
                 })
