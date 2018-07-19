@@ -121,7 +121,7 @@ mod tests {
             customer_id: UserId(1),
             store_id: StoreId(1),
             saga_id: SagaId::new(),
-            status: OrderState::PaymentAwaited,
+            status: OrderState::New,
         }
     }
 

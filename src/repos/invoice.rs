@@ -36,7 +36,7 @@ pub trait InvoiceRepo {
     fn create(&self, payload: Invoice) -> RepoResult<Invoice>;
 
     /// Updates invoice
-    fn update(&self, payload: UpdateInvoice) -> RepoResult<Invoice>;
+    fn update(&self, invoice_id: InvoiceId, payload: UpdateInvoice) -> RepoResult<Invoice>;
 
     /// Deletes invoice
     fn delete(&self, id: SagaId) -> RepoResult<Invoice>;
@@ -50,9 +50,9 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> InvoiceRepo for InvoiceRepoImpl<'a, T> {
     /// Find specific invoice by ID
-    fn find(&self, id_arg: InvoiceId) -> RepoResult<Option<Invoice>> {
+    fn find(&self, invoice_id_arg: InvoiceId) -> RepoResult<Option<Invoice>> {
         invoices
-            .filter(id.eq(id_arg.clone()))
+            .filter(invoice_id.eq(invoice_id_arg.clone()))
             .get_result(self.db_conn)
             .optional()
             .map_err(From::from)
@@ -62,7 +62,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 };
                 Ok(invoice_arg)
             })
-            .map_err(|e: FailureError| e.context(format!("Find specific invoice {} error occured", id_arg)).into())
+            .map_err(|e: FailureError| e.context(format!("Find specific invoice {} error occured", invoice_id_arg)).into())
     }
 
     /// Find specific invoice by saga ID
@@ -98,8 +98,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     /// update new invoice
-    fn update(&self, payload: UpdateInvoice) -> RepoResult<Invoice> {
-        let filter = invoices.filter(invoice_id.eq(payload.invoice_id));
+    fn update(&self, invoice_id_arg: InvoiceId, payload: UpdateInvoice) -> RepoResult<Invoice> {
+        let filter = invoices.filter(invoice_id.eq(invoice_id_arg));
 
         let query_invoice = diesel::update(filter).set(&payload);
         query_invoice
