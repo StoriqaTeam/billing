@@ -1,6 +1,8 @@
 use std::str::FromStr;
 use std::time::SystemTime;
 
+use serde_json;
+
 use stq_static_resources::*;
 use stq_types::*;
 
@@ -10,8 +12,7 @@ table! {
     invoices (id) {
         id -> Uuid,
         invoice_id -> Uuid,
-        transaction_id -> Nullable<VarChar>,
-        transaction_captured_amount -> Double,
+        transactions -> Jsonb,
         amount -> Double,
         currency_id -> Integer,
         price_reserved -> Timestamp, // UTC 0, generated at db level
@@ -25,8 +26,7 @@ table! {
 pub struct Invoice {
     pub id: SagaId,
     pub invoice_id: InvoiceId,
-    pub transaction_id: Option<String>,
-    pub transaction_captured_amount: ProductPrice,
+    pub transactions: serde_json::Value,
     pub amount: ProductPrice,
     pub currency_id: CurrencyId,
     pub price_reserved: SystemTime,
@@ -43,13 +43,18 @@ impl Invoice {
             ExternalBillingStatus::Waiting => OrderState::TransactionPending,
             ExternalBillingStatus::Done => OrderState::Paid,
         };
-        let transaction_captured_amount = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
+        let transactions: Vec<Transaction> = external_invoice
+            .transactions
+            .unwrap_or_default()
+            .into_iter()
+            .map(|t| t.into())
+            .collect();
+        let transactions = serde_json::to_value(transactions).unwrap_or_default();
         Self {
             id,
             invoice_id: external_invoice.id,
-            transaction_id: external_invoice.transaction_id,
-            transaction_captured_amount,
+            transactions,
             amount,
             currency_id,
             price_reserved: SystemTime::now(), //TODO: ON EXTERNAL BILLING SIDE
@@ -62,8 +67,7 @@ impl Invoice {
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset, Debug, Clone)]
 #[table_name = "invoices"]
 pub struct UpdateInvoice {
-    pub transaction_id: Option<String>,
-    pub transaction_captured_amount: ProductPrice,
+    pub transactions: serde_json::Value,
     pub amount: ProductPrice,
     pub currency_id: CurrencyId,
     pub price_reserved: SystemTime,
@@ -80,16 +84,38 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
             ExternalBillingStatus::Waiting => OrderState::TransactionPending,
             ExternalBillingStatus::Done => OrderState::Paid,
         };
-        let transaction_captured_amount = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
+        let transactions: Vec<Transaction> = external_invoice
+            .transactions
+            .unwrap_or_default()
+            .into_iter()
+            .map(|t| t.into())
+            .collect();
+        let transactions = serde_json::to_value(transactions).unwrap_or_default();
         Self {
-            transaction_id: external_invoice.transaction_id,
-            transaction_captured_amount,
             amount,
+            transactions,
             currency_id,
             price_reserved: SystemTime::now(), //TODO: ON EXTERNAL BILLING SIDE
             state,
             wallet: external_invoice.wallet,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Transaction {
+    pub id: String,
+    pub amount_captured: ProductPrice,
+}
+
+impl From<ExternalBillingTransaction> for Transaction {
+    fn from(external_transaction: ExternalBillingTransaction) -> Self {
+        let amount_captured = ProductPrice(f64::from_str(&external_transaction.amount_captured).unwrap_or_default());
+
+        Self {
+            id: external_transaction.txid,
+            amount_captured,
         }
     }
 }
@@ -140,12 +166,11 @@ impl CreateInvoicePayload {
 pub struct ExternalBillingInvoice {
     pub id: InvoiceId,
     pub amount_captured: String,
-    pub transaction_id: Option<String>,
+    pub transactions: Option<Vec<ExternalBillingTransaction>>,
     pub wallet: Option<String>,
     pub amount: String,
     pub currency: String,
     pub status: ExternalBillingStatus,
-    //pub price_reserved: SystemTime,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -154,4 +179,10 @@ pub enum ExternalBillingStatus {
     Wallet,
     Waiting,
     Done,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ExternalBillingTransaction {
+    pub txid: String,
+    pub amount_captured: String,
 }

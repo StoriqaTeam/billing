@@ -118,7 +118,7 @@ impl<
                             let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
 
                             conn.transaction::<Invoice, FailureError, _>(move || {
-                                debug!("Creating new order_infos: {}", &create_invoice);
+                                debug!("Creating new invoice: {}", &create_invoice);
                                 let saga_id = create_invoice.saga_id.clone();
                                 let customer_id = create_invoice.customer_id.clone();
                                 create_invoice
@@ -381,7 +381,7 @@ pub mod tests {
             status: ExternalBillingStatus::New,
             wallet: Some("wallet".to_string()),
             amount_captured: "0.000000000".to_string(),
-            transaction_id: None,
+            transactions: None,
             currency: "stq".to_string(),
         };
         let work = service.update(invoice);
