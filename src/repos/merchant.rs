@@ -163,7 +163,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                             .map(|user_roles_arg| {
                                 user_roles_arg.iter().any(|user_role_arg| {
                                     if let Some(data) = user_role_arg.data.clone() {
-                                        data == json!(obj_store_id)
+                                        data.to_string() == obj_store_id.to_string()
                                     } else {
                                         false
                                     }

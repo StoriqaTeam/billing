@@ -9,7 +9,7 @@ use futures::Future;
 use futures_cpupool::CpuPool;
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::Headers;
-use hyper::{Delete, Get, Post};
+use hyper::{Get, Post};
 use r2d2::{ManageConnection, Pool};
 use serde_json;
 
@@ -26,11 +26,11 @@ pub trait MerchantService {
     /// Creates user merchant
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
     /// Delete user merchant
-    fn delete_user(&self, user_id: UserId) -> ServiceFuture<ExternalBillingMerchant>;
+    fn delete_user(&self, user_id: UserId) -> ServiceFuture<MerchantId>;
     /// Creates store merchant
     fn create_store(&self, store: CreateStoreMerchantPayload) -> ServiceFuture<Merchant>;
     /// Delete store merchant
-    fn delete_store(&self, store_id: StoreId) -> ServiceFuture<ExternalBillingMerchant>;
+    fn delete_store(&self, store_id: StoreId) -> ServiceFuture<MerchantId>;
     /// Get merchant balance by merchant id
     fn get_balance(&self, id: MerchantId) -> ServiceFuture<MerchantBalance>;
 }
@@ -147,12 +147,10 @@ impl<
     }
 
     /// Delete user merchant
-    fn delete_user(&self, user_id_arg: UserId) -> ServiceFuture<ExternalBillingMerchant> {
+    fn delete_user(&self, user_id_arg: UserId) -> ServiceFuture<MerchantId> {
         let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
-        let client = self.http_client.clone();
-        let merchant_url = self.merchant_url.clone();
 
         Box::new(
             self.cpu_pool
@@ -163,19 +161,9 @@ impl<
                         .and_then(move |conn| {
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
 
-                            conn.transaction::<ExternalBillingMerchant, FailureError, _>(move || {
+                            conn.transaction::<MerchantId, FailureError, _>(move || {
                                 debug!("Deleting user merchant with user id {}", &user_id_arg);
-                                merchant_repo.delete_by_user_id(user_id_arg).and_then(|merchant| {
-                                    let url = format!("{}/{}", merchant_url, merchant.merchant_id);
-                                    client
-                                        .request::<ExternalBillingMerchant>(Delete, url, None, None)
-                                        .map_err(|e| {
-                                            e.context("Occured an error during user merchant deletion in external billing.")
-                                                .context(Error::HttpClient)
-                                                .into()
-                                        })
-                                        .wait()
-                                })
+                                merchant_repo.delete_by_user_id(user_id_arg).map(|merchant| merchant.merchant_id)
                             })
                         })
                 })
@@ -243,12 +231,10 @@ impl<
     }
 
     /// Delete store merchant
-    fn delete_store(&self, store_id_arg: StoreId) -> ServiceFuture<ExternalBillingMerchant> {
+    fn delete_store(&self, store_id_arg: StoreId) -> ServiceFuture<MerchantId> {
         let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
         let repo_factory = self.repo_factory.clone();
-        let client = self.http_client.clone();
-        let merchant_url = self.merchant_url.clone();
 
         Box::new(
             self.cpu_pool
@@ -259,19 +245,9 @@ impl<
                         .and_then(move |conn| {
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
 
-                            conn.transaction::<ExternalBillingMerchant, FailureError, _>(move || {
+                            conn.transaction::<MerchantId, FailureError, _>(move || {
                                 debug!("Deleting store merchant with store id {}", &store_id_arg);
-                                merchant_repo.delete_by_store_id(store_id_arg).and_then(|merchant| {
-                                    let url = format!("{}/{}", merchant_url, merchant.merchant_id);
-                                    client
-                                        .request::<ExternalBillingMerchant>(Delete, url, None, None)
-                                        .map_err(|e| {
-                                            e.context("Occured an error during store merchant deletion in external billing.")
-                                                .context(Error::HttpClient)
-                                                .into()
-                                        })
-                                        .wait()
-                                })
+                                merchant_repo.delete_by_store_id(store_id_arg).map(|merchant| merchant.merchant_id)
                             })
                         })
                 })
