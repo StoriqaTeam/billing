@@ -231,9 +231,10 @@ impl<
                         .and_then(move |conn| {
                             let order_info_repo = repo_factory.create_order_info_repo(&conn, current_user);
                             let invoice_repo = repo_factory.create_invoice_repo(&conn, current_user);
-                            let invoice = external_invoice.into();
+                            let invoice_id = external_invoice.id;
+                            let update_payload = external_invoice.into();
                             invoice_repo
-                                .update(invoice)
+                                .update(invoice_id, update_payload)
                                 .and_then(|invoice| order_info_repo.update_status(invoice.id, invoice.state))
                         })
                         .and_then(|orders| {

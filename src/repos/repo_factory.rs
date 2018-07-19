@@ -237,7 +237,7 @@ pub mod tests {
         }
 
         /// update new invoice
-        fn update(&self, _payload: UpdateInvoice) -> RepoResult<Invoice> {
+        fn update(&self, _invoice_id_arg: InvoiceId, _payload: UpdateInvoice) -> RepoResult<Invoice> {
             Ok(create_invoice())
         }
 
@@ -404,7 +404,7 @@ pub mod tests {
             customer_id: UserId(1),
             store_id: StoreId(1),
             saga_id: SagaId::new(),
-            status: OrderState::PaymentAwaited,
+            status: OrderState::New,
         }
     }
 
@@ -417,7 +417,7 @@ pub mod tests {
             amount: ProductPrice(1f64),
             currency_id: CurrencyId(1),
             price_reserved: SystemTime::now(),
-            state: OrderState::PaymentAwaited,
+            state: OrderState::New,
             wallet: Some(Uuid::new_v4().to_string()),
         }
     }

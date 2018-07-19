@@ -38,7 +38,8 @@ impl Invoice {
     pub fn new(id: SagaId, external_invoice: ExternalBillingInvoice) -> Self {
         let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
         let state = match external_invoice.status {
-            ExternalBillingStatus::New | ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
+            ExternalBillingStatus::New => OrderState::New,
+            ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
             ExternalBillingStatus::Waiting => OrderState::TransactionPending,
             ExternalBillingStatus::Done => OrderState::Paid,
         };
@@ -61,7 +62,6 @@ impl Invoice {
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset, Debug, Clone)]
 #[table_name = "invoices"]
 pub struct UpdateInvoice {
-    pub invoice_id: InvoiceId,
     pub transaction_id: Option<String>,
     pub transaction_captured_amount: ProductPrice,
     pub amount: ProductPrice,
@@ -75,14 +75,14 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
     fn from(external_invoice: ExternalBillingInvoice) -> Self {
         let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
         let state = match external_invoice.status {
-            ExternalBillingStatus::New | ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
+            ExternalBillingStatus::New => OrderState::New,
+            ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
             ExternalBillingStatus::Waiting => OrderState::TransactionPending,
             ExternalBillingStatus::Done => OrderState::Paid,
         };
         let transaction_captured_amount = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
         Self {
-            invoice_id: external_invoice.id,
             transaction_id: external_invoice.transaction_id,
             transaction_captured_amount,
             amount,
