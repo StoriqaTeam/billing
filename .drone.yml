@@ -26,7 +26,6 @@ pipeline:
     - rm -rf .git && mv -f .git.bak .git
     when:
       event: pull_request
-      branch: [ master, release* ]
   test:
     image: rust:1.26-stretch
     environment:
@@ -66,6 +65,9 @@ pipeline:
     - cargo build --release --locked
     when:
       event: push
+      branch:
+      - master
+      - release
   package:
     image: plugins/docker
     repo: storiqateam/stq-billing
@@ -77,7 +79,12 @@ pipeline:
     - docker_username
     - docker_password
     when:
-      event: [ push, tag ]
+      event:
+      - push
+      - tag
+      branch:
+      - master
+      - release
   deploy2nightly:
     image: jackthestripper/drone_k8s_rollout:20180610
     namespace: default
@@ -189,8 +196,13 @@ pipeline:
     template: >
         Build {{build.number}} for {{repo.name}} branch {{build.branch}} failed.
     when:
-      event: [ push, deployment, tag ]
-      branch: [ master, release ]
+      event:
+      - push
+      - deployment
+      - tag
+      branch:
+      - master
+      - release
       status: failure
 
 ###
