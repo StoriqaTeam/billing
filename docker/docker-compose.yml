@@ -31,6 +31,8 @@ services:
       - POSTGRES_PASSWORD=billing
     expose:
       - 5432
+    ports:
+      - 5533:5432
 
 volumes:
   stq_cargo_cache:

@@ -412,8 +412,7 @@ pub mod tests {
         Invoice {
             id: SagaId::new(),
             invoice_id: InvoiceId::new(),
-            transaction_id: None,
-            transaction_captured_amount: ProductPrice(0f64),
+            transactions: serde_json::Value::default(),
             amount: ProductPrice(1f64),
             currency_id: CurrencyId(1),
             price_reserved: SystemTime::now(),
