@@ -358,6 +358,7 @@ pub mod tests {
             id: OrderId::new(),
             store_id: StoreId(1),
             price: ProductPrice(3232.32),
+            quantity: Quantity(1),
             currency_id: CurrencyId(1),
         };
         let create_order = CreateInvoice {

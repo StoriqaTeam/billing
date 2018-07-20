@@ -132,7 +132,7 @@ impl BillingOrder {
     pub fn new(order: Order, merchant: MerchantId) -> Self {
         Self {
             merchant,
-            amount: order.price,
+            amount: ProductPrice(order.price.0 * (order.quantity.0 as f64)),
             currency: order.currency_id.to_string(),
             description: Some(format!("Order - id : {}", order.id)),
         }

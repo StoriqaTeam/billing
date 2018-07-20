@@ -7,6 +7,7 @@ pub struct Order {
     #[serde(rename = "store")]
     pub store_id: StoreId,
     pub price: ProductPrice,
+    pub quantity: Quantity,
     pub currency_id: CurrencyId,
 }
 
