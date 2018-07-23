@@ -29,4 +29,5 @@ stq_http = { path = "vendor/libstqbackend/http" }
 stq_router = { path = "vendor/libstqbackend/router" }
 stq_static_resources = { path = "vendor/libstqbackend/static_resources" }
 stq_types = { path = "vendor/libstqbackend/types" }
+stq_logging = { path = "vendor/libstqbackend/logging" }
 uuid = { version = "*", features = ["use_std", "v4", "serde"] }

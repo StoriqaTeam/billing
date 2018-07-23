@@ -1,6 +1,16 @@
 [saga_addr]
 url = "http://saga:8000"
 
+[callback]
+url = "http://billing:8000"
+
 [external_billing]
-create_order_url = "http://tugush.com:8000/order"
-create_merchant_url = "http://tugush.com:8000/merchant"
+invoice_url = "http://payments.tugush.com/api/v1/invoices/"
+merchant_url = "http://payments.tugush.com/api/v1/merchants/"
+login_url = "http://payments.tugush.com/api/v1/login/"
+username = "storiqa"
+password = "DuRZx,E}8&myT^%-"
+amount_recalculate_timeout_sec = 600
+
+[graylog]
+addr = "udplog.stq.cloud:32303"

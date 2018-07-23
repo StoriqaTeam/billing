@@ -11,3 +11,6 @@ login_url = "http://payments.tugush.com/api/v1/login/"
 username = "storiqa"
 password = "DuRZx,E}8&myT^%-"
 amount_recalculate_timeout_sec = 600
+
+[graylog]
+addr = "udplog.stq.cloud:32303"

@@ -1,7 +1,9 @@
 //! Config module contains the top-level config for the app.
+use std::env;
 
 use config_crate::{Config as RawConfig, ConfigError, Environment, File};
-use std::env;
+
+use stq_logging::GrayLogConfig;
 
 /// Basic settings - HTTP binding, saga and external billing addresses
 #[derive(Debug, Deserialize, Clone)]
@@ -11,6 +13,7 @@ pub struct Config {
     pub saga_addr: SagaAddr,
     pub callback: Callback,
     pub external_billing: ExternalBilling,
+    pub graylog: Option<GrayLogConfig>,
 }
 
 /// Common server settings
