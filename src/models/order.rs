@@ -1,7 +1,7 @@
 use std::fmt;
 use stq_types::*;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Order {
     pub id: OrderId,
     #[serde(rename = "store")]

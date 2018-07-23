@@ -52,7 +52,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     /// Find specific invoice by ID
     fn find(&self, invoice_id_arg: InvoiceId) -> RepoResult<Option<Invoice>> {
         invoices
-            .filter(invoice_id.eq(invoice_id_arg.clone()))
+            .filter(invoice_id.eq(invoice_id_arg))
             .get_result(self.db_conn)
             .optional()
             .map_err(From::from)
@@ -68,7 +68,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     /// Find specific invoice by saga ID
     fn find_by_saga_id(&self, saga_id_arg: SagaId) -> RepoResult<Option<Invoice>> {
         invoices
-            .filter(id.eq(saga_id_arg.clone()))
+            .filter(id.eq(saga_id_arg))
             .get_result(self.db_conn)
             .optional()
             .map_err(From::from)
@@ -132,13 +132,12 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             Scope::All => true,
             Scope::Owned => {
                 if let Some(invoice) = obj {
-                    let res = OrderInfos::orders_info
+                    OrderInfos::orders_info
                         .filter(OrderInfos::saga_id.eq(invoice.id))
                         .get_results::<OrderInfo>(self.db_conn)
                         .map_err(From::from)
                         .map(|order_infos| order_infos.iter().all(|order_info| order_info.customer_id == user_id))
-                        .unwrap_or_else(|_: FailureError| false);
-                    res
+                        .unwrap_or_else(|_: FailureError| false)
                 } else {
                     false
                 }

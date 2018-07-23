@@ -104,7 +104,7 @@ impl<
         let callback_url = self.callback_url.clone();
         let login_url = self.login_url.clone();
         let credentials = self.credentials.clone();
-        let timeout_s = self.timeout_s.clone();
+        let timeout_s = self.timeout_s;
 
         Box::new(
             self.cpu_pool
@@ -119,28 +119,28 @@ impl<
 
                             conn.transaction::<Invoice, FailureError, _>(move || {
                                 debug!("Creating new invoice: {}", &create_invoice);
-                                let saga_id = create_invoice.saga_id.clone();
-                                let customer_id = create_invoice.customer_id.clone();
+                                let saga_id = create_invoice.saga_id;
+                                let customer_id = create_invoice.customer_id;
                                 create_invoice
                                     .orders
                                     .iter()
                                     .map(|order| {
                                         let payload = NewOrderInfo::new(
-                                            order.id.clone(),
-                                            saga_id.clone(),
-                                            customer_id.clone(),
-                                            order.store_id.clone(),
+                                            order.id,
+                                            saga_id,
+                                            customer_id,
+                                            order.store_id,
                                         );
                                         order_info_repo.create(payload).and_then(|_| {
                                             merchant_repo
-                                                .get_by_subject_id(SubjectIdentifier::Store(order.store_id.clone()))
-                                                .map(|merchant| BillingOrder::new(order.clone(), merchant.merchant_id))
+                                                .get_by_subject_id(SubjectIdentifier::Store(order.store_id))
+                                                .map(|merchant| BillingOrder::new(&order, merchant.merchant_id))
                                         })
                                     })
                                     .collect::<RepoResult<Vec<BillingOrder>>>()
                                     .and_then(|orders| {
                                         let body = serde_json::to_string(&credentials)?;
-                                        let url = format!("{}", login_url);
+                                        let url = login_url.to_string();
                                         let mut headers = Headers::new();
                                         headers.set(ContentType::json());
                                         client
@@ -155,7 +155,7 @@ impl<
                                                 let mut headers = Headers::new();
                                                 headers.set(Authorization(Bearer { token: ext_token.token }));
                                                 headers.set(ContentType::json());
-                                                let callback = format!("{}", callback_url);
+                                                let callback = callback_url.to_string();
                                                 let billing_payload = CreateInvoicePayload::new(
                                                     orders,
                                                     callback,
@@ -163,7 +163,7 @@ impl<
                                                     timeout_s,
                                                 );
                                                 let body = serde_json::to_string(&billing_payload)?;
-                                                let url = format!("{}", invoice_url);
+                                                let url = invoice_url.to_string();
                                                 client
                                                     .request::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
                                                     .map_err(|e| {

@@ -109,7 +109,7 @@ impl<
                                 debug!("Creating new user merchant: {:?}", &user);
 
                                 let body = serde_json::to_string(&credentials)?;
-                                let url = format!("{}", login_url);
+                                let url = login_url.to_string();
                                 let mut headers = Headers::new();
                                 headers.set(ContentType::json());
                                 client
@@ -122,7 +122,7 @@ impl<
                                     .wait()
                                     .and_then(|ext_token| {
                                         let body = serde_json::to_string(&user)?;
-                                        let url = format!("{}", merchant_url);
+                                        let url = merchant_url.to_string();
                                         let mut headers = Headers::new();
                                         headers.set(Authorization(Bearer { token: ext_token.token }));
                                         headers.set(ContentType::json());
@@ -193,7 +193,7 @@ impl<
                                 debug!("Creating new store merchant: {:?}", &store);
 
                                 let body = serde_json::to_string(&credentials)?;
-                                let url = format!("{}", login_url);
+                                let url = login_url.to_string();
                                 let mut headers = Headers::new();
                                 headers.set(ContentType::json());
                                 client
@@ -206,7 +206,7 @@ impl<
                                     .wait()
                                     .and_then(|ext_token| {
                                         let body = serde_json::to_string(&store)?;
-                                        let url = format!("{}", merchant_url);
+                                        let url = merchant_url.to_string();
                                         let mut headers = Headers::new();
                                         headers.set(Authorization(Bearer { token: ext_token.token }));
                                         headers.set(ContentType::json());
