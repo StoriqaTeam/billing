@@ -156,21 +156,20 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     if let Some(obj_user_id) = obj.user_id {
                         user_id_arg == obj_user_id
                     } else if let Some(obj_store_id) = obj.store_id {
-                        let res = Roles::roles
+                        Roles::roles
                             .filter(Roles::user_id.eq(user_id_arg))
                             .get_results::<UserRole>(self.db_conn)
                             .map_err(From::from)
                             .map(|user_roles_arg| {
                                 user_roles_arg.iter().any(|user_role_arg| {
                                     if let Some(data) = user_role_arg.data.clone() {
-                                        data.to_string() == obj_store_id.to_string()
+                                        data == obj_store_id.to_string()
                                     } else {
                                         false
                                     }
                                 })
                             })
-                            .unwrap_or_else(|_: FailureError| false);
-                        res
+                            .unwrap_or_else(|_: FailureError| false)
                     } else {
                         false
                     }

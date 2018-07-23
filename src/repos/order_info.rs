@@ -55,7 +55,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     /// Find specific order_info by ID
     fn find(&self, id_arg: OrderInfoId) -> RepoResult<Option<OrderInfo>> {
         orders_info
-            .filter(id.eq(id_arg.clone()))
+            .filter(id.eq(id_arg))
             .get_result(self.db_conn)
             .optional()
             .map_err(From::from)
@@ -74,7 +74,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     /// Find specific order_info by order ID
     fn find_by_order_id(&self, order_id_arg: OrderId) -> RepoResult<Option<OrderInfo>> {
         orders_info
-            .filter(order_id.eq(order_id_arg.clone()))
+            .filter(order_id.eq(order_id_arg))
             .get_result(self.db_conn)
             .optional()
             .map_err(From::from)
@@ -93,7 +93,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     /// Find order_infos by saga ID
     fn find_by_saga_id(&self, saga_id_arg: SagaId) -> RepoResult<Vec<OrderInfo>> {
         orders_info
-            .filter(saga_id.eq(saga_id_arg.clone()))
+            .filter(saga_id.eq(saga_id_arg))
             .get_results(self.db_conn)
             .map_err(From::from)
             .and_then(|order_info_args: Vec<OrderInfo>| {
@@ -124,7 +124,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     /// Set specific order_info new status
     fn update_status(&self, saga_id_arg: SagaId, new_state: OrderState) -> RepoResult<Vec<OrderInfo>> {
         let new_status = NewStatus::new(new_state.clone());
-        diesel::update(orders_info.filter(saga_id.eq(saga_id_arg.clone())))
+        diesel::update(orders_info.filter(saga_id.eq(saga_id_arg)))
             .set(&new_status)
             .get_results::<OrderInfo>(self.db_conn)
             .map_err(|e| {
