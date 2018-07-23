@@ -38,7 +38,7 @@ pub trait OrderInfoRepo {
     /// Creates new order_info
     fn create(&self, payload: NewOrderInfo) -> RepoResult<OrderInfo>;
 
-    /// Set specific order_info paid
+    /// Set specific order_info new status
     fn update_status(&self, saga_id_arg: SagaId, new_status: OrderState) -> RepoResult<Vec<OrderInfo>>;
 
     /// Delete order_infos by saga ID
@@ -121,7 +121,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .map_err(|e: FailureError| e.context(format!("Create a new order_info {:?} error occured", payload)).into())
     }
 
-    /// Set specific order_info paid
+    /// Set specific order_info new status
     fn update_status(&self, saga_id_arg: SagaId, new_state: OrderState) -> RepoResult<Vec<OrderInfo>> {
         let new_status = NewStatus::new(new_state.clone());
         diesel::update(orders_info.filter(saga_id.eq(saga_id_arg.clone())))
