@@ -16,8 +16,8 @@ use repos::legacy_acl::*;
 use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
-use models::order_info::orders_info::dsl::*;
 use models::{NewOrderInfo, NewStatus, OrderInfo};
+use schema::orders_info::dsl::*;
 
 /// OrderInfos repository, responsible for handling order_info
 pub struct OrderInfoRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {

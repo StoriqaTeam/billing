@@ -13,13 +13,12 @@ use failure::Fail;
 
 use stq_types::{RoleId, StoresRole, UserId};
 
-use repos::legacy_acl::*;
-
-use super::types::RepoResult;
 use models::authorization::*;
-use models::role::roles::dsl::*;
 use models::{NewUserRole, UserRole};
+use repos::legacy_acl::*;
+use repos::types::RepoResult;
 use repos::RolesCacheImpl;
+use schema::roles::dsl::*;
 
 /// UserRoles repository for handling UserRoles
 pub trait UserRolesRepo {
