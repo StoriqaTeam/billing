@@ -414,6 +414,7 @@ pub mod tests {
             invoice_id: InvoiceId::new(),
             transactions: serde_json::Value::default(),
             amount: ProductPrice(1f64),
+            amount_captured: ProductPrice(1f64),
             currency_id: CurrencyId(1),
             price_reserved: SystemTime::now(),
             state: OrderState::New,

@@ -15,9 +15,9 @@ use repos::legacy_acl::*;
 use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
-use models::merchant::merchants::dsl::*;
-use models::role::roles::dsl as Roles;
 use models::{Merchant, NewStoreMerchant, NewUserMerchant, SubjectIdentifier, UserRole};
+use schema::merchants::dsl::*;
+use schema::roles::dsl as Roles;
 
 /// Merchant repository for handling Merchant
 pub trait MerchantRepo {

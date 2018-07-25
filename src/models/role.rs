@@ -4,14 +4,7 @@ use serde_json;
 
 use stq_types::{RoleId, StoresRole, UserId};
 
-table! {
-    roles (id) {
-        id -> Uuid,
-        user_id -> Integer,
-        name -> VarChar,
-        data -> Nullable<Jsonb>,
-    }
-}
+use schema::roles;
 
 #[derive(Serialize, Queryable, Insertable, Debug)]
 #[table_name = "roles"]

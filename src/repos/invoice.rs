@@ -15,9 +15,9 @@ use repos::legacy_acl::*;
 use super::acl;
 use super::types::RepoResult;
 use models::authorization::*;
-use models::invoice::invoices::dsl::*;
-use models::order_info::orders_info::dsl as OrderInfos;
 use models::{Invoice, OrderInfo, UpdateInvoice};
+use schema::invoices::dsl::*;
+use schema::orders_info::dsl as OrderInfos;
 
 /// Invoices repository, responsible for handling invoice
 pub struct InvoiceRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {

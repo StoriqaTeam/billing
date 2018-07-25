@@ -1,16 +1,7 @@
 use stq_static_resources::OrderState;
 use stq_types::{OrderId, OrderInfoId, SagaId, StoreId, UserId};
 
-table! {
-    orders_info (id) {
-        id -> Uuid,
-        order_id -> Uuid,
-        store_id -> Integer,
-        customer_id -> Integer,
-        saga_id -> Uuid,
-        status -> VarChar,
-    }
-}
+use schema::orders_info;
 
 #[derive(Serialize, Queryable, Insertable, Debug)]
 #[table_name = "orders_info"]

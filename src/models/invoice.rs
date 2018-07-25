@@ -7,19 +7,7 @@ use stq_static_resources::*;
 use stq_types::*;
 
 use models::Order;
-
-table! {
-    invoices (id) {
-        id -> Uuid,
-        invoice_id -> Uuid,
-        transactions -> Jsonb,
-        amount -> Double,
-        currency_id -> Integer,
-        price_reserved -> Timestamp, // UTC 0, generated at db level
-        state -> VarChar,
-        wallet -> Nullable<VarChar>,
-    }
-}
+use schema::invoices;
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset, Debug, Clone)]
 #[table_name = "invoices"]
@@ -32,6 +20,7 @@ pub struct Invoice {
     pub price_reserved: SystemTime,
     pub state: OrderState,
     pub wallet: Option<String>,
+    pub amount_captured: ProductPrice,
 }
 
 impl Invoice {
@@ -44,6 +33,7 @@ impl Invoice {
             ExternalBillingStatus::Done => OrderState::Paid,
         };
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
+        let amount_captured = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
         let transactions: Vec<Transaction> = external_invoice
             .transactions
             .unwrap_or_default()
@@ -56,6 +46,7 @@ impl Invoice {
             invoice_id: external_invoice.id,
             transactions,
             amount,
+            amount_captured,
             currency_id,
             price_reserved: SystemTime::now(), //TODO: ON EXTERNAL BILLING SIDE
             state,
@@ -73,6 +64,7 @@ pub struct UpdateInvoice {
     pub price_reserved: SystemTime,
     pub state: OrderState,
     pub wallet: Option<String>,
+    pub amount_captured: ProductPrice,
 }
 
 impl From<ExternalBillingInvoice> for UpdateInvoice {
@@ -85,6 +77,7 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
             ExternalBillingStatus::Done => OrderState::Paid,
         };
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
+        let amount_captured = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
         let transactions: Vec<Transaction> = external_invoice
             .transactions
             .unwrap_or_default()
@@ -94,6 +87,7 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
         let transactions = serde_json::to_value(transactions).unwrap_or_default();
         Self {
             amount,
+            amount_captured,
             transactions,
             currency_id,
             price_reserved: SystemTime::now(), //TODO: ON EXTERNAL BILLING SIDE

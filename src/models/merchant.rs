@@ -2,15 +2,7 @@ use std::fmt;
 
 use stq_types::{MerchantId, MerchantType, StoreId, UserId};
 
-table! {
-    merchants (merchant_id) {
-        merchant_id -> Uuid,
-        user_id -> Nullable<Integer>,
-        store_id -> Nullable<Integer>,
-        #[sql_name = "type"]
-        merchant_type -> VarChar,
-    }
-}
+use schema::merchants;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum SubjectIdentifier {
