@@ -31,8 +31,10 @@ pub trait MerchantService {
     fn create_store(&self, store: CreateStoreMerchantPayload) -> ServiceFuture<Merchant>;
     /// Delete store merchant
     fn delete_store(&self, store_id: StoreId) -> ServiceFuture<MerchantId>;
-    /// Get merchant balance by merchant id
-    fn get_balance(&self, id: MerchantId) -> ServiceFuture<MerchantBalance>;
+    /// Get user merchant balance by user id
+    fn get_user_balance(&self, id: UserId) -> ServiceFuture<Vec<MerchantBalance>>;
+    /// Get store merchant balance by store id
+    fn get_store_balance(&self, id: StoreId) -> ServiceFuture<Vec<MerchantBalance>>;
 }
 
 /// Merchants services, responsible for Merchant-related CRUD operations
@@ -255,11 +257,15 @@ impl<
         )
     }
 
-    /// Get merchant balance by merchant id
-    fn get_balance(&self, id: MerchantId) -> ServiceFuture<MerchantBalance> {
+    /// Get user merchant balance by user id
+    fn get_user_balance(&self, id: UserId) -> ServiceFuture<Vec<MerchantBalance>> {
         let db_clone = self.db_pool.clone();
+        let user_id = self.user_id;
+        let repo_factory = self.repo_factory.clone();
         let client = self.http_client.clone();
         let merchant_url = self.merchant_url.clone();
+        let login_url = self.login_url.clone();
+        let credentials = self.credentials.clone();
 
         Box::new(
             self.cpu_pool
@@ -268,21 +274,98 @@ impl<
                         .get()
                         .map_err(|e| e.context(Error::Connection).into())
                         .and_then(move |conn| {
-                            conn.transaction::<MerchantBalance, FailureError, _>(move || {
-                                debug!("Get merchant balance by merchant id {:?}", &id);
-                                let url = format!("{}/{}", merchant_url, id);
-                                client
-                                    .request::<MerchantBalance>(Get, url, None, None)
-                                    .map_err(|e| {
-                                        e.context("Occured an error during merchant balance receiving from external billing.")
-                                            .context(Error::HttpClient)
-                                            .into()
-                                    })
-                                    .wait()
+                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+                            conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
+                                debug!("Get merchant balance by user id {:?}", &id);
+                                merchant_repo.get_by_subject_id(SubjectIdentifier::User(id)).and_then(|merchant| {
+                                    let body = serde_json::to_string(&credentials)?;
+                                    let url = login_url.to_string();
+                                    let mut headers = Headers::new();
+                                    headers.set(ContentType::json());
+                                    client
+                                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                                        .map_err(|e| {
+                                            e.context("Occured an error during receiving authorization token in external billing.")
+                                                .context(Error::HttpClient)
+                                                .into()
+                                        })
+                                        .wait()
+                                        .and_then(|ext_token| {
+                                            let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
+                                            let mut headers = Headers::new();
+                                            headers.set(Authorization(Bearer { token: ext_token.token }));
+                                            headers.set(ContentType::json());
+                                            client
+                                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
+                                                .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
+                                                .map_err(|e| {
+                                                    e.context("Occured an error during user merchant get balance in external billing.")
+                                                        .context(Error::HttpClient)
+                                                        .into()
+                                                })
+                                                .wait()
+                                        })
+                                })
                             })
                         })
                 })
-                .map_err(|e: FailureError| e.context("Service get_balance, create user endpoint error occured.").into()),
+                .map_err(|e: FailureError| e.context("Service merchant, get_user_balance endpoint error occured.").into()),
+        )
+    }
+
+    /// Get store merchant balance by store id
+    fn get_store_balance(&self, id: StoreId) -> ServiceFuture<Vec<MerchantBalance>> {
+        let db_clone = self.db_pool.clone();
+        let user_id = self.user_id;
+        let repo_factory = self.repo_factory.clone();
+        let client = self.http_client.clone();
+        let merchant_url = self.merchant_url.clone();
+        let login_url = self.login_url.clone();
+        let credentials = self.credentials.clone();
+
+        Box::new(
+            self.cpu_pool
+                .spawn_fn(move || {
+                    db_clone
+                        .get()
+                        .map_err(|e| e.context(Error::Connection).into())
+                        .and_then(move |conn| {
+                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+                            conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
+                                debug!("Get merchant balance by store id {:?}", &id);
+                                merchant_repo.get_by_subject_id(SubjectIdentifier::Store(id)).and_then(|merchant| {
+                                    let body = serde_json::to_string(&credentials)?;
+                                    let url = login_url.to_string();
+                                    let mut headers = Headers::new();
+                                    headers.set(ContentType::json());
+                                    client
+                                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                                        .map_err(|e| {
+                                            e.context("Occured an error during receiving authorization token in external billing.")
+                                                .context(Error::HttpClient)
+                                                .into()
+                                        })
+                                        .wait()
+                                        .and_then(|ext_token| {
+                                            let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
+                                            let mut headers = Headers::new();
+                                            headers.set(Authorization(Bearer { token: ext_token.token }));
+                                            headers.set(ContentType::json());
+                                            client
+                                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
+                                                .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
+                                                .map_err(|e| {
+                                                    e.context("Occured an error during store merchant get balance in external billing.")
+                                                        .context(Error::HttpClient)
+                                                        .into()
+                                                })
+                                                .wait()
+                                        })
+                                })
+                            })
+                        })
+                })
+                .map_err(|e: FailureError| e.context("Service merchant, get_store_balance endpoint error occured.").into()),
         )
     }
 }
@@ -293,7 +376,7 @@ pub mod tests {
     use std::sync::Arc;
     use tokio_core::reactor::Core;
 
-    use stq_types::{MerchantId, StoreId, UserId};
+    use stq_types::{StoreId, UserId};
 
     use models::*;
     use repos::repo_factory::tests::*;
@@ -320,12 +403,12 @@ pub mod tests {
     }
 
     #[test]
-    fn test_get_balance() {
+    fn test_get_user_balance() {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
         let service = create_merchant_service(Some(UserId(1)), handle);
-        let id = MerchantId::new();
-        let work = service.get_balance(id);
+        let id = UserId(1);
+        let work = service.get_user_balance(id);
         let _result = core.run(work).unwrap();
     }
 
