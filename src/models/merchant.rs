@@ -116,11 +116,19 @@ pub struct CreateStoreMerchantPayload {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ExternalBillingMerchant {
     pub id: MerchantId,
+    pub balance: Option<Vec<MerchantBalance>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MerchantBalance {
-    pub id: MerchantId,
     pub amount: f64,
     pub currency: String,
+    pub status: MerchantBalanceStatus,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum MerchantBalanceStatus {
+    Active,
+    Blocked,
 }

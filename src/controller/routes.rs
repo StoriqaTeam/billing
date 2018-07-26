@@ -13,7 +13,9 @@ pub enum Route {
     UserMerchants,
     StoreMerchants,
     UserMerchant { user_id: UserId },
+    UserMerchantBalance { user_id: UserId },
     StoreMerchant { store_id: StoreId },
+    StoreMerchantBalance { store_id: StoreId },
     Roles,
     RoleById { id: RoleId },
     RolesByUserId { user_id: UserId },
@@ -56,12 +58,24 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .and_then(|string_id| string_id.parse().ok())
             .map(|user_id| Route::UserMerchant { user_id })
     });
+    route_parser.add_route_with_params(r"^/merchants/user/(\d+)/balance$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|user_id| Route::UserMerchantBalance { user_id })
+    });
     route_parser.add_route(r"^/merchants/store$", || Route::StoreMerchants);
     route_parser.add_route_with_params(r"^/merchants/store/(\d+)$", |params| {
         params
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|store_id| Route::StoreMerchant { store_id })
+    });
+    route_parser.add_route_with_params(r"^/merchants/store/(\d+)/balance$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|store_id| Route::StoreMerchantBalance { store_id })
     });
 
     route_parser.add_route(r"^/roles$", || Route::Roles);
