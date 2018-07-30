@@ -5,7 +5,7 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
-use futures::Future;
+use futures::{Future, IntoFuture};
 use futures_cpupool::CpuPool;
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::Headers;
@@ -30,6 +30,8 @@ pub trait InvoiceService {
     fn get_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>>;
     /// Get invoice by invoice id
     fn get_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>>;
+    /// Recalc invoice by invoice id
+    fn recalc(&self, id: InvoiceId) -> ServiceFuture<Invoice>;
     /// Get orders ids by invoice id
     fn get_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
     /// Delete invoice merchant
@@ -145,7 +147,6 @@ impl<
                                                     .context(Error::HttpClient)
                                                     .into()
                                             })
-                                            .wait()
                                             .and_then(|ext_token| {
                                                 let mut headers = Headers::new();
                                                 headers.set(Authorization(Bearer { token: ext_token.token }));
@@ -157,17 +158,25 @@ impl<
                                                     create_invoice.currency_id.to_string(),
                                                     timeout_s,
                                                 );
-                                                let body = serde_json::to_string(&billing_payload)?;
                                                 let url = invoice_url.to_string();
-                                                client
-                                                    .request::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
+                                                serde_json::to_string(&billing_payload)
                                                     .map_err(|e| {
-                                                        e.context("Occured an error during invoice creation in external billing.")
-                                                            .context(Error::HttpClient)
+                                                        e.context("Occured an error during billing payload serialization.")
+                                                            .context(Error::Parse)
                                                             .into()
                                                     })
-                                                    .wait()
+                                                    .into_future()
+                                                    .and_then(|body| {
+                                                        client
+                                                            .request::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
+                                                            .map_err(|e| {
+                                                                e.context("Occured an error during invoice creation in external billing.")
+                                                                    .context(Error::HttpClient)
+                                                                    .into()
+                                                            })
+                                                    })
                                             })
+                                            .wait()
                                     })
                                     .and_then(|invoice| {
                                         let payload = Invoice::new(saga_id, invoice);
@@ -238,7 +247,7 @@ impl<
                             client
                                 .request::<String>(Post, url, Some(body), None)
                                 .map_err(|e| {
-                                    e.context("Occured an error during setting orders paid in saga.")
+                                    e.context("Occured an error during setting orders new status in saga.")
                                         .context(Error::HttpClient)
                                         .into()
                                 })
@@ -329,6 +338,79 @@ impl<
                 .map_err(|e: FailureError| e.context("Service invoice, get_orders_ids endpoint error occured.").into()),
         )
     }
+
+    /// Recalc invoice by invoice id
+    fn recalc(&self, id: InvoiceId) -> ServiceFuture<Invoice> {
+        let db_clone = self.db_pool.clone();
+        let user_id = self.user_id;
+        let repo_factory = self.repo_factory.clone();
+        let client = self.http_client.clone();
+        let invoice_url = self.invoice_url.clone();
+        let login_url = self.login_url.clone();
+        let credentials = self.credentials.clone();
+        let saga_url = self.saga_url.clone();
+
+        Box::new(
+            self.cpu_pool
+                .spawn_fn(move || {
+                    db_clone
+                        .get()
+                        .map_err(|e| e.context(Error::Connection).into())
+                        .and_then(move |conn| {
+                            let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
+                            let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
+
+                            conn.transaction::<Invoice, FailureError, _>(move || {
+                                debug!("Recalculating invoice with id: {}", &id);
+                                let body = serde_json::to_string(&credentials)?;
+                                let url = login_url.to_string();
+                                let mut headers = Headers::new();
+                                headers.set(ContentType::json());
+                                client
+                                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                                    .map_err(|e| {
+                                        e.context("Occured an error during receiving authorization token in external billing.")
+                                            .context(Error::HttpClient)
+                                            .into()
+                                    })
+                                    .and_then(|ext_token| {
+                                        let mut headers = Headers::new();
+                                        headers.set(Authorization(Bearer { token: ext_token.token }));
+                                        headers.set(ContentType::json());
+                                        let url = format!("{}recalc/{}/", invoice_url.to_string(), id);
+                                        client
+                                            .request::<ExternalBillingInvoice>(Post, url, None, Some(headers))
+                                            .map_err(|e| {
+                                                e.context("Occured an error during invoice recalculation in external billing.")
+                                                    .context(Error::HttpClient)
+                                                    .into()
+                                            })
+                                    })
+                                    .wait()
+                                    .and_then(|invoice| invoice_repo.update(id, invoice.into()))
+                                    .and_then(|invoice| {
+                                        order_info_repo
+                                            .update_status(invoice.id, invoice.state)
+                                            .and_then(|orders| {
+                                                let body = serde_json::to_string(&orders)?;
+                                                let url = format!("{}/orders/update_state", saga_url);
+                                                client
+                                                    .request::<String>(Post, url, Some(body), None)
+                                                    .map_err(|e| {
+                                                        e.context("Occured an error during setting orders new status in saga.")
+                                                            .context(Error::HttpClient)
+                                                            .into()
+                                                    })
+                                                    .wait()
+                                            })
+                                            .map(|_| invoice)
+                                    })
+                            })
+                        })
+                })
+                .map_err(|e: FailureError| e.context("Service invoice, recalc endpoint error occured.").into()),
+        )
+    }
 }
 
 #[cfg(test)]
@@ -379,6 +461,7 @@ pub mod tests {
             amount_captured: "0.000000000".to_string(),
             transactions: None,
             currency: "stq".to_string(),
+            expired: None,
         };
         let work = service.update(invoice);
         let _result = core.run(work).unwrap();
