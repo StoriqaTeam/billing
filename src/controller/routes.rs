@@ -10,6 +10,7 @@ pub enum Route {
     InvoiceById { id: InvoiceId },
     InvoiceByOrderId { id: OrderId },
     InvoiceOrdersIds { id: InvoiceId },
+    InvoiceByIdRecalc { id: InvoiceId },
     UserMerchants,
     StoreMerchants,
     UserMerchant { user_id: UserId },
@@ -38,6 +39,12 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::InvoiceById { id })
+    });
+    route_parser.add_route_with_params(r"^/invoices/by-id/(\S+)/recalc$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::InvoiceByIdRecalc { id })
     });
     route_parser.add_route_with_params(r"^/invoices/by-order-id/(\S+)$", |params| {
         params

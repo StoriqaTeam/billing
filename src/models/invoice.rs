@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use serde_json;
 
@@ -26,12 +26,7 @@ pub struct Invoice {
 impl Invoice {
     pub fn new(id: SagaId, external_invoice: ExternalBillingInvoice) -> Self {
         let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
-        let state = match external_invoice.status {
-            ExternalBillingStatus::New => OrderState::New,
-            ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
-            ExternalBillingStatus::Waiting => OrderState::TransactionPending,
-            ExternalBillingStatus::Done => OrderState::Paid,
-        };
+        let state = external_invoice.status.into();
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
         let amount_captured = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
         let transactions: Vec<Transaction> = external_invoice
@@ -41,6 +36,9 @@ impl Invoice {
             .map(|t| t.into())
             .collect();
         let transactions = serde_json::to_value(transactions).unwrap_or_default();
+        let price_reserved = external_invoice
+            .expired
+            .unwrap_or_else(|| SystemTime::now() + Duration::from_secs(600));
         Self {
             id,
             invoice_id: external_invoice.id,
@@ -48,7 +46,7 @@ impl Invoice {
             amount,
             amount_captured,
             currency_id,
-            price_reserved: SystemTime::now(), //TODO: ON EXTERNAL BILLING SIDE
+            price_reserved,
             state,
             wallet: external_invoice.wallet,
         }
@@ -70,12 +68,7 @@ pub struct UpdateInvoice {
 impl From<ExternalBillingInvoice> for UpdateInvoice {
     fn from(external_invoice: ExternalBillingInvoice) -> Self {
         let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
-        let state = match external_invoice.status {
-            ExternalBillingStatus::New => OrderState::New,
-            ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
-            ExternalBillingStatus::Waiting => OrderState::TransactionPending,
-            ExternalBillingStatus::Done => OrderState::Paid,
-        };
+        let state = external_invoice.status.into();
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
         let amount_captured = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
         let transactions: Vec<Transaction> = external_invoice
@@ -85,12 +78,15 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
             .map(|t| t.into())
             .collect();
         let transactions = serde_json::to_value(transactions).unwrap_or_default();
+        let price_reserved = external_invoice
+            .expired
+            .unwrap_or_else(|| SystemTime::now() + Duration::from_secs(600));
         Self {
             amount,
             amount_captured,
             transactions,
             currency_id,
-            price_reserved: SystemTime::now(), //TODO: ON EXTERNAL BILLING SIDE
+            price_reserved,
             state,
             wallet: external_invoice.wallet,
         }
@@ -165,6 +161,7 @@ pub struct ExternalBillingInvoice {
     pub amount: String,
     pub currency: String,
     pub status: ExternalBillingStatus,
+    pub expired: Option<SystemTime>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -172,7 +169,20 @@ pub enum ExternalBillingStatus {
     New,
     Wallet,
     Waiting,
+    Timeout,
     Done,
+}
+
+impl From<ExternalBillingStatus> for OrderState {
+    fn from(external_invoice_status: ExternalBillingStatus) -> OrderState {
+        match external_invoice_status {
+            ExternalBillingStatus::New => OrderState::New,
+            ExternalBillingStatus::Wallet => OrderState::PaymentAwaited,
+            ExternalBillingStatus::Waiting => OrderState::TransactionPending,
+            ExternalBillingStatus::Timeout => OrderState::AmountExpired,
+            ExternalBillingStatus::Done => OrderState::Paid,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

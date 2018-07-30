@@ -170,6 +170,10 @@ impl<
                 debug!("Received request to get invoice by id {}", id);
                 serialize_future({ invoice_service.get_by_id(id) })
             }
+            (Post, Some(Route::InvoiceByIdRecalc { id })) => {
+                debug!("Received request to recalc invoice by id {}", id);
+                serialize_future({ invoice_service.recalc(id) })
+            }
             (Get, Some(Route::InvoiceOrdersIds { id })) => {
                 debug!("Received request to get invoice orders ids by id {}", id);
                 serialize_future({ invoice_service.get_orders_ids(id) })
