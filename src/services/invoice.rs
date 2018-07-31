@@ -377,7 +377,7 @@ impl<
                                         let mut headers = Headers::new();
                                         headers.set(Authorization(Bearer { token: ext_token.token }));
                                         headers.set(ContentType::json());
-                                        let url = format!("{}recalc/{}/", invoice_url.to_string(), id);
+                                        let url = format!("{}{}/recalc/", invoice_url.to_string(), id);
                                         client
                                             .request::<ExternalBillingInvoice>(Post, url, None, Some(headers))
                                             .map_err(|e| {
