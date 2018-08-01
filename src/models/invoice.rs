@@ -1,6 +1,7 @@
 use std::str::FromStr;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
+use chrono::prelude::*;
 use serde_json;
 
 use stq_static_resources::*;
@@ -36,9 +37,7 @@ impl Invoice {
             .map(|t| t.into())
             .collect();
         let transactions = serde_json::to_value(transactions).unwrap_or_default();
-        let price_reserved = external_invoice
-            .expired
-            .unwrap_or_else(|| SystemTime::now() + Duration::from_secs(600));
+        let price_reserved = external_invoice.expired.into();
         Self {
             id,
             invoice_id: external_invoice.id,
@@ -78,9 +77,7 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
             .map(|t| t.into())
             .collect();
         let transactions = serde_json::to_value(transactions).unwrap_or_default();
-        let price_reserved = external_invoice
-            .expired
-            .unwrap_or_else(|| SystemTime::now() + Duration::from_secs(600));
+        let price_reserved = external_invoice.expired.into();
         Self {
             amount,
             amount_captured,
@@ -161,7 +158,7 @@ pub struct ExternalBillingInvoice {
     pub amount: String,
     pub currency: String,
     pub status: ExternalBillingStatus,
-    pub expired: Option<SystemTime>,
+    pub expired: DateTime<Utc>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

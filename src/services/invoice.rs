@@ -417,6 +417,7 @@ impl<
 pub mod tests {
 
     use std::sync::Arc;
+    use std::time::SystemTime;
     use tokio_core::reactor::Core;
 
     use stq_static_resources::*;
@@ -461,7 +462,7 @@ pub mod tests {
             amount_captured: "0.000000000".to_string(),
             transactions: None,
             currency: "stq".to_string(),
-            expired: None,
+            expired: SystemTime::now().into(),
         };
         let work = service.update(invoice);
         let _result = core.run(work).unwrap();
