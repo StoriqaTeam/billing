@@ -102,9 +102,12 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let filter = invoices.filter(invoice_id.eq(invoice_id_arg));
 
         let query_invoice = diesel::update(filter).set(&payload);
-        query_invoice
-            .get_result::<Invoice>(self.db_conn)
-            .map_err(|e| e.context(format!("Update invoice {:?} error occured", payload)).into())
+        query_invoice.get_result::<Invoice>(self.db_conn).map_err(|e| {
+            e.context(format!(
+                "Update invoice id {} with payload {:?} error occured",
+                invoice_id_arg, payload
+            )).into()
+        })
     }
 
     /// Deletes invoice
