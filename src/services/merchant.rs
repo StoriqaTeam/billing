@@ -104,9 +104,7 @@ impl<
                         .get()
                         .map_err(|e| e.context(Error::Connection).into())
                         .and_then(move |conn| {
-                            debug!("user id: {:?}", user_id);
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-
                             conn.transaction::<Merchant, FailureError, _>(move || {
                                 debug!("Creating new user merchant: {:?}", &user);
 
@@ -193,7 +191,6 @@ impl<
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
                             conn.transaction::<Merchant, FailureError, _>(move || {
                                 debug!("Creating new store merchant: {:?}", &store);
-
                                 let body = serde_json::to_string(&credentials)?;
                                 let url = login_url.to_string();
                                 let mut headers = Headers::new();
@@ -228,7 +225,7 @@ impl<
                             })
                         })
                 })
-                .map_err(|e: FailureError| e.context("Service merchant, create user endpoint error occured.").into()),
+                .map_err(|e: FailureError| e.context("Service merchant, create_store endpoint error occured.").into()),
         )
     }
 
@@ -246,7 +243,6 @@ impl<
                         .map_err(|e| e.context(Error::Connection).into())
                         .and_then(move |conn| {
                             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-
                             conn.transaction::<MerchantId, FailureError, _>(move || {
                                 debug!("Deleting store merchant with store id {}", &store_id_arg);
                                 merchant_repo.delete_by_store_id(store_id_arg).map(|merchant| merchant.merchant_id)

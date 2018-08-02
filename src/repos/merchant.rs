@@ -68,7 +68,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 acl::check(&*self.acl, Resource::Merchant, Action::Read, self, Some(&merch))?;
                 Ok(merch)
             })
-            .map_err(|e: FailureError| e.context(format!("get by subject id {:?} error occured.", id)).into())
+            .map_err(|e: FailureError| e.context(format!("get merchant by subject id {:?} error occured.", id)).into())
     }
 
     /// Returns merchant by merchant identifier
@@ -81,7 +81,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 acl::check(&*self.acl, Resource::Merchant, Action::Read, self, Some(&merch))?;
                 Ok(merch)
             })
-            .map_err(|e: FailureError| e.context(format!("get by merchant id {} error occured.", id)).into())
+            .map_err(|e: FailureError| e.context(format!("get merchant by merchant id {} error occured.", id)).into())
     }
 
     /// Create a new store merchant

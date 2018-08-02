@@ -76,7 +76,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     }
                     Ok(user_roles)
                 })
-                .map_err(|e| e.context(format!("List user roles for id {} error occured.", user_id_value)).into())
+                .map_err(|e| e.context(format!("List user roles for user {} error occured.", user_id_value)).into())
         }
     }
 
