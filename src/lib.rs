@@ -36,8 +36,6 @@ extern crate tokio_core;
 extern crate uuid;
 extern crate validator;
 
-#[macro_use]
-pub mod macros;
 pub mod config;
 pub mod controller;
 pub mod errors;

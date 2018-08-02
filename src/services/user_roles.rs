@@ -99,7 +99,7 @@ impl<
                             user_roles_repo.delete_by_user_id(user_id_arg)
                         })
                 })
-                .map_err(|e: FailureError| e.context("Service user_roles, delete endpoint error occured.").into()),
+                .map_err(|e: FailureError| e.context("Service user_roles, delete_by_user_id endpoint error occured.").into()),
         )
     }
 

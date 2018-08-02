@@ -37,7 +37,7 @@ pub trait InvoiceService {
     /// Delete invoice merchant
     fn delete(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// Creates orders in billing system, returning url for payment
-    fn update(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<String>;
+    fn update(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
 }
 
 /// OrderInfos services, responsible for OrderInfo-related CRUD operations
@@ -161,7 +161,7 @@ impl<
                                                 let url = invoice_url.to_string();
                                                 serde_json::to_string(&billing_payload)
                                                     .map_err(|e| {
-                                                        e.context("Occured an error during billing payload serialization.")
+                                                        e.context("Occured an error during invoice creation payload serialization.")
                                                             .context(Error::Parse)
                                                             .into()
                                                     })
@@ -217,14 +217,14 @@ impl<
     }
 
     /// Updates specific invoice and orders
-    fn update(&self, external_invoice: ExternalBillingInvoice) -> ServiceFuture<String> {
+    fn update(&self, external_invoice: ExternalBillingInvoice) -> ServiceFuture<()> {
         let db_clone = self.db_pool.clone();
         let current_user = self.user_id;
         let client = self.http_client.clone();
         let repo_factory = self.repo_factory.clone();
         let saga_url = self.saga_url.clone();
 
-        debug!("Update invoice by external invoice {:?}.", &external_invoice);
+        debug!("Updating by external invoice {:?}.", &external_invoice);
 
         Box::new(
             self.cpu_pool
@@ -245,7 +245,7 @@ impl<
                             let body = serde_json::to_string(&orders)?;
                             let url = format!("{}/orders/update_state", saga_url);
                             client
-                                .request::<String>(Post, url, Some(body), None)
+                                .request::<()>(Post, url, Some(body), None)
                                 .map_err(|e| {
                                     e.context("Occured an error during setting orders new status in saga.")
                                         .context(Error::HttpClient)
@@ -395,7 +395,7 @@ impl<
                                                 let body = serde_json::to_string(&orders)?;
                                                 let url = format!("{}/orders/update_state", saga_url);
                                                 client
-                                                    .request::<String>(Post, url, Some(body), None)
+                                                    .request::<()>(Post, url, Some(body), None)
                                                     .map_err(|e| {
                                                         e.context("Occured an error during setting orders new status in saga.")
                                                             .context(Error::HttpClient)
