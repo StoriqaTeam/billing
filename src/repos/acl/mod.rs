@@ -95,7 +95,8 @@ impl<T> Acl<Resource, Action, Scope, FailureError, T> for ApplicationAcl {
         let empty: Vec<Permission> = Vec::new();
         let user_id = &self.user_id;
         let hashed_acls = self.acls.clone();
-        let acls = self.roles
+        let acls = self
+            .roles
             .iter()
             .flat_map(|role| hashed_acls.get(role).unwrap_or(&empty))
             .filter(|permission| (permission.resource == resource) && ((permission.action == action) || (permission.action == Action::All)))
