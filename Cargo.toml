@@ -7,27 +7,27 @@ name = "billing_lib"
 path = "src/lib.rs"
 
 [dependencies]
-config = "0.7"
-log = "0.4"
+chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
+config = { version = "0.9", default-features = false, features = ["toml"] }
+diesel = { version = "1.3.2", features = ["postgres", "extras"] }
 env_logger = "0.5.6"
-hyper = "0.11"
+failure = "0.1.1"
 futures = "0.1.17"
+futures-cpupool = "0.1.7"
+hyper = "0.11"
+hyper-tls="0.1.3"
+log = "0.4"
+r2d2 = "0.8.1"
+r2d2-diesel = "1.0.0"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
-diesel = { version = "1.3.2", features = ["postgres", "extras"] }
-r2d2 = "0.8.1"
-r2d2-diesel = "1.0.0"
-validator = "0.6.3"
-validator_derive = "0.6.1"
-tokio-core = "0.1"
-futures-cpupool = "0.1.7"
-hyper-tls="0.1.3"
-chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
-failure = "0.1.1"
 stq_http = { path = "vendor/libstqbackend/http" }
+stq_logging = { path = "vendor/libstqbackend/logging" }
 stq_router = { path = "vendor/libstqbackend/router" }
 stq_static_resources = { path = "vendor/libstqbackend/static_resources" }
 stq_types = { path = "vendor/libstqbackend/types" }
-stq_logging = { path = "vendor/libstqbackend/logging" }
+tokio-core = "0.1"
 uuid = { version = "*", features = ["use_std", "v4", "serde"] }
+validator = "0.6.3"
+validator_derive = "0.6.1"

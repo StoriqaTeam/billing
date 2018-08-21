@@ -123,7 +123,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     /// Set specific order_info new status
     fn update_status(&self, saga_id_arg: SagaId, new_state: OrderState) -> RepoResult<Vec<OrderInfo>> {
-        let new_status = NewStatus::new(new_state.clone());
+        let new_status = NewStatus::new(new_state);
         diesel::update(orders_info.filter(saga_id.eq(saga_id_arg)))
             .set(&new_status)
             .get_results::<OrderInfo>(self.db_conn)

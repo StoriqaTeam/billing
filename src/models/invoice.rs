@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -159,6 +160,16 @@ pub struct ExternalBillingInvoice {
     pub currency: String,
     pub status: ExternalBillingStatus,
     pub expired: DateTime<Utc>,
+}
+
+impl fmt::Display for ExternalBillingInvoice {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "ExternalBillingInvoice - id : {}, amount_captured: {}, transactions: {:?}, wallet: {:?}, amount: {}, currency: {}, status: {:?}, expired: {}",
+            self.id, self.amount_captured, self.transactions, self.wallet, self.amount, self.currency, self.status, self.expired,
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
