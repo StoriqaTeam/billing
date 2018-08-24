@@ -155,7 +155,7 @@ impl<
                                                 let billing_payload = CreateInvoicePayload::new(
                                                     orders,
                                                     callback,
-                                                    create_invoice.currency_id.to_string(),
+                                                    create_invoice.currency.to_string(),
                                                     timeout_s,
                                                 );
                                                 let url = invoice_url.to_string();
@@ -437,13 +437,13 @@ pub mod tests {
             store_id: StoreId(1),
             price: ProductPrice(3232.32),
             quantity: Quantity(1),
-            currency_id: CurrencyId(1),
+            currency: Currency::STQ,
         };
         let create_order = CreateInvoice {
             saga_id: SagaId::new(),
             customer_id: UserId(1),
             orders: vec![order],
-            currency_id: CurrencyId(Currency::Stq as i32),
+            currency: Currency::STQ,
         };
         let work = service.create(create_order);
         let _result = core.run(work).unwrap();
@@ -461,7 +461,7 @@ pub mod tests {
             wallet: Some("wallet".to_string()),
             amount_captured: "0.000000000".to_string(),
             transactions: None,
-            currency: "stq".to_string(),
+            currency: Currency::STQ,
             expired: SystemTime::now().into(),
         };
         let work = service.update(invoice);

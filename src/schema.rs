@@ -4,7 +4,7 @@ table! {
         invoice_id -> Uuid,
         transactions -> Jsonb,
         amount -> Double,
-        currency_id -> Integer,
+        currency -> VarChar,
         price_reserved -> Timestamp, // UTC 0, generated at db level
         state -> VarChar,
         wallet -> Nullable<VarChar>,

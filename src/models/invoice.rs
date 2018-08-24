@@ -18,7 +18,7 @@ pub struct Invoice {
     pub invoice_id: InvoiceId,
     pub transactions: serde_json::Value,
     pub amount: ProductPrice,
-    pub currency_id: CurrencyId,
+    pub currency: Currency,
     pub price_reserved: SystemTime,
     pub state: OrderState,
     pub wallet: Option<String>,
@@ -27,7 +27,7 @@ pub struct Invoice {
 
 impl Invoice {
     pub fn new(id: SagaId, external_invoice: ExternalBillingInvoice) -> Self {
-        let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
+        let currency = external_invoice.currency;
         let state = external_invoice.status.into();
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
         let amount_captured = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
@@ -45,7 +45,7 @@ impl Invoice {
             transactions,
             amount,
             amount_captured,
-            currency_id,
+            currency,
             price_reserved,
             state,
             wallet: external_invoice.wallet,
@@ -58,7 +58,7 @@ impl Invoice {
 pub struct UpdateInvoice {
     pub transactions: serde_json::Value,
     pub amount: ProductPrice,
-    pub currency_id: CurrencyId,
+    pub currency: Currency,
     pub price_reserved: SystemTime,
     pub state: OrderState,
     pub wallet: Option<String>,
@@ -67,7 +67,7 @@ pub struct UpdateInvoice {
 
 impl From<ExternalBillingInvoice> for UpdateInvoice {
     fn from(external_invoice: ExternalBillingInvoice) -> Self {
-        let currency_id = CurrencyId(Currency::from_str(&external_invoice.currency).unwrap_or_else(|_| Currency::Stq) as i32);
+        let currency = external_invoice.currency;
         let state = external_invoice.status.into();
         let amount = ProductPrice(f64::from_str(&external_invoice.amount).unwrap_or_default());
         let amount_captured = ProductPrice(f64::from_str(&external_invoice.amount_captured).unwrap_or_default());
@@ -83,7 +83,7 @@ impl From<ExternalBillingInvoice> for UpdateInvoice {
             amount,
             amount_captured,
             transactions,
-            currency_id,
+            currency,
             price_reserved,
             state,
             wallet: external_invoice.wallet,
@@ -121,7 +121,7 @@ impl BillingOrder {
         Self {
             merchant,
             amount: ProductPrice(order.price.0 * f64::from(order.quantity.0)),
-            currency: order.currency_id.to_string(),
+            currency: order.currency.to_string(),
             description: Some(format!("Order - id : {}", order.id)),
         }
     }
@@ -157,7 +157,7 @@ pub struct ExternalBillingInvoice {
     pub transactions: Option<Vec<ExternalBillingTransaction>>,
     pub wallet: Option<String>,
     pub amount: String,
-    pub currency: String,
+    pub currency: Currency,
     pub status: ExternalBillingStatus,
     pub expired: DateTime<Utc>,
 }
