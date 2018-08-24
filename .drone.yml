@@ -33,8 +33,8 @@ pipeline:
     - DATABASE_HOST=db-postgresql
     - DATABASE_URL=postgresql://billing:billing@db-postgresql/billing
     - RUST_BACKTRACE=1
-    - PGPASSWORD=a1a1a1a1
     - CARGO_HOME=deps
+    - PGPASSWORD=a1a1a1a1
     commands:
     - rustup component add rustfmt-preview
     - cargo fmt -- --check
@@ -54,7 +54,7 @@ pipeline:
       event: pull_request
 
 ###
-# Build an deploy to nightly / stage
+# Build and deploy to nightly / stage
 ###
 
   build:
@@ -64,10 +64,9 @@ pipeline:
     commands:
     - cargo build --release --locked
     when:
-      event: push
-      branch:
-      - master
-      - release
+      event:
+      - push
+      - tag
   package:
     image: plugins/docker
     repo: storiqateam/stq-billing
@@ -79,14 +78,21 @@ pipeline:
     - docker_username
     - docker_password
     when:
-      event:
-      - push
-      - tag
-      branch:
-      - master
-      - release
+      event: push
+  package:
+    image: plugins/docker
+    repo: storiqateam/stq-billing
+    tags:
+    - '${DRONE_TAG}'
+    - latest
+    dockerfile: docker/Dockerfile.run
+    secrets:
+    - docker_username
+    - docker_password
+    when:
+      event: tag
   deploy2nightly:
-    image: jackthestripper/drone_k8s_rollout:20180610
+    image: jackthestripper/drone_setimage
     namespace: default
     kind: deployment
     object: billing
@@ -106,12 +112,12 @@ pipeline:
       branch: master
       event: push
   deploy2stage:
-    image: jackthestripper/drone_k8s_rollout:20180610
+    image: jackthestripper/drone_setimage
     namespace: default
     kind: deployment
     object: billing
     img_names: storiqateam/stq-billing
-    img_tags: ${DRONE_BRANCH//\//_}${DRONE_BUILD_NUMBER}
+    img_tags: '${DRONE_TAG}'
     img_cnts: billing
     secrets:
     - source: k8s_stage_ca
@@ -123,15 +129,14 @@ pipeline:
     - source: k8s_stage_addr
       target: k8s_addr
     when:
-      branch: release*
-      event: push
+      event: tag
 
 ###
-# Deploy to stable, production
+# Deploy to stable / production
 ###
 
   deploy2stable:
-    image: jackthestripper/drone_k8s_rollout:20180610
+    image: jackthestripper/drone_setimage
     namespace: default
     kind: deployment
     object: billing
@@ -148,16 +153,15 @@ pipeline:
     - source: k8s_stable_addr
       target: k8s_addr
     when:
-      branch: master
       event: deployment
       environment: stable
   deploy2production:
-    image: jackthestripper/drone_k8s_rollout:20180610
+    image: jackthestripper/drone_setimage
     namespace: default
     kind: deployment
     object: billing
     img_names: storiqateam/stq-billing
-    img_tags: ${DRONE_BRANCH//\//_}${DRONE_PARENT_BUILD_NUMBER}
+    img_tags: '${DRONE_TAG}'
     img_cnts: billing
     secrets:
     - source: k8s_prod_ca
@@ -169,7 +173,6 @@ pipeline:
     - source: k8s_prod_addr
       target: k8s_addr
     when:
-      branch: release*
       event: deployment
       environment: production
 
@@ -187,23 +190,41 @@ pipeline:
     when:
       event: push
       branch: master
-  notify_slack:
+  slack:
     image: plugins/slack
     webhook: https://hooks.slack.com/services/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
     channel: release
     icon_url: https://drone.io/favicon.ico
     username: cd.stq.cloud
     template: >
-        Build {{build.number}} for {{repo.name}} branch {{build.branch}} failed.
+      {{#success build.status}}
+        {{repo.name}} has been released to stage.stq.cloud!
+      {{else}}
+        Failed to deploy {{repo.name}} to stage.stq.cloud! More details here {{build.link}}
+      {{/success}}
     when:
-      event:
-      - push
-      - deployment
-      - tag
-      branch:
-      - master
-      - release
-      status: failure
+      event: tag
+      status:
+      - success
+      - failure
+  slack:
+    image: plugins/slack
+    webhook: https://hooks.slack.com/services/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
+    channel: release
+    icon_url: https://drone.io/favicon.ico
+    username: cd.stq.cloud
+    template: >
+      {{#success build.status}}
+        {{repo.name}} has been released to production.stq.cloud!
+      {{else}}
+        Failed to deploy {{repo.name}} to production.stq.cloud! More details here {{build.link}}
+      {{/success}}
+    when:
+      event: deployment
+      environment: production
+      status:
+      - success
+      - failure
 
 ###
 # Test services
@@ -213,7 +234,7 @@ services:
   db-postgresql:
     image: postgres:10-alpine
     environment:
-      - POSTGRES_PASSWORD=a1a1a1a1
+    - POSTGRES_PASSWORD=a1a1a1a1
     when:
       event: pull_request
 
