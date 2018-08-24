@@ -134,7 +134,6 @@ pub mod tests {
     use tokio_core::reactor::Handle;
     use uuid::Uuid;
 
-    use stq_http::client::Config as HttpConfig;
     use stq_static_resources::OrderState;
     use stq_types::*;
 
@@ -368,11 +367,7 @@ pub mod tests {
         let cpu_pool = CpuPool::new(1);
 
         let config = Config::new().unwrap();
-        let http_config = HttpConfig {
-            http_client_retries: config.client.http_client_retries,
-            http_client_buffer_size: config.client.http_client_buffer_size,
-        };
-        let client = stq_http::client::Client::new(&http_config, &handle);
+        let client = stq_http::client::Client::new(&config.to_http_config(), &handle);
         let client_handle = client.handle();
 
         InvoiceServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, config)
@@ -387,11 +382,7 @@ pub mod tests {
         let cpu_pool = CpuPool::new(1);
 
         let config = Config::new().unwrap();
-        let http_config = HttpConfig {
-            http_client_retries: config.client.http_client_retries,
-            http_client_buffer_size: config.client.http_client_buffer_size,
-        };
-        let client = stq_http::client::Client::new(&http_config, &handle);
+        let client = stq_http::client::Client::new(&config.to_http_config(), &handle);
         let client_handle = client.handle();
 
         MerchantServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, config)
