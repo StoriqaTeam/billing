@@ -1,4 +1,5 @@
 use std::fmt;
+use stq_static_resources::Currency;
 use stq_types::*;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
@@ -8,15 +9,15 @@ pub struct Order {
     pub store_id: StoreId,
     pub price: ProductPrice,
     pub quantity: Quantity,
-    pub currency_id: CurrencyId,
+    pub currency: Currency,
 }
 
 impl fmt::Display for Order {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Order - id : {}, store id: {}, price: {}, currency id : {}",
-            self.id, self.store_id, self.price, self.currency_id
+            "Order - id : {}, store id: {}, price: {}, currency : {}",
+            self.id, self.store_id, self.price, self.currency
         )
     }
 }
@@ -25,7 +26,7 @@ impl fmt::Display for Order {
 pub struct CreateInvoice {
     pub orders: Vec<Order>,
     pub customer_id: UserId,
-    pub currency_id: CurrencyId,
+    pub currency: Currency,
     pub saga_id: SagaId,
 }
 
@@ -34,8 +35,8 @@ impl fmt::Display for CreateInvoice {
         let orders_comma_separated = self.orders.iter().fold("".to_string(), |acc, i| format!("{}, {}", acc, i));
         write!(
             f,
-            "Create invoice - orders: '{}'; customer id: {}, currency id: {}, saga id : {}",
-            orders_comma_separated, self.customer_id, self.currency_id, self.saga_id
+            "Create invoice - orders: '{}'; customer id: {}, currency: {}, saga id : {}",
+            orders_comma_separated, self.customer_id, self.currency, self.saga_id
         )
     }
 }

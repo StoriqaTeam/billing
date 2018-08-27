@@ -1,0 +1,2 @@
+ALTER TABLE invoices DROP COLUMN currency_id;
+ALTER TABLE invoices ADD COLUMN currency VARCHAR NOT NULL DEFAULT 'STQ';

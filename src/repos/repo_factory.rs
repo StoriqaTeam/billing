@@ -134,7 +134,7 @@ pub mod tests {
     use tokio_core::reactor::Handle;
     use uuid::Uuid;
 
-    use stq_static_resources::OrderState;
+    use stq_static_resources::{Currency, OrderState};
     use stq_types::*;
 
     use config::Config;
@@ -406,7 +406,7 @@ pub mod tests {
             transactions: serde_json::Value::default(),
             amount: ProductPrice(1f64),
             amount_captured: ProductPrice(1f64),
-            currency_id: CurrencyId(1),
+            currency: Currency::STQ,
             price_reserved: SystemTime::now(),
             state: OrderState::New,
             wallet: Some(Uuid::new_v4().to_string()),
