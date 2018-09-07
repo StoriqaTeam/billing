@@ -237,21 +237,23 @@ impl<
                             let invoice_repo = repo_factory.create_invoice_repo(&conn, current_user);
                             let invoice_id = external_invoice.id;
                             let update_payload = external_invoice.into();
-                            invoice_repo
-                                .update(invoice_id, update_payload)
-                                .and_then(|invoice| order_info_repo.update_status(invoice.id, invoice.state))
-                        })
-                        .and_then(|orders| {
-                            let body = serde_json::to_string(&orders)?;
-                            let url = format!("{}/orders/update_state", saga_url);
-                            client
-                                .request::<()>(Post, url, Some(body), None)
-                                .map_err(|e| {
-                                    e.context("Occured an error during setting orders new status in saga.")
-                                        .context(Error::HttpClient)
-                                        .into()
-                                })
-                                .wait()
+                            conn.transaction::<(), FailureError, _>(move || {
+                                invoice_repo
+                                    .update(invoice_id, update_payload)
+                                    .and_then(|invoice| order_info_repo.update_status(invoice.id, invoice.state))
+                                    .and_then(|orders| {
+                                        let body = serde_json::to_string(&orders)?;
+                                        let url = format!("{}/orders/update_state", saga_url);
+                                        client
+                                            .request::<()>(Post, url, Some(body), None)
+                                            .map_err(|e| {
+                                                e.context("Occured an error during setting orders new status in saga.")
+                                                    .context(Error::HttpClient)
+                                                    .into()
+                                            })
+                                            .wait()
+                                    })
+                            })
                         })
                 })
                 .map_err(|e: FailureError| e.context("Service invoice, update endpoint error occured.").into()),
