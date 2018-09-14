@@ -35,6 +35,8 @@ extern crate stq_types;
 extern crate tokio_core;
 extern crate uuid;
 extern crate validator;
+#[macro_use]
+extern crate sentry;
 
 pub mod config;
 pub mod controller;
@@ -42,6 +44,7 @@ pub mod errors;
 pub mod models;
 pub mod repos;
 pub mod schema;
+pub mod sentry_integration;
 pub mod services;
 
 use std::process;
