@@ -133,8 +133,7 @@ impl<
                                                 .get_by_subject_id(SubjectIdentifier::Store(order.store_id))
                                                 .map(|merchant| BillingOrder::new(&order, merchant.merchant_id))
                                         })
-                                    })
-                                    .collect::<RepoResult<Vec<BillingOrder>>>()
+                                    }).collect::<RepoResult<Vec<BillingOrder>>>()
                                     .and_then(|orders| {
                                         let body = serde_json::to_string(&credentials)?;
                                         let url = login_url.to_string();
@@ -146,8 +145,7 @@ impl<
                                                 e.context("Occured an error during receiving authorization token in external billing.")
                                                     .context(Error::HttpClient)
                                                     .into()
-                                            })
-                                            .and_then(|ext_token| {
+                                            }).and_then(|ext_token| {
                                                 let mut headers = Headers::new();
                                                 headers.set(Authorization(Bearer { token: ext_token.token }));
                                                 headers.set(ContentType::json());
@@ -164,8 +162,7 @@ impl<
                                                         e.context("Occured an error during invoice creation payload serialization.")
                                                             .context(Error::Parse)
                                                             .into()
-                                                    })
-                                                    .into_future()
+                                                    }).into_future()
                                                     .and_then(|body| {
                                                         client
                                                             .request::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
@@ -175,17 +172,14 @@ impl<
                                                                     .into()
                                                             })
                                                     })
-                                            })
-                                            .wait()
-                                    })
-                                    .and_then(|invoice| {
+                                            }).wait()
+                                    }).and_then(|invoice| {
                                         let payload = Invoice::new(saga_id, invoice);
                                         invoice_repo.create(payload)
                                     })
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service invoice, create endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service invoice, create endpoint error occured.").into()),
         )
     }
 
@@ -211,8 +205,7 @@ impl<
                                     .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice.id))
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service invoice, delete endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service invoice, delete endpoint error occured.").into()),
         )
     }
 
@@ -250,13 +243,11 @@ impl<
                                                 e.context("Occured an error during setting orders new status in saga.")
                                                     .context(Error::HttpClient)
                                                     .into()
-                                            })
-                                            .wait()
+                                            }).wait()
                                     })
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service invoice, update endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service invoice, update endpoint error occured.").into()),
         )
     }
 
@@ -285,8 +276,7 @@ impl<
                                 }
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service invoice, get_by_order_id endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service invoice, get_by_order_id endpoint error occured.").into()),
         )
     }
     /// Get invoice by invoice id
@@ -305,8 +295,7 @@ impl<
                             debug!("Requesting invoice by invoice id: {}", &id);
                             invoice_repo.find(id)
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service invoice, get_by_id endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service invoice, get_by_id endpoint error occured.").into()),
         )
     }
 
@@ -336,8 +325,7 @@ impl<
                                 }
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service invoice, get_orders_ids endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service invoice, get_orders_ids endpoint error occured.").into()),
         )
     }
 
@@ -374,8 +362,7 @@ impl<
                                         e.context("Occured an error during receiving authorization token in external billing.")
                                             .context(Error::HttpClient)
                                             .into()
-                                    })
-                                    .and_then(|ext_token| {
+                                    }).and_then(|ext_token| {
                                         let mut headers = Headers::new();
                                         headers.set(Authorization(Bearer { token: ext_token.token }));
                                         headers.set(ContentType::json());
@@ -387,8 +374,7 @@ impl<
                                                     .context(Error::HttpClient)
                                                     .into()
                                             })
-                                    })
-                                    .wait()
+                                    }).wait()
                                     .and_then(|invoice| invoice_repo.update(id, invoice.into()))
                                     .and_then(|invoice| {
                                         order_info_repo
@@ -402,15 +388,12 @@ impl<
                                                         e.context("Occured an error during setting orders new status in saga.")
                                                             .context(Error::HttpClient)
                                                             .into()
-                                                    })
-                                                    .wait()
-                                            })
-                                            .map(|_| invoice)
+                                                    }).wait()
+                                            }).map(|_| invoice)
                                     })
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service invoice, recalc endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service invoice, recalc endpoint error occured.").into()),
         )
     }
 }

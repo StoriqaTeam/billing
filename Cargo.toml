@@ -9,7 +9,7 @@ path = "src/lib.rs"
 [dependencies]
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
 config = { version = "0.9", default-features = false, features = ["toml"] }
-diesel = { version = "1.3.2", features = ["postgres", "extras"] }
+diesel = { version = "1.3.3", features = ["postgres", "extras"] }
 env_logger = "0.5.6"
 failure = "0.1.1"
 futures = "0.1.17"

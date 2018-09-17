@@ -118,8 +118,7 @@ impl<
                                         e.context("Occured an error during receiving authorization token in external billing.")
                                             .context(Error::HttpClient)
                                             .into()
-                                    })
-                                    .wait()
+                                    }).wait()
                                     .and_then(|ext_token| {
                                         let body = serde_json::to_string(&user)?;
                                         let url = merchant_url.to_string();
@@ -132,17 +131,14 @@ impl<
                                                 e.context("Occured an error during user merchant creation in external billing.")
                                                     .context(Error::HttpClient)
                                                     .into()
-                                            })
-                                            .wait()
-                                    })
-                                    .and_then(|merchant| {
+                                            }).wait()
+                                    }).and_then(|merchant| {
                                         let payload = NewUserMerchant::new(merchant.id, user.id);
                                         merchant_repo.create_user_merchant(payload)
                                     })
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service merchant, create user endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service merchant, create user endpoint error occured.").into()),
         )
     }
 
@@ -166,8 +162,7 @@ impl<
                                 merchant_repo.delete_by_user_id(user_id_arg).map(|merchant| merchant.merchant_id)
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service merchant, delete user endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service merchant, delete user endpoint error occured.").into()),
         )
     }
 
@@ -201,8 +196,7 @@ impl<
                                         e.context("Occured an error during receiving authorization token in external billing.")
                                             .context(Error::HttpClient)
                                             .into()
-                                    })
-                                    .wait()
+                                    }).wait()
                                     .and_then(|ext_token| {
                                         let body = serde_json::to_string(&store)?;
                                         let url = merchant_url.to_string();
@@ -215,17 +209,14 @@ impl<
                                                 e.context("Occured an error during store merchant creation in external billing.")
                                                     .context(Error::HttpClient)
                                                     .into()
-                                            })
-                                            .wait()
-                                    })
-                                    .and_then(|merchant| {
+                                            }).wait()
+                                    }).and_then(|merchant| {
                                         let payload = NewStoreMerchant::new(merchant.id, store.id);
                                         merchant_repo.create_store_merchant(payload)
                                     })
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service merchant, create_store endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service merchant, create_store endpoint error occured.").into()),
         )
     }
 
@@ -248,8 +239,7 @@ impl<
                                 merchant_repo.delete_by_store_id(store_id_arg).map(|merchant| merchant.merchant_id)
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service merchant, delete store endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service merchant, delete store endpoint error occured.").into()),
         )
     }
 
@@ -284,8 +274,7 @@ impl<
                                             e.context("Occured an error during receiving authorization token in external billing.")
                                                 .context(Error::HttpClient)
                                                 .into()
-                                        })
-                                        .wait()
+                                        }).wait()
                                         .and_then(|ext_token| {
                                             let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
                                             let mut headers = Headers::new();
@@ -298,14 +287,12 @@ impl<
                                                     e.context("Occured an error during user merchant get balance in external billing.")
                                                         .context(Error::HttpClient)
                                                         .into()
-                                                })
-                                                .wait()
+                                                }).wait()
                                         })
                                 })
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service merchant, get_user_balance endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service merchant, get_user_balance endpoint error occured.").into()),
         )
     }
 
@@ -340,8 +327,7 @@ impl<
                                             e.context("Occured an error during receiving authorization token in external billing.")
                                                 .context(Error::HttpClient)
                                                 .into()
-                                        })
-                                        .wait()
+                                        }).wait()
                                         .and_then(|ext_token| {
                                             let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
                                             let mut headers = Headers::new();
@@ -354,14 +340,12 @@ impl<
                                                     e.context("Occured an error during store merchant get balance in external billing.")
                                                         .context(Error::HttpClient)
                                                         .into()
-                                                })
-                                                .wait()
+                                                }).wait()
                                         })
                                 })
                             })
                         })
-                })
-                .map_err(|e: FailureError| e.context("Service merchant, get_store_balance endpoint error occured.").into()),
+                }).map_err(|e: FailureError| e.context("Service merchant, get_store_balance endpoint error occured.").into()),
         )
     }
 }
