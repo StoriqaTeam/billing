@@ -3,6 +3,8 @@ use std::env;
 
 use config_crate::{Config as RawConfig, ConfigError, Environment, File};
 
+use sentry_integration::SentryConfig;
+
 use stq_http;
 use stq_logging::GrayLogConfig;
 
@@ -15,6 +17,7 @@ pub struct Config {
     pub callback: Callback,
     pub external_billing: ExternalBilling,
     pub graylog: Option<GrayLogConfig>,
+    pub sentry: Option<SentryConfig>,
 }
 
 /// Common server settings

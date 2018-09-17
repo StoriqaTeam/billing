@@ -35,6 +35,8 @@ extern crate stq_types;
 extern crate tokio_core;
 extern crate uuid;
 extern crate validator;
+#[macro_use]
+extern crate sentry;
 
 pub mod config;
 pub mod controller;
@@ -42,6 +44,7 @@ pub mod errors;
 pub mod models;
 pub mod repos;
 pub mod schema;
+pub mod sentry_integration;
 pub mod services;
 
 use std::process;
@@ -109,8 +112,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
             let app = Application::<Error>::new(controller);
 
             Ok(app)
-        })
-        .unwrap_or_else(|why| {
+        }).unwrap_or_else(|why| {
             error!("Http Server Initialization Error: {}", why);
             process::exit(1);
         });
@@ -121,8 +123,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
             .for_each(move |conn| {
                 handle_arc2.spawn(conn.map(|_| ()).map_err(|why| error!("Server Error: {:?}", why)));
                 Ok(())
-            })
-            .map_err(|_| ()),
+            }).map_err(|_| ()),
     );
 
     info!("Listening on http://{}, threads: {}", address, thread_count);

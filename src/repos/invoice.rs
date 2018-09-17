@@ -61,8 +61,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     acl::check(&*self.acl, Resource::Invoice, Action::Read, self, Some(invoice_arg))?;
                 };
                 Ok(invoice_arg)
-            })
-            .map_err(|e: FailureError| e.context(format!("Find specific invoice {} error occured", invoice_id_arg)).into())
+            }).map_err(|e: FailureError| e.context(format!("Find specific invoice {} error occured", invoice_id_arg)).into())
     }
 
     /// Find specific invoice by saga ID
@@ -77,8 +76,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     acl::check(&*self.acl, Resource::Invoice, Action::Read, self, Some(invoice_arg))?;
                 };
                 Ok(invoice_arg)
-            })
-            .map_err(|e: FailureError| {
+            }).map_err(|e: FailureError| {
                 e.context(format!("Find specific invoice by saga id {} error occured", saga_id_arg))
                     .into()
             })
@@ -93,8 +91,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|invoice| {
                 acl::check(&*self.acl, Resource::Invoice, Action::Write, self, Some(&invoice))?;
                 Ok(invoice)
-            })
-            .map_err(|e: FailureError| e.context(format!("Create a new invoice {:?} error occured", payload)).into())
+            }).map_err(|e: FailureError| e.context(format!("Create a new invoice {:?} error occured", payload)).into())
     }
 
     /// update new invoice
@@ -122,8 +119,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|invoice| {
                 acl::check(&*self.acl, Resource::Invoice, Action::Write, self, Some(&invoice))?;
                 Ok(invoice)
-            })
-            .map_err(|e: FailureError| e.context(format!("Delete invoice id {} error occured", id_arg)).into())
+            }).map_err(|e: FailureError| e.context(format!("Delete invoice id {} error occured", id_arg)).into())
     }
 }
 
