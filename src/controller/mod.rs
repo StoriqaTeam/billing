@@ -31,7 +31,6 @@ use self::routes::Route;
 use config::Config;
 use errors::Error;
 use models::*;
-use repos::acl::RolesCacheImpl;
 use repos::repo_factory::*;
 use services::invoice::{InvoiceService, InvoiceServiceImpl};
 use services::merchant::{MerchantService, MerchantServiceImpl};
@@ -49,7 +48,6 @@ where
     pub route_parser: Arc<RouteParser<Route>>,
     pub config: Config,
     pub client_handle: ClientHandle,
-    pub roles_cache: RolesCacheImpl,
     pub repo_factory: F,
 }
 
@@ -60,14 +58,7 @@ impl<
     > ControllerImpl<T, M, F>
 {
     /// Create a new controller based on services
-    pub fn new(
-        db_pool: Pool<M>,
-        cpu_pool: CpuPool,
-        client_handle: ClientHandle,
-        config: Config,
-        roles_cache: RolesCacheImpl,
-        repo_factory: F,
-    ) -> Self {
+    pub fn new(db_pool: Pool<M>, cpu_pool: CpuPool, client_handle: ClientHandle, config: Config, repo_factory: F) -> Self {
         let route_parser = Arc::new(routes::create_route_parser());
         Self {
             route_parser,
@@ -75,7 +66,6 @@ impl<
             cpu_pool,
             client_handle,
             config,
-            roles_cache,
             repo_factory,
         }
     }
@@ -95,7 +85,6 @@ impl<
             .map(move |auth| auth.0.clone())
             .and_then(|id| i32::from_str(&id).ok())
             .map(UserId);
-        let cached_roles = self.roles_cache.clone();
         let invoice_service = InvoiceServiceImpl::new(
             self.db_pool.clone(),
             self.cpu_pool.clone(),
@@ -112,8 +101,7 @@ impl<
             self.repo_factory.clone(),
             self.config.clone(),
         );
-        let user_roles_service =
-            UserRolesServiceImpl::new(self.db_pool.clone(), self.cpu_pool.clone(), cached_roles, self.repo_factory.clone());
+        let user_roles_service = UserRolesServiceImpl::new(self.db_pool.clone(), self.cpu_pool.clone(), user_id, self.repo_factory.clone());
 
         let path = req.path().to_string();
 

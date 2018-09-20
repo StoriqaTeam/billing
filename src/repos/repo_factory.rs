@@ -3,7 +3,7 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use failure::Error as FailureError;
 
-use stq_types::{StoresRole, UserId};
+use stq_types::{BillingRole, UserId};
 
 use models::*;
 use repos::legacy_acl::{Acl, SystemACL, UnauthorizedACL};
@@ -18,7 +18,8 @@ pub trait ReposFactory<C: Connection<Backend = Pg, TransactionManager = AnsiTran
     fn create_invoice_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoiceRepo + 'a>;
     fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a>;
     fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a>;
-    fn create_user_roles_repo<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
+    fn create_user_roles_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
+    fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
 }
 
 #[derive(Clone)]
@@ -35,8 +36,11 @@ impl ReposFactoryImpl {
         &self,
         id: UserId,
         db_conn: &'a C,
-    ) -> Vec<StoresRole> {
-        self.create_user_roles_repo(db_conn).list_for_user(id).ok().unwrap_or_default()
+    ) -> Vec<BillingRole> {
+        self.create_user_roles_repo_with_sys_acl(db_conn)
+            .list_for_user(id)
+            .ok()
+            .unwrap_or_default()
     }
 
     fn get_acl<'a, T, C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
@@ -91,12 +95,16 @@ impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 
         )) as Box<MerchantRepo>
     }
 
-    fn create_user_roles_repo<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
+    fn create_user_roles_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
         Box::new(UserRolesRepoImpl::new(
             db_conn,
             Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, UserRole>>,
             self.roles_cache.clone(),
         )) as Box<UserRolesRepo>
+    }
+    fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(UserRolesRepoImpl::new(db_conn, acl, self.roles_cache.clone())) as Box<UserRolesRepo>
     }
 }
 
@@ -171,7 +179,10 @@ pub mod tests {
             Box::new(MerchantRepoMock::default()) as Box<MerchantRepo>
         }
 
-        fn create_user_roles_repo<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
+        fn create_user_roles_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
+            Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
+        }
+        fn create_user_roles_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
             Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
         }
     }
@@ -323,10 +334,10 @@ pub mod tests {
     pub struct UserRolesRepoMock;
 
     impl UserRolesRepo for UserRolesRepoMock {
-        fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<StoresRole>> {
+        fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<BillingRole>> {
             Ok(match user_id_value.0 {
-                1 => vec![StoresRole::Superuser],
-                _ => vec![StoresRole::User],
+                1 => vec![BillingRole::Superuser],
+                _ => vec![BillingRole::User],
             })
         }
 
@@ -343,7 +354,7 @@ pub mod tests {
             Ok(vec![UserRole {
                 id: RoleId::new(),
                 user_id: user_id_arg,
-                name: StoresRole::User,
+                name: BillingRole::User,
                 data: None,
             }])
         }
@@ -352,7 +363,7 @@ pub mod tests {
             Ok(UserRole {
                 id: id,
                 user_id: UserId(1),
-                name: StoresRole::User,
+                name: BillingRole::User,
                 data: None,
             })
         }

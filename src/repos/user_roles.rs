@@ -11,7 +11,7 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 
-use stq_types::{RoleId, StoresRole, UserId};
+use stq_types::{BillingRole, RoleId, UserId};
 
 use models::authorization::*;
 use models::{NewUserRole, UserRole};
@@ -23,7 +23,7 @@ use schema::roles::dsl::*;
 /// UserRoles repository for handling UserRoles
 pub trait UserRolesRepo {
     /// Returns list of user_roles for a specific user
-    fn list_for_user(&self, user_id: UserId) -> RepoResult<Vec<StoresRole>>;
+    fn list_for_user(&self, user_id: UserId) -> RepoResult<Vec<BillingRole>>;
 
     /// Create a new user role
     fn create(&self, payload: NewUserRole) -> RepoResult<UserRole>;
@@ -54,7 +54,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> UserRolesRepo for UserRolesRepoImpl<'a, T> {
     /// Returns list of user_roles for a specific user
-    fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<StoresRole>> {
+    fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<BillingRole>> {
         debug!("list user roles for id {}.", user_id_value);
         if self.cached_roles.contains(user_id_value) {
             let user_roles = self.cached_roles.get(user_id_value);
@@ -67,7 +67,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     let user_roles = user_roles_arg
                         .into_iter()
                         .map(|user_role| user_role.name)
-                        .collect::<Vec<StoresRole>>();
+                        .collect::<Vec<BillingRole>>();
                     Ok(user_roles)
                 }).and_then(|user_roles| {
                     if !user_roles.is_empty() {
