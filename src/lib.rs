@@ -95,7 +95,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
 
     let roles_cache = RolesCacheImpl::default();
 
-    let repo_factory = ReposFactoryImpl::new(roles_cache.clone());
+    let repo_factory = ReposFactoryImpl::new(roles_cache);
 
     let serve = Http::new()
         .serve_addr_handle(&address, &handle, move || {
@@ -104,7 +104,6 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
                 cpu_pool.clone(),
                 client_handle.clone(),
                 config.clone(),
-                roles_cache.clone(),
                 repo_factory.clone(),
             );
 
