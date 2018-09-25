@@ -146,6 +146,7 @@ pub mod tests {
     use stq_types::*;
 
     use config::Config;
+    use controller::context::Context;
     use models::*;
     use repos::*;
     use services::invoice::InvoiceServiceImpl;
@@ -380,8 +381,9 @@ pub mod tests {
         let config = Config::new().unwrap();
         let client = stq_http::client::Client::new(&config.to_http_config(), &handle);
         let client_handle = client.handle();
+        let context = Context::new(db_pool, cpu_pool, client_handle, config, MOCK_REPO_FACTORY);
 
-        InvoiceServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, config)
+        InvoiceServiceImpl::new(context, user_id)
     }
 
     pub fn create_merchant_service(
@@ -396,7 +398,8 @@ pub mod tests {
         let client = stq_http::client::Client::new(&config.to_http_config(), &handle);
         let client_handle = client.handle();
 
-        MerchantServiceImpl::new(db_pool, cpu_pool, client_handle, user_id, MOCK_REPO_FACTORY, config)
+        let context = Context::new(db_pool, cpu_pool, client_handle, config, MOCK_REPO_FACTORY);
+        MerchantServiceImpl::new(context, user_id)
     }
 
     pub fn create_order_info() -> OrderInfo {
