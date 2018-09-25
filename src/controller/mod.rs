@@ -3,32 +3,29 @@
 //! Basically it provides inputs to `Service` layer and converts outputs
 //! of `Service` layer to http responses
 
+pub mod context;
 pub mod routes;
 
 use std::str::FromStr;
-use std::sync::Arc;
 
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
 use futures::future;
 use futures::Future;
-use futures_cpupool::CpuPool;
 use hyper::header::Authorization;
 use hyper::server::Request;
 use hyper::{Delete, Get, Post};
-use r2d2::{ManageConnection, Pool};
+use r2d2::ManageConnection;
 
-use stq_http::client::ClientHandle;
 use stq_http::controller::Controller;
 use stq_http::controller::ControllerFuture;
 use stq_http::request_util::parse_body;
 use stq_http::request_util::serialize_future;
-use stq_router::RouteParser;
 use stq_types::UserId;
 
+use self::context::Context;
 use self::routes::Route;
-use config::Config;
 use errors::Error;
 use models::*;
 use repos::repo_factory::*;
@@ -43,12 +40,7 @@ where
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
 {
-    pub db_pool: Pool<M>,
-    pub cpu_pool: CpuPool,
-    pub route_parser: Arc<RouteParser<Route>>,
-    pub config: Config,
-    pub client_handle: ClientHandle,
-    pub repo_factory: F,
+    pub context: Context<T, M, F>,
 }
 
 impl<
@@ -58,16 +50,8 @@ impl<
     > ControllerImpl<T, M, F>
 {
     /// Create a new controller based on services
-    pub fn new(db_pool: Pool<M>, cpu_pool: CpuPool, client_handle: ClientHandle, config: Config, repo_factory: F) -> Self {
-        let route_parser = Arc::new(routes::create_route_parser());
-        Self {
-            route_parser,
-            db_pool,
-            cpu_pool,
-            client_handle,
-            config,
-            repo_factory,
-        }
+    pub fn new(context: Context<T, M, F>) -> Self {
+        Self { context }
     }
 }
 
@@ -85,27 +69,14 @@ impl<
             .map(move |auth| auth.0.clone())
             .and_then(|id| i32::from_str(&id).ok())
             .map(UserId);
-        let invoice_service = InvoiceServiceImpl::new(
-            self.db_pool.clone(),
-            self.cpu_pool.clone(),
-            self.client_handle.clone(),
-            user_id,
-            self.repo_factory.clone(),
-            self.config.clone(),
-        );
-        let merchant_service = MerchantServiceImpl::new(
-            self.db_pool.clone(),
-            self.cpu_pool.clone(),
-            self.client_handle.clone(),
-            user_id,
-            self.repo_factory.clone(),
-            self.config.clone(),
-        );
-        let user_roles_service = UserRolesServiceImpl::new(self.db_pool.clone(), self.cpu_pool.clone(), user_id, self.repo_factory.clone());
+
+        let invoice_service = InvoiceServiceImpl::new(self.context.clone(), user_id);
+        let merchant_service = MerchantServiceImpl::new(self.context.clone(), user_id);
+        let user_roles_service = UserRolesServiceImpl::new(self.context.clone(), user_id);
 
         let path = req.path().to_string();
 
-        match (&req.method().clone(), self.route_parser.test(req.path())) {
+        match (&req.method().clone(), self.context.route_parser.test(req.path())) {
             (&Post, Some(Route::ExternalBillingCallback)) => serialize_future({
                 parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| {
                     debug!("Received request to update invoice {:?}", data);

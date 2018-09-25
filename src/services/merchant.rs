@@ -6,18 +6,17 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 use futures::Future;
-use futures_cpupool::CpuPool;
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::Headers;
 use hyper::{Get, Post};
-use r2d2::{ManageConnection, Pool};
+use r2d2::ManageConnection;
 use serde_json;
 
-use stq_http::client::ClientHandle;
 use stq_types::{MerchantId, StoreId, UserId};
 
 use super::types::ServiceFuture;
-use config::Config;
+use config::ExternalBilling;
+use controller::context::Context;
 use errors::Error;
 use models::*;
 use repos::repo_factory::ReposFactory;
@@ -43,14 +42,8 @@ pub struct MerchantServiceImpl<
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
 > {
-    pub db_pool: Pool<M>,
-    pub cpu_pool: CpuPool,
-    pub http_client: ClientHandle,
     user_id: Option<UserId>,
-    pub repo_factory: F,
-    pub merchant_url: String,
-    pub login_url: String,
-    pub credentials: ExternalBillingCredentials,
+    pub context: Context<T, M, F>,
 }
 
 impl<
@@ -59,25 +52,8 @@ impl<
         F: ReposFactory<T>,
     > MerchantServiceImpl<T, M, F>
 {
-    pub fn new(
-        db_pool: Pool<M>,
-        cpu_pool: CpuPool,
-        http_client: ClientHandle,
-        user_id: Option<UserId>,
-        repo_factory: F,
-        config: Config,
-    ) -> Self {
-        let credentials = ExternalBillingCredentials::new(config.external_billing.username, config.external_billing.password);
-        Self {
-            db_pool,
-            cpu_pool,
-            http_client,
-            user_id,
-            repo_factory,
-            merchant_url: config.external_billing.merchant_url,
-            login_url: config.external_billing.login_url,
-            credentials,
-        }
+    pub fn new(context: Context<T, M, F>, user_id: Option<UserId>) -> Self {
+        Self { user_id, context }
     }
 }
 
@@ -89,264 +65,230 @@ impl<
 {
     /// Creates user merchant
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
-        let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
-        let repo_factory = self.repo_factory.clone();
-        let client = self.http_client.clone();
-        let merchant_url = self.merchant_url.clone();
-        let login_url = self.login_url.clone();
-        let credentials = self.credentials.clone();
+        let repo_factory = self.context.repo_factory.clone();
+        let client = self.context.client_handle.clone();
+        let ExternalBilling {
+            merchant_url,
+            login_url,
+            username,
+            password,
+            ..
+        } = self.context.config.external_billing.clone();
+        let credentials = ExternalBillingCredentials::new(username, password);
 
-        Box::new(
-            self.cpu_pool
-                .spawn_fn(move || {
-                    db_clone
-                        .get()
-                        .map_err(|e| e.context(Error::Connection).into())
-                        .and_then(move |conn| {
-                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-                            conn.transaction::<Merchant, FailureError, _>(move || {
-                                debug!("Creating new user merchant: {:?}", &user);
+        self.context.spawn_on_pool(move |conn| {
+            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            conn.transaction::<Merchant, FailureError, _>(move || {
+                debug!("Creating new user merchant: {:?}", &user);
 
-                                let body = serde_json::to_string(&credentials)?;
-                                let url = login_url.to_string();
-                                let mut headers = Headers::new();
-                                headers.set(ContentType::json());
-                                client
-                                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
-                                    .map_err(|e| {
-                                        e.context("Occured an error during receiving authorization token in external billing.")
-                                            .context(Error::HttpClient)
-                                            .into()
-                                    }).wait()
-                                    .and_then(|ext_token| {
-                                        let body = serde_json::to_string(&user)?;
-                                        let url = merchant_url.to_string();
-                                        let mut headers = Headers::new();
-                                        headers.set(Authorization(Bearer { token: ext_token.token }));
-                                        headers.set(ContentType::json());
-                                        client
-                                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
-                                            .map_err(|e| {
-                                                e.context("Occured an error during user merchant creation in external billing.")
-                                                    .context(Error::HttpClient)
-                                                    .into()
-                                            }).wait()
-                                    }).and_then(|merchant| {
-                                        let payload = NewUserMerchant::new(merchant.id, user.id);
-                                        merchant_repo.create_user_merchant(payload)
-                                    })
-                            })
-                        })
-                }).map_err(|e: FailureError| e.context("Service merchant, create user endpoint error occured.").into()),
-        )
+                let body = serde_json::to_string(&credentials)?;
+                let url = login_url.to_string();
+                let mut headers = Headers::new();
+                headers.set(ContentType::json());
+                client
+                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                    .map_err(|e| {
+                        e.context("Occured an error during receiving authorization token in external billing.")
+                            .context(Error::HttpClient)
+                            .into()
+                    }).wait()
+                    .and_then(|ext_token| {
+                        let body = serde_json::to_string(&user)?;
+                        let url = merchant_url.to_string();
+                        let mut headers = Headers::new();
+                        headers.set(Authorization(Bearer { token: ext_token.token }));
+                        headers.set(ContentType::json());
+                        client
+                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
+                            .map_err(|e| {
+                                e.context("Occured an error during user merchant creation in external billing.")
+                                    .context(Error::HttpClient)
+                                    .into()
+                            }).wait()
+                    }).and_then(|merchant| {
+                        let payload = NewUserMerchant::new(merchant.id, user.id);
+                        merchant_repo.create_user_merchant(payload)
+                    })
+            }).map_err(|e: FailureError| e.context("Service merchant, create user endpoint error occured.").into())
+        })
     }
 
     /// Delete user merchant
     fn delete_user(&self, user_id_arg: UserId) -> ServiceFuture<MerchantId> {
-        let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
-        let repo_factory = self.repo_factory.clone();
+        let repo_factory = self.context.repo_factory.clone();
 
-        Box::new(
-            self.cpu_pool
-                .spawn_fn(move || {
-                    db_clone
-                        .get()
-                        .map_err(|e| e.context(Error::Connection).into())
-                        .and_then(move |conn| {
-                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+        self.context.spawn_on_pool(move |conn| {
+            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
 
-                            conn.transaction::<MerchantId, FailureError, _>(move || {
-                                debug!("Deleting user merchant with user id {}", &user_id_arg);
-                                merchant_repo.delete_by_user_id(user_id_arg).map(|merchant| merchant.merchant_id)
-                            })
-                        })
-                }).map_err(|e: FailureError| e.context("Service merchant, delete user endpoint error occured.").into()),
-        )
+            conn.transaction::<MerchantId, FailureError, _>(move || {
+                debug!("Deleting user merchant with user id {}", &user_id_arg);
+                merchant_repo.delete_by_user_id(user_id_arg).map(|merchant| merchant.merchant_id)
+            }).map_err(|e: FailureError| e.context("Service merchant, delete user endpoint error occured.").into())
+        })
     }
 
     /// Creates store merchant
     fn create_store(&self, store: CreateStoreMerchantPayload) -> ServiceFuture<Merchant> {
-        let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
-        let repo_factory = self.repo_factory.clone();
-        let client = self.http_client.clone();
-        let merchant_url = self.merchant_url.clone();
-        let login_url = self.login_url.clone();
-        let credentials = self.credentials.clone();
+        let repo_factory = self.context.repo_factory.clone();
+        let client = self.context.client_handle.clone();
+        let ExternalBilling {
+            merchant_url,
+            login_url,
+            username,
+            password,
+            ..
+        } = self.context.config.external_billing.clone();
+        let credentials = ExternalBillingCredentials::new(username, password);
 
-        Box::new(
-            self.cpu_pool
-                .spawn_fn(move || {
-                    db_clone
-                        .get()
-                        .map_err(|e| e.context(Error::Connection).into())
-                        .and_then(move |conn| {
-                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-                            conn.transaction::<Merchant, FailureError, _>(move || {
-                                debug!("Creating new store merchant: {:?}", &store);
-                                let body = serde_json::to_string(&credentials)?;
-                                let url = login_url.to_string();
-                                let mut headers = Headers::new();
-                                headers.set(ContentType::json());
-                                client
-                                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
-                                    .map_err(|e| {
-                                        e.context("Occured an error during receiving authorization token in external billing.")
-                                            .context(Error::HttpClient)
-                                            .into()
-                                    }).wait()
-                                    .and_then(|ext_token| {
-                                        let body = serde_json::to_string(&store)?;
-                                        let url = merchant_url.to_string();
-                                        let mut headers = Headers::new();
-                                        headers.set(Authorization(Bearer { token: ext_token.token }));
-                                        headers.set(ContentType::json());
-                                        client
-                                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
-                                            .map_err(|e| {
-                                                e.context("Occured an error during store merchant creation in external billing.")
-                                                    .context(Error::HttpClient)
-                                                    .into()
-                                            }).wait()
-                                    }).and_then(|merchant| {
-                                        let payload = NewStoreMerchant::new(merchant.id, store.id);
-                                        merchant_repo.create_store_merchant(payload)
-                                    })
-                            })
-                        })
-                }).map_err(|e: FailureError| e.context("Service merchant, create_store endpoint error occured.").into()),
-        )
+        self.context.spawn_on_pool(move |conn| {
+            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            conn.transaction::<Merchant, FailureError, _>(move || {
+                debug!("Creating new store merchant: {:?}", &store);
+                let body = serde_json::to_string(&credentials)?;
+                let url = login_url.to_string();
+                let mut headers = Headers::new();
+                headers.set(ContentType::json());
+                client
+                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                    .map_err(|e| {
+                        e.context("Occured an error during receiving authorization token in external billing.")
+                            .context(Error::HttpClient)
+                            .into()
+                    }).wait()
+                    .and_then(|ext_token| {
+                        let body = serde_json::to_string(&store)?;
+                        let url = merchant_url.to_string();
+                        let mut headers = Headers::new();
+                        headers.set(Authorization(Bearer { token: ext_token.token }));
+                        headers.set(ContentType::json());
+                        client
+                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
+                            .map_err(|e| {
+                                e.context("Occured an error during store merchant creation in external billing.")
+                                    .context(Error::HttpClient)
+                                    .into()
+                            }).wait()
+                    }).and_then(|merchant| {
+                        let payload = NewStoreMerchant::new(merchant.id, store.id);
+                        merchant_repo.create_store_merchant(payload)
+                    })
+            }).map_err(|e: FailureError| e.context("Service merchant, create_store endpoint error occured.").into())
+        })
     }
 
     /// Delete store merchant
     fn delete_store(&self, store_id_arg: StoreId) -> ServiceFuture<MerchantId> {
-        let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
-        let repo_factory = self.repo_factory.clone();
+        let repo_factory = self.context.repo_factory.clone();
 
-        Box::new(
-            self.cpu_pool
-                .spawn_fn(move || {
-                    db_clone
-                        .get()
-                        .map_err(|e| e.context(Error::Connection).into())
-                        .and_then(move |conn| {
-                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-                            conn.transaction::<MerchantId, FailureError, _>(move || {
-                                debug!("Deleting store merchant with store id {}", &store_id_arg);
-                                merchant_repo.delete_by_store_id(store_id_arg).map(|merchant| merchant.merchant_id)
-                            })
-                        })
-                }).map_err(|e: FailureError| e.context("Service merchant, delete store endpoint error occured.").into()),
-        )
+        self.context.spawn_on_pool(move |conn| {
+            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            conn.transaction::<MerchantId, FailureError, _>(move || {
+                debug!("Deleting store merchant with store id {}", &store_id_arg);
+                merchant_repo.delete_by_store_id(store_id_arg).map(|merchant| merchant.merchant_id)
+            }).map_err(|e: FailureError| e.context("Service merchant, delete store endpoint error occured.").into())
+        })
     }
 
     /// Get user merchant balance by user id
     fn get_user_balance(&self, id: UserId) -> ServiceFuture<Vec<MerchantBalance>> {
-        let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
-        let repo_factory = self.repo_factory.clone();
-        let client = self.http_client.clone();
-        let merchant_url = self.merchant_url.clone();
-        let login_url = self.login_url.clone();
-        let credentials = self.credentials.clone();
+        let repo_factory = self.context.repo_factory.clone();
+        let client = self.context.client_handle.clone();
+        let ExternalBilling {
+            merchant_url,
+            login_url,
+            username,
+            password,
+            ..
+        } = self.context.config.external_billing.clone();
+        let credentials = ExternalBillingCredentials::new(username, password);
 
-        Box::new(
-            self.cpu_pool
-                .spawn_fn(move || {
-                    db_clone
-                        .get()
-                        .map_err(|e| e.context(Error::Connection).into())
-                        .and_then(move |conn| {
-                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-                            conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
-                                debug!("Get merchant balance by user id {:?}", &id);
-                                merchant_repo.get_by_subject_id(SubjectIdentifier::User(id)).and_then(|merchant| {
-                                    let body = serde_json::to_string(&credentials)?;
-                                    let url = login_url.to_string();
-                                    let mut headers = Headers::new();
-                                    headers.set(ContentType::json());
-                                    client
-                                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
-                                        .map_err(|e| {
-                                            e.context("Occured an error during receiving authorization token in external billing.")
-                                                .context(Error::HttpClient)
-                                                .into()
-                                        }).wait()
-                                        .and_then(|ext_token| {
-                                            let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
-                                            let mut headers = Headers::new();
-                                            headers.set(Authorization(Bearer { token: ext_token.token }));
-                                            headers.set(ContentType::json());
-                                            client
-                                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
-                                                .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
-                                                .map_err(|e| {
-                                                    e.context("Occured an error during user merchant get balance in external billing.")
-                                                        .context(Error::HttpClient)
-                                                        .into()
-                                                }).wait()
-                                        })
-                                })
-                            })
+        self.context.spawn_on_pool(move |conn| {
+            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
+                debug!("Get merchant balance by user id {:?}", &id);
+                merchant_repo.get_by_subject_id(SubjectIdentifier::User(id)).and_then(|merchant| {
+                    let body = serde_json::to_string(&credentials)?;
+                    let url = login_url.to_string();
+                    let mut headers = Headers::new();
+                    headers.set(ContentType::json());
+                    client
+                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                        .map_err(|e| {
+                            e.context("Occured an error during receiving authorization token in external billing.")
+                                .context(Error::HttpClient)
+                                .into()
+                        }).wait()
+                        .and_then(|ext_token| {
+                            let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
+                            let mut headers = Headers::new();
+                            headers.set(Authorization(Bearer { token: ext_token.token }));
+                            headers.set(ContentType::json());
+                            client
+                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
+                                .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
+                                .map_err(|e| {
+                                    e.context("Occured an error during user merchant get balance in external billing.")
+                                        .context(Error::HttpClient)
+                                        .into()
+                                }).wait()
                         })
-                }).map_err(|e: FailureError| e.context("Service merchant, get_user_balance endpoint error occured.").into()),
-        )
+                })
+            }).map_err(|e: FailureError| e.context("Service merchant, get_user_balance endpoint error occured.").into())
+        })
     }
 
     /// Get store merchant balance by store id
     fn get_store_balance(&self, id: StoreId) -> ServiceFuture<Vec<MerchantBalance>> {
-        let db_clone = self.db_pool.clone();
         let user_id = self.user_id;
-        let repo_factory = self.repo_factory.clone();
-        let client = self.http_client.clone();
-        let merchant_url = self.merchant_url.clone();
-        let login_url = self.login_url.clone();
-        let credentials = self.credentials.clone();
+        let repo_factory = self.context.repo_factory.clone();
+        let client = self.context.client_handle.clone();
+        let ExternalBilling {
+            merchant_url,
+            login_url,
+            username,
+            password,
+            ..
+        } = self.context.config.external_billing.clone();
+        let credentials = ExternalBillingCredentials::new(username, password);
 
-        Box::new(
-            self.cpu_pool
-                .spawn_fn(move || {
-                    db_clone
-                        .get()
-                        .map_err(|e| e.context(Error::Connection).into())
-                        .and_then(move |conn| {
-                            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-                            conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
-                                debug!("Get merchant balance by store id {:?}", &id);
-                                merchant_repo.get_by_subject_id(SubjectIdentifier::Store(id)).and_then(|merchant| {
-                                    let body = serde_json::to_string(&credentials)?;
-                                    let url = login_url.to_string();
-                                    let mut headers = Headers::new();
-                                    headers.set(ContentType::json());
-                                    client
-                                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
-                                        .map_err(|e| {
-                                            e.context("Occured an error during receiving authorization token in external billing.")
-                                                .context(Error::HttpClient)
-                                                .into()
-                                        }).wait()
-                                        .and_then(|ext_token| {
-                                            let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
-                                            let mut headers = Headers::new();
-                                            headers.set(Authorization(Bearer { token: ext_token.token }));
-                                            headers.set(ContentType::json());
-                                            client
-                                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
-                                                .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
-                                                .map_err(|e| {
-                                                    e.context("Occured an error during store merchant get balance in external billing.")
-                                                        .context(Error::HttpClient)
-                                                        .into()
-                                                }).wait()
-                                        })
-                                })
-                            })
+        self.context.spawn_on_pool(move |conn| {
+            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
+                debug!("Get merchant balance by store id {:?}", &id);
+                merchant_repo.get_by_subject_id(SubjectIdentifier::Store(id)).and_then(|merchant| {
+                    let body = serde_json::to_string(&credentials)?;
+                    let url = login_url.to_string();
+                    let mut headers = Headers::new();
+                    headers.set(ContentType::json());
+                    client
+                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                        .map_err(|e| {
+                            e.context("Occured an error during receiving authorization token in external billing.")
+                                .context(Error::HttpClient)
+                                .into()
+                        }).wait()
+                        .and_then(|ext_token| {
+                            let url = format!("{}/{}/", merchant_url, merchant.merchant_id);
+                            let mut headers = Headers::new();
+                            headers.set(Authorization(Bearer { token: ext_token.token }));
+                            headers.set(ContentType::json());
+                            client
+                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
+                                .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
+                                .map_err(|e| {
+                                    e.context("Occured an error during store merchant get balance in external billing.")
+                                        .context(Error::HttpClient)
+                                        .into()
+                                }).wait()
                         })
-                }).map_err(|e: FailureError| e.context("Service merchant, get_store_balance endpoint error occured.").into()),
-        )
+                })
+            }).map_err(|e: FailureError| e.context("Service merchant, get_store_balance endpoint error occured.").into())
+        })
     }
 }
 
