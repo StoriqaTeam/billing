@@ -14,3 +14,6 @@ amount_recalculate_timeout_sec = 600
 
 [graylog]
 addr = "udplog.stq.cloud:32303"
+
+[stripe]
+api_key = ""

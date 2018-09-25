@@ -37,6 +37,7 @@ extern crate uuid;
 extern crate validator;
 #[macro_use]
 extern crate sentry;
+extern crate libstripe;
 
 pub mod config;
 pub mod controller;
@@ -46,6 +47,7 @@ pub mod repos;
 pub mod schema;
 pub mod sentry_integration;
 pub mod services;
+pub mod stripe_integration;
 
 use std::process;
 use std::sync::Arc;
