@@ -5,3 +5,5 @@ pub mod invoice;
 pub mod merchant;
 pub mod types;
 pub mod user_roles;
+
+pub use self::types::Service;

@@ -16,10 +16,10 @@ use stq_types::{MerchantId, StoreId, UserId};
 
 use super::types::ServiceFuture;
 use config::ExternalBilling;
-use controller::context::Context;
 use errors::Error;
 use models::*;
 use repos::repo_factory::ReposFactory;
+use services::Service;
 
 pub trait MerchantService {
     /// Creates user merchant
@@ -36,48 +36,27 @@ pub trait MerchantService {
     fn get_store_balance(&self, id: StoreId) -> ServiceFuture<Vec<MerchantBalance>>;
 }
 
-/// Merchants services, responsible for Merchant-related CRUD operations
-pub struct MerchantServiceImpl<
-    T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-    M: ManageConnection<Connection = T>,
-    F: ReposFactory<T>,
-> {
-    user_id: Option<UserId>,
-    pub context: Context<T, M, F>,
-}
-
 impl<
         T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
         M: ManageConnection<Connection = T>,
         F: ReposFactory<T>,
-    > MerchantServiceImpl<T, M, F>
-{
-    pub fn new(context: Context<T, M, F>, user_id: Option<UserId>) -> Self {
-        Self { user_id, context }
-    }
-}
-
-impl<
-        T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-        M: ManageConnection<Connection = T>,
-        F: ReposFactory<T>,
-    > MerchantService for MerchantServiceImpl<T, M, F>
+    > MerchantService for Service<T, M, F>
 {
     /// Creates user merchant
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-        let client = self.context.client_handle.clone();
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let client = self.static_context.client_handle.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
             username,
             password,
             ..
-        } = self.context.config.external_billing.clone();
+        } = self.static_context.config.external_billing.clone();
         let credentials = ExternalBillingCredentials::new(username, password);
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
             conn.transaction::<Merchant, FailureError, _>(move || {
                 debug!("Creating new user merchant: {:?}", &user);
@@ -116,10 +95,10 @@ impl<
 
     /// Delete user merchant
     fn delete_user(&self, user_id_arg: UserId) -> ServiceFuture<MerchantId> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
 
             conn.transaction::<MerchantId, FailureError, _>(move || {
@@ -131,19 +110,19 @@ impl<
 
     /// Creates store merchant
     fn create_store(&self, store: CreateStoreMerchantPayload) -> ServiceFuture<Merchant> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-        let client = self.context.client_handle.clone();
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let client = self.static_context.client_handle.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
             username,
             password,
             ..
-        } = self.context.config.external_billing.clone();
+        } = self.static_context.config.external_billing.clone();
         let credentials = ExternalBillingCredentials::new(username, password);
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
             conn.transaction::<Merchant, FailureError, _>(move || {
                 debug!("Creating new store merchant: {:?}", &store);
@@ -181,10 +160,10 @@ impl<
 
     /// Delete store merchant
     fn delete_store(&self, store_id_arg: StoreId) -> ServiceFuture<MerchantId> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
             conn.transaction::<MerchantId, FailureError, _>(move || {
                 debug!("Deleting store merchant with store id {}", &store_id_arg);
@@ -195,19 +174,19 @@ impl<
 
     /// Get user merchant balance by user id
     fn get_user_balance(&self, id: UserId) -> ServiceFuture<Vec<MerchantBalance>> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-        let client = self.context.client_handle.clone();
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let client = self.static_context.client_handle.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
             username,
             password,
             ..
-        } = self.context.config.external_billing.clone();
+        } = self.static_context.config.external_billing.clone();
         let credentials = ExternalBillingCredentials::new(username, password);
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
             conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
                 debug!("Get merchant balance by user id {:?}", &id);
@@ -244,19 +223,19 @@ impl<
 
     /// Get store merchant balance by store id
     fn get_store_balance(&self, id: StoreId) -> ServiceFuture<Vec<MerchantBalance>> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-        let client = self.context.client_handle.clone();
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let client = self.static_context.client_handle.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
             username,
             password,
             ..
-        } = self.context.config.external_billing.clone();
+        } = self.static_context.config.external_billing.clone();
         let credentials = ExternalBillingCredentials::new(username, password);
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
             conn.transaction::<Vec<MerchantBalance>, FailureError, _>(move || {
                 debug!("Get merchant balance by store id {:?}", &id);
@@ -308,7 +287,7 @@ pub mod tests {
     fn test_create_user_merchant() {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
-        let service = create_merchant_service(Some(UserId(1)), handle);
+        let service = create_service(Some(UserId(1)), handle);
         let create_user = CreateUserMerchantPayload { id: UserId(1) };
         let work = service.create_user(create_user);
         let _result = core.run(work).unwrap();
@@ -318,7 +297,7 @@ pub mod tests {
     fn test_create_store_merchant() {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
-        let service = create_merchant_service(Some(UserId(1)), handle);
+        let service = create_service(Some(UserId(1)), handle);
         let create_store = CreateStoreMerchantPayload { id: StoreId(1) };
         let work = service.create_store(create_store);
         let _result = core.run(work).unwrap();
@@ -328,7 +307,7 @@ pub mod tests {
     fn test_get_user_balance() {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
-        let service = create_merchant_service(Some(UserId(1)), handle);
+        let service = create_service(Some(UserId(1)), handle);
         let id = UserId(1);
         let work = service.get_user_balance(id);
         let _result = core.run(work).unwrap();

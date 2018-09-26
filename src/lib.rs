@@ -61,7 +61,7 @@ use tokio_core::reactor::Core;
 use stq_http::controller::Application;
 
 use config::Config;
-use controller::context::Context;
+use controller::context::StaticContext;
 use errors::Error;
 use repos::acl::RolesCacheImpl;
 use repos::repo_factory::ReposFactoryImpl;
@@ -98,7 +98,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
 
     let repo_factory = ReposFactoryImpl::new(roles_cache);
 
-    let context = Context::new(db_pool, cpu_pool, client_handle, config, repo_factory);
+    let context = StaticContext::new(db_pool, cpu_pool, client_handle, Arc::new(config), repo_factory);
 
     let serve = Http::new()
         .serve_addr_handle(&address, &handle, move || {
