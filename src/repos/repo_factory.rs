@@ -146,11 +146,10 @@ pub mod tests {
     use stq_types::*;
 
     use config::Config;
-    use controller::context::Context;
+    use controller::context::{DynamicContext, StaticContext};
     use models::*;
     use repos::*;
-    use services::invoice::InvoiceServiceImpl;
-    use services::merchant::MerchantServiceImpl;
+    use services::*;
 
     #[derive(Default, Copy, Clone)]
     pub struct ReposFactoryMock;
@@ -370,10 +369,10 @@ pub mod tests {
         }
     }
 
-    pub fn create_invoice_service(
+    pub fn create_service(
         user_id: Option<UserId>,
         handle: Arc<Handle>,
-    ) -> InvoiceServiceImpl<MockConnection, MockConnectionManager, ReposFactoryMock> {
+    ) -> Service<MockConnection, MockConnectionManager, ReposFactoryMock> {
         let manager = MockConnectionManager::default();
         let db_pool = r2d2::Pool::builder().build(manager).expect("Failed to create connection pool");
         let cpu_pool = CpuPool::new(1);
@@ -381,25 +380,10 @@ pub mod tests {
         let config = Config::new().unwrap();
         let client = stq_http::client::Client::new(&config.to_http_config(), &handle);
         let client_handle = client.handle();
-        let context = Context::new(db_pool, cpu_pool, client_handle, config, MOCK_REPO_FACTORY);
+        let static_context = StaticContext::new(db_pool, cpu_pool, client_handle, Arc::new(config), MOCK_REPO_FACTORY);
+        let dynamic_context = DynamicContext::new(user_id);
 
-        InvoiceServiceImpl::new(context, user_id)
-    }
-
-    pub fn create_merchant_service(
-        user_id: Option<UserId>,
-        handle: Arc<Handle>,
-    ) -> MerchantServiceImpl<MockConnection, MockConnectionManager, ReposFactoryMock> {
-        let manager = MockConnectionManager::default();
-        let db_pool = r2d2::Pool::builder().build(manager).expect("Failed to create connection pool");
-        let cpu_pool = CpuPool::new(1);
-
-        let config = Config::new().unwrap();
-        let client = stq_http::client::Client::new(&config.to_http_config(), &handle);
-        let client_handle = client.handle();
-
-        let context = Context::new(db_pool, cpu_pool, client_handle, config, MOCK_REPO_FACTORY);
-        MerchantServiceImpl::new(context, user_id)
+        Service::new(static_context, dynamic_context)
     }
 
     pub fn create_order_info() -> OrderInfo {

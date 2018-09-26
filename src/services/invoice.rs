@@ -12,66 +12,45 @@ use hyper::Post;
 use r2d2::ManageConnection;
 use serde_json;
 
-use stq_types::{InvoiceId, OrderId, SagaId, UserId};
+use stq_types::{InvoiceId, OrderId, SagaId};
 
 use super::types::ServiceFuture;
 use config::ExternalBilling;
-use controller::context::Context;
 use errors::Error;
 use models::*;
 use repos::repo_factory::ReposFactory;
 use repos::RepoResult;
+use services::Service;
 
 pub trait InvoiceService {
     /// Creates invoice in billing system
-    fn create(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice>;
+    fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice>;
     /// Get invoice by order id
-    fn get_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>>;
+    fn get_invoice_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>>;
     /// Get invoice by invoice id
-    fn get_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>>;
+    fn get_invoice_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>>;
     /// Recalc invoice by invoice id
-    fn recalc(&self, id: InvoiceId) -> ServiceFuture<Invoice>;
+    fn recalc_invoice(&self, id: InvoiceId) -> ServiceFuture<Invoice>;
     /// Get orders ids by invoice id
-    fn get_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
+    fn get_invoice_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
     /// Delete invoice merchant
-    fn delete(&self, id: SagaId) -> ServiceFuture<SagaId>;
+    fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// Creates orders in billing system, returning url for payment
-    fn update(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
-}
-
-/// OrderInfos services, responsible for OrderInfo-related CRUD operations
-pub struct InvoiceServiceImpl<
-    T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-    M: ManageConnection<Connection = T>,
-    F: ReposFactory<T>,
-> {
-    user_id: Option<UserId>,
-    pub context: Context<T, M, F>,
+    fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
 }
 
 impl<
         T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
         M: ManageConnection<Connection = T>,
         F: ReposFactory<T>,
-    > InvoiceServiceImpl<T, M, F>
-{
-    pub fn new(context: Context<T, M, F>, user_id: Option<UserId>) -> Self {
-        Self { user_id, context }
-    }
-}
-
-impl<
-        T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-        M: ManageConnection<Connection = T>,
-        F: ReposFactory<T>,
-    > InvoiceService for InvoiceServiceImpl<T, M, F>
+    > InvoiceService for Service<T, M, F>
 {
     /// Creates orders in billing system, returning url for payment
-    fn create(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-        let client = self.context.client_handle.clone();
-        let callback_url = self.context.config.callback.url.clone();
+    fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let client = self.static_context.client_handle.clone();
+        let callback_url = self.static_context.config.callback.url.clone();
         let ExternalBilling {
             invoice_url,
             login_url,
@@ -79,10 +58,10 @@ impl<
             password,
             amount_recalculate_timeout_sec,
             ..
-        } = self.context.config.external_billing.clone();
+        } = self.static_context.config.external_billing.clone();
         let credentials = ExternalBillingCredentials::new(username, password);
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
             let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
@@ -149,62 +128,12 @@ impl<
         })
     }
 
-    /// Delete invoice
-    fn delete(&self, id: SagaId) -> ServiceFuture<SagaId> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-
-        self.context.spawn_on_pool(move |conn| {
-            let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
-            let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
-            conn.transaction::<SagaId, FailureError, _>(move || {
-                debug!("Deleting invoice: {}", &id);
-                invoice_repo
-                    .delete(id)
-                    .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice.id))
-            }).map_err(|e: FailureError| e.context("Service invoice, delete endpoint error occured.").into())
-        })
-    }
-
-    /// Updates specific invoice and orders
-    fn update(&self, external_invoice: ExternalBillingInvoice) -> ServiceFuture<()> {
-        let current_user = self.user_id;
-        let client = self.context.client_handle.clone();
-        let repo_factory = self.context.repo_factory.clone();
-        let saga_url = self.context.config.saga_addr.url.clone();
-
-        debug!("Updating by external invoice {:?}.", &external_invoice);
-
-        self.context.spawn_on_pool(move |conn| {
-            let order_info_repo = repo_factory.create_order_info_repo(&conn, current_user);
-            let invoice_repo = repo_factory.create_invoice_repo(&conn, current_user);
-            let invoice_id = external_invoice.id;
-            let update_payload = external_invoice.into();
-            conn.transaction::<(), FailureError, _>(move || {
-                invoice_repo
-                    .update(invoice_id, update_payload)
-                    .and_then(|invoice| order_info_repo.update_status(invoice.id, invoice.state))
-                    .and_then(|orders| {
-                        let body = serde_json::to_string(&orders)?;
-                        let url = format!("{}/orders/update_state", saga_url);
-                        client
-                            .request::<()>(Post, url, Some(body), None)
-                            .map_err(|e| {
-                                e.context("Occured an error during setting orders new status in saga.")
-                                    .context(Error::HttpClient)
-                                    .into()
-                            }).wait()
-                    })
-            }).map_err(|e: FailureError| e.context("Service invoice, update endpoint error occured.").into())
-        })
-    }
-
     /// Get invoice by order id
-    fn get_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
+    fn get_invoice_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
             let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
             debug!("Requesting invoice by order id: {}", &order_id);
@@ -221,10 +150,10 @@ impl<
         })
     }
     /// Get invoice by invoice id
-    fn get_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>> {
-        let repo_factory = self.context.repo_factory.clone();
-        let user_id = self.user_id;
-        self.context.spawn_on_pool(move |conn| {
+    fn get_invoice_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>> {
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+        self.spawn_on_pool(move |conn| {
             let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
             debug!("Requesting invoice by invoice id: {}", &id);
             invoice_repo
@@ -233,45 +162,22 @@ impl<
         })
     }
 
-    /// Get orders ids by invoice id
-    fn get_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-        self.context.spawn_on_pool(move |conn| {
-            let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
-            let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
-            debug!("Requesting vec order ids by invoice id: {}", &id);
-
-            invoice_repo
-                .find(id)
-                .and_then(|invoice| {
-                    if let Some(invoice) = invoice {
-                        order_info_repo
-                            .find_by_saga_id(invoice.id)
-                            .map(|order_infos| order_infos.into_iter().map(|order_info| order_info.order_id).collect())
-                    } else {
-                        Ok(vec![])
-                    }
-                }).map_err(|e: FailureError| e.context("Service invoice, get_orders_ids endpoint error occured.").into())
-        })
-    }
-
     /// Recalc invoice by invoice id
-    fn recalc(&self, id: InvoiceId) -> ServiceFuture<Invoice> {
-        let user_id = self.user_id;
-        let repo_factory = self.context.repo_factory.clone();
-        let client = self.context.client_handle.clone();
+    fn recalc_invoice(&self, id: InvoiceId) -> ServiceFuture<Invoice> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let client = self.static_context.client_handle.clone();
         let ExternalBilling {
             invoice_url,
             login_url,
             username,
             password,
             ..
-        } = self.context.config.external_billing.clone();
+        } = self.static_context.config.external_billing.clone();
         let credentials = ExternalBillingCredentials::new(username, password);
-        let saga_url = self.context.config.saga_addr.url.clone();
+        let saga_url = self.static_context.config.saga_addr.url.clone();
 
-        self.context.spawn_on_pool(move |conn| {
+        self.spawn_on_pool(move |conn| {
             let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
             let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
 
@@ -319,6 +225,79 @@ impl<
             }).map_err(|e: FailureError| e.context("Service invoice, recalc endpoint error occured.").into())
         })
     }
+
+    /// Get orders ids by invoice id
+    fn get_invoice_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        self.spawn_on_pool(move |conn| {
+            let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
+            let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
+            debug!("Requesting vec order ids by invoice id: {}", &id);
+
+            invoice_repo
+                .find(id)
+                .and_then(|invoice| {
+                    if let Some(invoice) = invoice {
+                        order_info_repo
+                            .find_by_saga_id(invoice.id)
+                            .map(|order_infos| order_infos.into_iter().map(|order_info| order_info.order_id).collect())
+                    } else {
+                        Ok(vec![])
+                    }
+                }).map_err(|e: FailureError| e.context("Service invoice, get_orders_ids endpoint error occured.").into())
+        })
+    }
+
+    /// Delete invoice
+    fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+
+        self.spawn_on_pool(move |conn| {
+            let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
+            let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
+            conn.transaction::<SagaId, FailureError, _>(move || {
+                debug!("Deleting invoice: {}", &id);
+                invoice_repo
+                    .delete(id)
+                    .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice.id))
+            }).map_err(|e: FailureError| e.context("Service invoice, delete endpoint error occured.").into())
+        })
+    }
+
+    /// Updates specific invoice and orders
+    fn update_invoice(&self, external_invoice: ExternalBillingInvoice) -> ServiceFuture<()> {
+        let current_user = self.dynamic_context.user_id;
+        let client = self.static_context.client_handle.clone();
+        let repo_factory = self.static_context.repo_factory.clone();
+        let saga_url = self.static_context.config.saga_addr.url.clone();
+
+        debug!("Updating by external invoice {:?}.", &external_invoice);
+
+        self.spawn_on_pool(move |conn| {
+            let order_info_repo = repo_factory.create_order_info_repo(&conn, current_user);
+            let invoice_repo = repo_factory.create_invoice_repo(&conn, current_user);
+            let invoice_id = external_invoice.id;
+            let update_payload = external_invoice.into();
+            conn.transaction::<(), FailureError, _>(move || {
+                invoice_repo
+                    .update(invoice_id, update_payload)
+                    .and_then(|invoice| order_info_repo.update_status(invoice.id, invoice.state))
+                    .and_then(|orders| {
+                        let body = serde_json::to_string(&orders)?;
+                        let url = format!("{}/orders/update_state", saga_url);
+                        client
+                            .request::<()>(Post, url, Some(body), None)
+                            .map_err(|e| {
+                                e.context("Occured an error during setting orders new status in saga.")
+                                    .context(Error::HttpClient)
+                                    .into()
+                            }).wait()
+                    })
+            }).map_err(|e: FailureError| e.context("Service invoice, update endpoint error occured.").into())
+        })
+    }
 }
 
 #[cfg(test)]
@@ -339,7 +318,7 @@ pub mod tests {
     fn test_create_order_info() {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
-        let service = create_invoice_service(Some(UserId(1)), handle);
+        let service = create_service(Some(UserId(1)), handle);
         let order = Order {
             id: OrderId::new(),
             store_id: StoreId(1),
@@ -353,7 +332,7 @@ pub mod tests {
             orders: vec![order],
             currency: Currency::STQ,
         };
-        let work = service.create(create_order);
+        let work = service.create_invoice(create_order);
         let _result = core.run(work).unwrap();
     }
 
@@ -361,7 +340,7 @@ pub mod tests {
     fn test_set_paid() {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
-        let service = create_invoice_service(Some(UserId(1)), handle);
+        let service = create_service(Some(UserId(1)), handle);
         let invoice = ExternalBillingInvoice {
             id: InvoiceId::new(),
             amount: "0.000000000".to_string(),
@@ -372,7 +351,7 @@ pub mod tests {
             currency: Currency::STQ,
             expired: SystemTime::now().into(),
         };
-        let work = service.update(invoice);
+        let work = service.update_invoice(invoice);
         let _result = core.run(work).unwrap();
     }
 
