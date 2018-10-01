@@ -32,3 +32,4 @@ uuid = { version = "*", features = ["use_std", "v4", "serde"] }
 validator = "0.7.1"
 validator_derive = "0.7.2"
 sentry = "0.3"
+libstripe = "0.3.2"

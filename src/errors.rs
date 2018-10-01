@@ -20,6 +20,9 @@ pub enum Error {
     HttpClient,
     #[fail(display = "Invalid oauth token")]
     InvalidToken,
+    #[fail(display = "Invalid request in Stripe API")]
+    Stripe,
+
 }
 
 impl Codeable for Error {
@@ -28,7 +31,7 @@ impl Codeable for Error {
             Error::NotFound => StatusCode::NotFound,
             Error::Validate(_) => StatusCode::BadRequest,
             Error::Parse => StatusCode::UnprocessableEntity,
-            Error::Connection | Error::HttpClient => StatusCode::InternalServerError,
+            Error::Connection | Error::HttpClient | Error::Stripe => StatusCode::InternalServerError,
             Error::Forbidden | Error::InvalidToken => StatusCode::Forbidden,
         }
     }
