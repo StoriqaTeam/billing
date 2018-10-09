@@ -20,6 +20,7 @@ use r2d2::ManageConnection;
 
 use stq_http::controller::Controller;
 use stq_http::controller::ControllerFuture;
+use stq_http::errors::ErrorMessageWrapper;
 use stq_http::request_util::parse_body;
 use stq_http::request_util::serialize_future;
 use stq_types::UserId;
@@ -29,6 +30,7 @@ use self::routes::Route;
 use errors::Error;
 use models::*;
 use repos::repo_factory::*;
+use sentry_integration::log_and_capture_error;
 use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
 use services::user_roles::UserRolesService;
@@ -75,7 +77,7 @@ impl<
         let service = Service::new(self.static_context.clone(), dynamic_context);
 
         let path = req.path().to_string();
-        match (&req.method().clone(), self.static_context.route_parser.test(req.path())) {
+        let fut = match (&req.method().clone(), self.static_context.route_parser.test(req.path())) {
             (&Post, Some(Route::ExternalBillingCallback)) => serialize_future({
                 parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| {
                     debug!("Received request to update invoice {:?}", data);
@@ -161,6 +163,14 @@ impl<
                     .context(Error::NotFound)
                     .into(),
             )),
-        }
+        }.map_err(|err| {
+            let wrapper = ErrorMessageWrapper::<Error>::from(&err);
+            if wrapper.inner.code == 500 {
+                log_and_capture_error(&err);
+            }
+            err
+        });
+
+        Box::new(fut)
     }
 }
