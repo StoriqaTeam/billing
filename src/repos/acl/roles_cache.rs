@@ -12,30 +12,32 @@ pub struct RolesCacheImpl {
 
 impl RolesCacheImpl {
     pub fn get(&self, user_id: UserId) -> Vec<BillingRole> {
-        let mut hash_map = self.roles_cache.lock().unwrap();
-        match hash_map.entry(user_id) {
-            Entry::Occupied(o) => o.get().clone(),
-            Entry::Vacant(_) => vec![],
-        }
+        //let mut hash_map = self.roles_cache.lock().unwrap();
+        //match hash_map.entry(user_id) {
+        //    Entry::Occupied(o) => o.get().clone(),
+        //    Entry::Vacant(_) => vec![],
+        //}
+        vec![]
     }
 
     pub fn clear(&self) {
-        let mut hash_map = self.roles_cache.lock().unwrap();
-        hash_map.clear();
+        //let mut hash_map = self.roles_cache.lock().unwrap();
+        //hash_map.clear();
     }
 
     pub fn remove(&self, user_id: UserId) {
-        let mut hash_map = self.roles_cache.lock().unwrap();
-        hash_map.remove(&user_id);
+        //let mut hash_map = self.roles_cache.lock().unwrap();
+        //hash_map.remove(&user_id);
     }
 
     pub fn contains(&self, user_id: UserId) -> bool {
-        let hash_map = self.roles_cache.lock().unwrap();
-        hash_map.contains_key(&user_id)
+        //let hash_map = self.roles_cache.lock().unwrap();
+        //hash_map.contains_key(&user_id)
+        false
     }
 
     pub fn add_roles(&self, user_id: UserId, roles: &[BillingRole]) {
-        let mut hash_map = self.roles_cache.lock().unwrap();
-        hash_map.insert(user_id, roles.to_vec());
+        //let mut hash_map = self.roles_cache.lock().unwrap();
+        //hash_map.insert(user_id, roles.to_vec());
     }
 }
