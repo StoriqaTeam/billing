@@ -11,7 +11,7 @@ pub struct RolesCacheImpl {
 }
 
 impl RolesCacheImpl {
-    pub fn get(&self, user_id: UserId) -> Vec<BillingRole> {
+    pub fn get(&self, _user_id: UserId) -> Vec<BillingRole> {
         //let mut hash_map = self.roles_cache.lock().unwrap();
         //match hash_map.entry(user_id) {
         //    Entry::Occupied(o) => o.get().clone(),
@@ -25,18 +25,18 @@ impl RolesCacheImpl {
         //hash_map.clear();
     }
 
-    pub fn remove(&self, user_id: UserId) {
+    pub fn remove(&self, _user_id: UserId) {
         //let mut hash_map = self.roles_cache.lock().unwrap();
         //hash_map.remove(&user_id);
     }
 
-    pub fn contains(&self, user_id: UserId) -> bool {
+    pub fn contains(&self, _user_id: UserId) -> bool {
         //let hash_map = self.roles_cache.lock().unwrap();
         //hash_map.contains_key(&user_id)
         false
     }
 
-    pub fn add_roles(&self, user_id: UserId, roles: &[BillingRole]) {
+    pub fn add_roles(&self, _user_id: UserId, _roles: &[BillingRole]) {
         //let mut hash_map = self.roles_cache.lock().unwrap();
         //hash_map.insert(user_id, roles.to_vec());
     }
