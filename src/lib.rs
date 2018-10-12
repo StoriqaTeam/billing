@@ -8,6 +8,7 @@
 //! `ServiceError`. That way Controller will only have to deal with ServiceError, but not with `Repo`
 //! or `HttpClient` repo.
 
+#![allow(proc_macro_derive_resolution_fallback)]
 extern crate config as config_crate;
 #[macro_use]
 extern crate diesel;
