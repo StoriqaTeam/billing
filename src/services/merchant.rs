@@ -304,11 +304,17 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_get_user_balance() {
+        let id = UserId(1);
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
-        let service = create_service(Some(UserId(1)), handle);
-        let id = UserId(1);
+        let service = create_service(Some(id), handle);
+
+        let create_user = CreateUserMerchantPayload { id };
+        let work = service.create_user(create_user);
+        let _merchant = core.run(work).unwrap();
+
         let work = service.get_user_balance(id);
         let _result = core.run(work).unwrap();
     }

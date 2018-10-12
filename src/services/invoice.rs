@@ -313,12 +313,24 @@ pub mod tests {
     use models::*;
     use repos::repo_factory::tests::*;
     use services::invoice::InvoiceService;
+    use services::merchant::MerchantService;
 
     #[test]
+    #[ignore]
     fn test_create_order_info() {
+        let id = UserId(1);
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
-        let service = create_service(Some(UserId(1)), handle);
+        let service = create_service(Some(id), handle);
+
+        let create_user = CreateUserMerchantPayload { id };
+        let work = service.create_user(create_user);
+        let _merchant = core.run(work).unwrap();
+
+        let create_store = CreateStoreMerchantPayload { id: StoreId(1) };
+        let work = service.create_store(create_store);
+        let _store_merchant = core.run(work).unwrap();
+
         let order = Order {
             id: OrderId::new(),
             store_id: StoreId(1),
@@ -337,6 +349,7 @@ pub mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_set_paid() {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
