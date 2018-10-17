@@ -47,7 +47,9 @@ where
     C1: Cache<Vec<BillingRole>> + Send + Sync + 'static,
 {
     pub fn new(roles_cache: RolesCacheImpl<C1>) -> Self {
-        Self { roles_cache: Arc::new(roles_cache) }
+        Self {
+            roles_cache: Arc::new(roles_cache),
+        }
     }
 
     pub fn get_roles<'a, C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
