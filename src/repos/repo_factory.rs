@@ -2,15 +2,17 @@ use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
 use failure::Error as FailureError;
-
+use std::sync::Arc;
+use stq_cache::cache::Cache;
 use stq_types::{BillingRole, UserId};
 
 use models::*;
 use repos::legacy_acl::{Acl, SystemACL, UnauthorizedACL};
 use repos::*;
 
-pub trait ReposFactory<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>:
-    Clone + Send + Sync + 'static
+pub trait ReposFactory<C>: Clone + Send + Sync + 'static
+where
+    C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
 {
     fn create_order_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrderInfoRepo + 'a>;
     fn create_order_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderInfoRepo + 'a>;
@@ -22,14 +24,30 @@ pub trait ReposFactory<C: Connection<Backend = Pg, TransactionManager = AnsiTran
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
 }
 
-#[derive(Clone)]
-pub struct ReposFactoryImpl {
-    roles_cache: RolesCacheImpl,
+pub struct ReposFactoryImpl<C1>
+where
+    C1: Cache<Vec<BillingRole>>,
+{
+    roles_cache: Arc<RolesCacheImpl<C1>>,
 }
 
-impl ReposFactoryImpl {
-    pub fn new(roles_cache: RolesCacheImpl) -> Self {
-        Self { roles_cache }
+impl<C1> Clone for ReposFactoryImpl<C1>
+where
+    C1: Cache<Vec<BillingRole>>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            roles_cache: self.roles_cache.clone(),
+        }
+    }
+}
+
+impl<C1> ReposFactoryImpl<C1>
+where
+    C1: Cache<Vec<BillingRole>> + Send + Sync + 'static,
+{
+    pub fn new(roles_cache: RolesCacheImpl<C1>) -> Self {
+        Self { roles_cache: Arc::new(roles_cache) }
     }
 
     pub fn get_roles<'a, C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
@@ -58,7 +76,11 @@ impl ReposFactoryImpl {
     }
 }
 
-impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> ReposFactory<C> for ReposFactoryImpl {
+impl<C, C1> ReposFactory<C> for ReposFactoryImpl<C1>
+where
+    C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
+    C1: Cache<Vec<BillingRole>> + Send + Sync + 'static,
+{
     fn create_order_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderInfoRepo + 'a> {
         let acl = self.get_acl(db_conn, user_id);
         Box::new(OrderInfoRepoImpl::new(db_conn, acl)) as Box<OrderInfoRepo>
