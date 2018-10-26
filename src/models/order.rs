@@ -10,6 +10,13 @@ pub struct Order {
     pub price: ProductPrice,
     pub quantity: Quantity,
     pub currency: Currency,
+    pub coupon: Option<Coupon>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Coupon {
+    pub id: CouponId,
+    pub percent: i32,
 }
 
 impl fmt::Display for Order {
