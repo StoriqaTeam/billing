@@ -201,6 +201,9 @@ pub struct ExternalBillingTransaction {
 }
 
 fn calculate_total(order: &Order) -> ProductPrice {
+    if order.quantity.0 <= 0 {
+        return ProductPrice(0.0);
+    }
     let total = match order.coupon {
         Some(Coupon { percent, .. }) if percent > 0 && percent <= 100 => {
             order.price.0 * f64::from(order.quantity.0 - 1) + order.price.0 * f64::from(100 - percent) / 100.
