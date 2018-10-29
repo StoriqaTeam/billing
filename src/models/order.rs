@@ -10,6 +10,7 @@ pub struct Order {
     pub price: ProductPrice,
     pub quantity: Quantity,
     pub currency: Currency,
+    pub total_amount: ProductPrice,
 }
 
 impl fmt::Display for Order {

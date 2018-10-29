@@ -111,6 +111,7 @@ impl From<ExternalBillingTransaction> for Transaction {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BillingOrder {
     pub merchant: MerchantId,
+    /// Total order amount
     pub amount: ProductPrice,
     pub currency: String,
     pub description: Option<String>,
@@ -120,7 +121,7 @@ impl BillingOrder {
     pub fn new(order: &Order, merchant: MerchantId) -> Self {
         Self {
             merchant,
-            amount: ProductPrice(order.price.0 * f64::from(order.quantity.0)),
+            amount: order.total_amount,
             currency: order.currency.to_string(),
             description: Some(format!("Order - id : {}", order.id)),
         }
