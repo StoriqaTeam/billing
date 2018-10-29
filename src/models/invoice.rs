@@ -8,7 +8,7 @@ use serde_json;
 use stq_static_resources::*;
 use stq_types::*;
 
-use models::{Order};
+use models::Order;
 use schema::invoices;
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset, Debug, Clone)]

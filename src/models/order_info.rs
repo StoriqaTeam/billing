@@ -1,5 +1,5 @@
 use stq_static_resources::OrderState;
-use stq_types::{ProductPrice, OrderId, OrderInfoId, SagaId, StoreId, UserId};
+use stq_types::{OrderId, OrderInfoId, ProductPrice, SagaId, StoreId, UserId};
 
 use schema::orders_info;
 
