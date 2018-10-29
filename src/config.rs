@@ -27,6 +27,8 @@ pub struct Server {
     pub port: String,
     pub database: String,
     pub thread_count: usize,
+    pub redis: Option<String>,
+    pub cache_ttl_sec: u64,
 }
 
 /// Http client settings
