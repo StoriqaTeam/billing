@@ -8,7 +8,7 @@ use serde_json;
 use stq_static_resources::*;
 use stq_types::*;
 
-use models::{Coupon, Order};
+use models::{Order};
 use schema::invoices;
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset, Debug, Clone)]
@@ -121,7 +121,7 @@ impl BillingOrder {
     pub fn new(order: &Order, merchant: MerchantId) -> Self {
         Self {
             merchant,
-            amount: calculate_total(order),
+            amount: order.total_amount,
             currency: order.currency.to_string(),
             description: Some(format!("Order - id : {}", order.id)),
         }
@@ -198,50 +198,4 @@ impl From<ExternalBillingStatus> for OrderState {
 pub struct ExternalBillingTransaction {
     pub txid: String,
     pub amount_captured: String,
-}
-
-fn calculate_total(order: &Order) -> ProductPrice {
-    if order.quantity.0 <= 0 {
-        return ProductPrice(0.0);
-    }
-    let total = match order.coupon {
-        Some(Coupon { percent, .. }) if percent > 0 && percent <= 100 => {
-            order.price.0 * f64::from(order.quantity.0 - 1) + order.price.0 * f64::from(100 - percent) / 100.
-        }
-        _ => order.price.0 * f64::from(order.quantity.0),
-    };
-
-    ProductPrice(total)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use models::{Coupon, Order};
-
-    #[test]
-    fn correctly_discounts() {
-        let zero_discount = order_with_discount(100., 1, 0);
-        assert_eq!(ProductPrice(100.0), calculate_total(&zero_discount));
-
-        let hundred_percent_discount = order_with_discount(100., 1, 100);
-        assert_eq!(ProductPrice(0.0), calculate_total(&hundred_percent_discount));
-
-        let any_percent = order_with_discount(100., 2, 30);
-        assert_eq!(ProductPrice(170.0), calculate_total(&any_percent));
-    }
-
-    fn order_with_discount(price: f64, quantity: i32, discount_percent: i32) -> Order {
-        Order {
-            id: OrderId::new(),
-            store_id: StoreId(0),
-            price: ProductPrice(price),
-            quantity: Quantity(quantity),
-            currency: Currency::STQ,
-            coupon: Some(Coupon {
-                id: CouponId(0),
-                percent: discount_percent,
-            }),
-        }
-    }
 }

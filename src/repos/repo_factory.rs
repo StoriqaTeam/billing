@@ -398,6 +398,7 @@ pub mod tests {
             store_id: StoreId(1),
             saga_id: SagaId::new(),
             status: OrderState::New,
+            total_amount: ProductPrice(100.0),
         }
     }
 

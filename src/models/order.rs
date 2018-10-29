@@ -10,7 +10,7 @@ pub struct Order {
     pub price: ProductPrice,
     pub quantity: Quantity,
     pub currency: Currency,
-    pub coupon: Option<Coupon>,
+    pub total_amount: ProductPrice,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]

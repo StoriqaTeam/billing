@@ -1,5 +1,5 @@
 use stq_static_resources::OrderState;
-use stq_types::{OrderId, OrderInfoId, SagaId, StoreId, UserId};
+use stq_types::{ProductPrice, OrderId, OrderInfoId, SagaId, StoreId, UserId};
 
 use schema::orders_info;
 
@@ -12,6 +12,7 @@ pub struct OrderInfo {
     pub customer_id: UserId,
     pub saga_id: SagaId,
     pub status: OrderState,
+    pub total_amount: ProductPrice,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
@@ -21,15 +22,17 @@ pub struct NewOrderInfo {
     customer_id: UserId,
     store_id: StoreId,
     saga_id: SagaId,
+    total_amount: ProductPrice,
 }
 
 impl NewOrderInfo {
-    pub fn new(order_id: OrderId, saga_id: SagaId, customer_id: UserId, store_id: StoreId) -> Self {
+    pub fn new(order_id: OrderId, saga_id: SagaId, customer_id: UserId, store_id: StoreId, total_amount: ProductPrice) -> Self {
         Self {
             order_id,
             saga_id,
             customer_id,
             store_id,
+            total_amount,
         }
     }
 }
