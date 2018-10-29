@@ -13,12 +13,6 @@ pub struct Order {
     pub total_amount: ProductPrice,
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-pub struct Coupon {
-    pub id: CouponId,
-    pub percent: i32,
-}
-
 impl fmt::Display for Order {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
