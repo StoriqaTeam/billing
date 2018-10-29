@@ -61,7 +61,7 @@ use futures_cpupool::CpuPool;
 use hyper::server::Http;
 use r2d2_diesel::ConnectionManager;
 use r2d2_redis::RedisConnectionManager;
-use stq_cache::cache::{redis::RedisCache, typed::TypedCache};
+use stq_cache::cache::{redis::RedisCache, Cache, NullCache, TypedCache};
 use stq_http::controller::Application;
 use tokio_core::reactor::Core;
 
@@ -98,20 +98,29 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         .build(db_manager)
         .expect("Failed to create DB connection pool");
 
-    // Prepare Redis pool
-    let redis_url: String = config.server.redis.parse().expect("Redis URL must be set in configuration");
-    let redis_manager = RedisConnectionManager::new(redis_url.as_ref()).expect("Failed to create Redis connection manager");
-    let redis_pool = r2d2::Pool::builder()
-        .build(redis_manager)
-        .expect("Failed to create Redis connection pool");
-
     // Prepare CPU pool
     let cpu_pool = CpuPool::new(thread_count);
 
-    let ttl = Duration::from_secs(config.server.cache_ttl_sec);
+    // Prepare cache
+    let roles_cache = match &config.server.redis {
+        Some(redis_url) => {
+            // Prepare Redis pool
+            let redis_url: String = redis_url.parse().expect("Redis URL must be set in configuration");
+            let redis_manager = RedisConnectionManager::new(redis_url.as_ref()).expect("Failed to create Redis connection manager");
+            let redis_pool = r2d2::Pool::builder()
+                .build(redis_manager)
+                .expect("Failed to create Redis connection pool");
 
-    let roles_cache_backend = TypedCache::new(RedisCache::new(redis_pool.clone(), "roles".to_string()).with_ttl(ttl));
-    let roles_cache = RolesCacheImpl::new(roles_cache_backend);
+            let ttl = Duration::from_secs(config.server.cache_ttl_sec);
+
+            let roles_cache_backend = Box::new(TypedCache::new(
+                RedisCache::new(redis_pool.clone(), "roles".to_string()).with_ttl(ttl),
+            )) as Box<dyn Cache<_, Error = _> + Send + Sync>;
+
+            RolesCacheImpl::new(roles_cache_backend)
+        }
+        None => RolesCacheImpl::new(Box::new(NullCache::new()) as Box<_>),
+    };
 
     let repo_factory = ReposFactoryImpl::new(roles_cache);
 
