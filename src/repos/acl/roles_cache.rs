@@ -1,42 +1,50 @@
 //! RolesCache is a module that caches received from db information about user and his roles
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
+use failure::Fail;
+use stq_cache::cache::Cache;
 use stq_types::{BillingRole, UserId};
 
-#[derive(Default, Clone)]
-pub struct RolesCacheImpl {
-    roles_cache: Arc<Mutex<HashMap<UserId, Vec<BillingRole>>>>,
+pub struct RolesCacheImpl<C>
+where
+    C: Cache<Vec<BillingRole>>,
+{
+    cache: C,
 }
 
-impl RolesCacheImpl {
-    pub fn get(&self, _user_id: UserId) -> Vec<BillingRole> {
-        //let mut hash_map = self.roles_cache.lock().unwrap();
-        //match hash_map.entry(user_id) {
-        //    Entry::Occupied(o) => o.get().clone(),
-        //    Entry::Vacant(_) => vec![],
-        //}
-        vec![]
+impl<C> RolesCacheImpl<C>
+where
+    C: Cache<Vec<BillingRole>>,
+{
+    pub fn new(cache: C) -> Self {
+        RolesCacheImpl { cache }
     }
 
-    pub fn clear(&self) {
-        //let mut hash_map = self.roles_cache.lock().unwrap();
-        //hash_map.clear();
+    pub fn get(&self, user_id: UserId) -> Option<Vec<BillingRole>> {
+        debug!("Getting roles from RolesCache at key '{}'", user_id);
+
+        self.cache.get(user_id.to_string().as_str()).unwrap_or_else(|err| {
+            let err = err.context(format!("Failed to get roles from RolesCache at key '{}'", user_id));
+            error!("{}", err);
+            None
+        })
     }
 
-    pub fn remove(&self, _user_id: UserId) {
-        //let mut hash_map = self.roles_cache.lock().unwrap();
-        //hash_map.remove(&user_id);
+    pub fn remove(&self, user_id: UserId) -> bool {
+        debug!("Removing roles from RolesCache at key '{}'", user_id);
+
+        self.cache.remove(user_id.to_string().as_str()).unwrap_or_else(|err| {
+            let err = err.context(format!("Failed to remove roles from RolesCache at key '{}'", user_id));
+            error!("{}", err);
+            false
+        })
     }
 
-    pub fn contains(&self, _user_id: UserId) -> bool {
-        //let hash_map = self.roles_cache.lock().unwrap();
-        //hash_map.contains_key(&user_id)
-        false
-    }
+    pub fn set(&self, user_id: UserId, roles: Vec<BillingRole>) {
+        debug!("Setting roles in RolesCache at key '{}'", user_id);
 
-    pub fn add_roles(&self, _user_id: UserId, _roles: &[BillingRole]) {
-        //let mut hash_map = self.roles_cache.lock().unwrap();
-        //hash_map.insert(user_id, roles.to_vec());
+        self.cache.set(user_id.to_string().as_str(), roles).unwrap_or_else(|err| {
+            let err = err.context(format!("Failed to set roles in RolesCache at key '{}'", user_id));
+            error!("{}", err);
+        })
     }
 }

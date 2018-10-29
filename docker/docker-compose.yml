@@ -14,29 +14,43 @@ services:
     environment:
       - DATABASE_URL=postgresql://billing:billing@billing-pg/billing
       - "RUST_LOG=billing=debug"
+    ports:
+      - "8000"
     expose:
       - 8000
     stdin_open: true
     depends_on:
       - billing-pg
+      - billing-redis
 
   billing-pg:
     image: postgres:10
     container_name: billing-pg
     volumes:
-      - stq-billing-postgres-data:/var/lib/postgresql/data
+      - stq_billing_postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=billing
       - POSTGRES_DB=billing
       - POSTGRES_PASSWORD=billing
+    ports:
+      - "5432"
     expose:
       - 5432
+
+  billing-redis:
+    image: redis:4.0-alpine
+    container_name: billing-redis
+    volumes:
+      - stq_billing_redis_data:/data
     ports:
-      - 5533:5432
+      - "6379"
+    expose:
+      - 6379
 
 volumes:
   stq_cargo_cache:
-  stq-billing-postgres-data:
+  stq_billing_postgres_data:
+  stq_billing_redis_data:
 
 networks:
   default:
