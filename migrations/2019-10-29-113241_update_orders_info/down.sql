@@ -1,0 +1,1 @@
+ALTER TABLE orders_info DROP COLUMN total_amount;

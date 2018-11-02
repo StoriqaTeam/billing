@@ -2,7 +2,9 @@
 host = "0.0.0.0"
 port = "8000"
 database = "postgresql://billing:billing@billing-pg/billing"
+# redis = "redis://billing-redis"
 thread_count = 20
+cache_ttl_sec = 600
 
 [client]
 http_client_buffer_size=3

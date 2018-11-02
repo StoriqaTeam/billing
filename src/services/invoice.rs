@@ -74,7 +74,7 @@ impl<
                     .orders
                     .iter()
                     .map(|order| {
-                        let payload = NewOrderInfo::new(order.id, saga_id, customer_id, order.store_id);
+                        let payload = NewOrderInfo::new(order.id, saga_id, customer_id, order.store_id, order.total_amount);
                         order_info_repo.create(payload).and_then(|_| {
                             merchant_repo
                                 .get_by_subject_id(SubjectIdentifier::Store(order.store_id))
@@ -337,6 +337,7 @@ pub mod tests {
             price: ProductPrice(3232.32),
             quantity: Quantity(1),
             currency: Currency::STQ,
+            total_amount: ProductPrice(3232.32),
         };
         let create_order = CreateInvoice {
             saga_id: SagaId::new(),

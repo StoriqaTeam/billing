@@ -30,6 +30,7 @@ table! {
         customer_id -> Integer,
         saga_id -> Uuid,
         status -> VarChar,
+        total_amount -> Double,
     }
 }
 
