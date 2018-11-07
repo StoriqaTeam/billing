@@ -72,11 +72,15 @@ impl<
 #[derive(Clone)]
 pub struct DynamicContext {
     pub user_id: Option<UserId>,
+    pub correlation_token: String,
 }
 
 impl DynamicContext {
     /// Create a new dynamic context for each request
-    pub fn new(user_id: Option<UserId>) -> Self {
-        Self { user_id }
+    pub fn new(user_id: Option<UserId>, correlation_token: String) -> Self {
+        Self {
+            user_id,
+            correlation_token,
+        }
     }
 }
