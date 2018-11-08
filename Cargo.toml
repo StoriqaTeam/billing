@@ -30,6 +30,7 @@ stq_router = { path = "vendor/libstqbackend/router" }
 stq_static_resources = { path = "vendor/libstqbackend/static_resources" }
 stq_types = { path = "vendor/libstqbackend/types" }
 tokio-core = "0.1"
+tokio-signal = "0.2.6"
 uuid = { version = "*", features = ["use_std", "v4", "serde"] }
 validator = "0.7.1"
 validator_derive = "0.7.2"

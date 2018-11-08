@@ -36,6 +36,7 @@ extern crate stq_router;
 extern crate stq_static_resources;
 extern crate stq_types;
 extern crate tokio_core;
+extern crate tokio_signal;
 extern crate uuid;
 extern crate validator;
 #[macro_use]
@@ -152,5 +153,9 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         callback();
         future::ok(())
     });
-    core.run(future::empty::<(), ()>()).unwrap();
+
+    core.run(tokio_signal::ctrl_c().flatten_stream().take(1u64).for_each(|()| {
+        info!("Ctrl+C received. Exit");
+        Ok(())
+    })).unwrap();
 }
