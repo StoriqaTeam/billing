@@ -6,10 +6,6 @@ RUN wget -q https://www.postgresql.org/media/keys/ACCC4CF8.asc -O - | apt-key ad
     apt-get update && \
     apt-get install -y libpq-dev
 
-# Install clang
-RUN apt-get update && \
-    apt-get install -y libclang1 clang
-
 # Install diesel client
 RUN wget \
     -q https://s3.eu-central-1.amazonaws.com/dumpster.stq/diesel \
