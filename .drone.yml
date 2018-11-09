@@ -64,17 +64,21 @@ pipeline:
     commands:
     - cargo build --release --locked
     when:
-      event:
-      - push
-      - tag
+      event: tag
+  build:
+    image: rust:1.30-stretch
+    environment:
+    - CARGO_HOME=deps
+    commands:
+    - cargo build
+    when:
+      event: push
   package:
-    group: package
     image: plugins/docker
     repo: storiqateam/stq-billing
     tags:
     - ${DRONE_BRANCH//\//_}
     - ${DRONE_BRANCH//\//_}${DRONE_BUILD_NUMBER}
-    dockerfile: docker/Dockerfile.run
     secrets:
     - docker_username
     - docker_password
@@ -83,10 +87,11 @@ pipeline:
   package:
     image: plugins/docker
     repo: storiqateam/stq-billing
+    build_args:
+    - env=release
     tags:
     - '${DRONE_TAG}'
     - latest
-    dockerfile: docker/Dockerfile.run
     secrets:
     - docker_username
     - docker_password
