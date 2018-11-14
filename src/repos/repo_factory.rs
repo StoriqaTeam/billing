@@ -147,7 +147,7 @@ pub mod tests {
     use std::error::Error;
     use std::fmt;
     use std::sync::Arc;
-    use std::time::SystemTime;
+    use std::time::{Duration, SystemTime};
 
     use diesel::connection::AnsiTransactionManager;
     use diesel::connection::SimpleConnection;
@@ -167,6 +167,7 @@ pub mod tests {
     use tokio_core::reactor::Handle;
     use uuid::Uuid;
 
+    use stq_http::client::TimeLimitedHttpClient;
     use stq_static_resources::{Currency, OrderState};
     use stq_types::*;
 
@@ -408,8 +409,10 @@ pub mod tests {
         let client_stream = client.stream();
         handle.spawn(client_stream.for_each(|_| Ok(())));
 
-        let static_context = StaticContext::new(db_pool, cpu_pool, client_handle, Arc::new(config), MOCK_REPO_FACTORY);
-        let dynamic_context = DynamicContext::new(user_id, String::default());
+        let static_context = StaticContext::new(db_pool, cpu_pool, client_handle.clone(), Arc::new(config), MOCK_REPO_FACTORY);
+
+        let time_limited_http_client = TimeLimitedHttpClient::new(client_handle, Duration::new(1, 0));
+        let dynamic_context = DynamicContext::new(user_id, String::default(), time_limited_http_client);
 
         Service::new(static_context, dynamic_context)
     }

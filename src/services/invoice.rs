@@ -12,6 +12,7 @@ use hyper::Post;
 use r2d2::ManageConnection;
 use serde_json;
 
+use stq_http::client::HttpClient;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
 use super::types::ServiceFuture;
@@ -49,7 +50,7 @@ impl<
     fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
-        let client = self.static_context.client_handle.clone();
+        let client = self.dynamic_context.http_client.clone();
         let callback_url = self.static_context.config.callback.url.clone();
         let ExternalBilling {
             invoice_url,
@@ -87,7 +88,7 @@ impl<
                         let mut headers = Headers::new();
                         headers.set(ContentType::json());
                         client
-                            .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                            .request_json::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                             .map_err(|e| {
                                 e.context("Occured an error during receiving authorization token in external billing.")
                                     .context(Error::HttpClient)
@@ -112,7 +113,7 @@ impl<
                                     }).into_future()
                                     .and_then(|body| {
                                         client
-                                            .request::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
+                                            .request_json::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
                                             .map_err(|e| {
                                                 e.context("Occured an error during invoice creation in external billing.")
                                                     .context(Error::HttpClient)
@@ -166,7 +167,7 @@ impl<
     fn recalc_invoice(&self, id: InvoiceId) -> ServiceFuture<Invoice> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
-        let client = self.static_context.client_handle.clone();
+        let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
             invoice_url,
             login_url,
@@ -188,7 +189,7 @@ impl<
                 let mut headers = Headers::new();
                 headers.set(ContentType::json());
                 client
-                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                    .request_json::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                     .map_err(|e| {
                         e.context("Occured an error during receiving authorization token in external billing.")
                             .context(Error::HttpClient)
@@ -199,7 +200,7 @@ impl<
                         headers.set(ContentType::json());
                         let url = format!("{}{}/recalc/", invoice_url.to_string(), id);
                         client
-                            .request::<ExternalBillingInvoice>(Post, url, None, Some(headers))
+                            .request_json::<ExternalBillingInvoice>(Post, url, None, Some(headers))
                             .map_err(|e| {
                                 e.context("Occured an error during invoice recalculation in external billing.")
                                     .context(Error::HttpClient)
@@ -214,7 +215,7 @@ impl<
                                 let body = serde_json::to_string(&orders)?;
                                 let url = format!("{}/orders/update_state", saga_url);
                                 client
-                                    .request::<()>(Post, url, Some(body), None)
+                                    .request_json::<()>(Post, url, Some(body), None)
                                     .map_err(|e| {
                                         e.context("Occured an error during setting orders new status in saga.")
                                             .context(Error::HttpClient)
@@ -269,7 +270,7 @@ impl<
     /// Updates specific invoice and orders
     fn update_invoice(&self, external_invoice: ExternalBillingInvoice) -> ServiceFuture<()> {
         let current_user = self.dynamic_context.user_id;
-        let client = self.static_context.client_handle.clone();
+        let client = self.dynamic_context.http_client.clone();
         let repo_factory = self.static_context.repo_factory.clone();
         let saga_url = self.static_context.config.saga_addr.url.clone();
 
@@ -288,7 +289,7 @@ impl<
                         let body = serde_json::to_string(&orders)?;
                         let url = format!("{}/orders/update_state", saga_url);
                         client
-                            .request::<()>(Post, url, Some(body), None)
+                            .request_json::<()>(Post, url, Some(body), None)
                             .map_err(|e| {
                                 e.context("Occured an error during setting orders new status in saga.")
                                     .context(Error::HttpClient)
