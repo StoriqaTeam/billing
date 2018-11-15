@@ -7,7 +7,7 @@ use diesel::Connection;
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool};
 
-use stq_http::client::ClientHandle;
+use stq_http::client::{ClientHandle, TimeLimitedHttpClient};
 use stq_router::RouteParser;
 use stq_types::UserId;
 
@@ -73,14 +73,16 @@ impl<
 pub struct DynamicContext {
     pub user_id: Option<UserId>,
     pub correlation_token: String,
+    pub http_client: TimeLimitedHttpClient<ClientHandle>,
 }
 
 impl DynamicContext {
     /// Create a new dynamic context for each request
-    pub fn new(user_id: Option<UserId>, correlation_token: String) -> Self {
+    pub fn new(user_id: Option<UserId>, correlation_token: String, http_client: TimeLimitedHttpClient<ClientHandle>) -> Self {
         Self {
             user_id,
             correlation_token,
+            http_client,
         }
     }
 }

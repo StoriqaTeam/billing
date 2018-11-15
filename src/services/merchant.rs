@@ -12,6 +12,7 @@ use hyper::{Get, Post};
 use r2d2::ManageConnection;
 use serde_json;
 
+use stq_http::client::HttpClient;
 use stq_types::{MerchantId, StoreId, UserId};
 
 use super::types::ServiceFuture;
@@ -46,7 +47,7 @@ impl<
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
-        let client = self.static_context.client_handle.clone();
+        let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
@@ -66,7 +67,7 @@ impl<
                 let mut headers = Headers::new();
                 headers.set(ContentType::json());
                 client
-                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                    .request_json::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                     .map_err(|e| {
                         e.context("Occured an error during receiving authorization token in external billing.")
                             .context(Error::HttpClient)
@@ -79,7 +80,7 @@ impl<
                         headers.set(Authorization(Bearer { token: ext_token.token }));
                         headers.set(ContentType::json());
                         client
-                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
+                            .request_json::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
                             .map_err(|e| {
                                 e.context("Occured an error during user merchant creation in external billing.")
                                     .context(Error::HttpClient)
@@ -112,7 +113,7 @@ impl<
     fn create_store(&self, store: CreateStoreMerchantPayload) -> ServiceFuture<Merchant> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
-        let client = self.static_context.client_handle.clone();
+        let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
@@ -131,7 +132,7 @@ impl<
                 let mut headers = Headers::new();
                 headers.set(ContentType::json());
                 client
-                    .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                    .request_json::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                     .map_err(|e| {
                         e.context("Occured an error during receiving authorization token in external billing.")
                             .context(Error::HttpClient)
@@ -144,7 +145,7 @@ impl<
                         headers.set(Authorization(Bearer { token: ext_token.token }));
                         headers.set(ContentType::json());
                         client
-                            .request::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
+                            .request_json::<ExternalBillingMerchant>(Post, url, Some(body), Some(headers))
                             .map_err(|e| {
                                 e.context("Occured an error during store merchant creation in external billing.")
                                     .context(Error::HttpClient)
@@ -176,7 +177,7 @@ impl<
     fn get_user_balance(&self, id: UserId) -> ServiceFuture<Vec<MerchantBalance>> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
-        let client = self.static_context.client_handle.clone();
+        let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
@@ -196,7 +197,7 @@ impl<
                     let mut headers = Headers::new();
                     headers.set(ContentType::json());
                     client
-                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                        .request_json::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                         .map_err(|e| {
                             e.context("Occured an error during receiving authorization token in external billing.")
                                 .context(Error::HttpClient)
@@ -208,7 +209,7 @@ impl<
                             headers.set(Authorization(Bearer { token: ext_token.token }));
                             headers.set(ContentType::json());
                             client
-                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
+                                .request_json::<ExternalBillingMerchant>(Get, url, None, Some(headers))
                                 .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
                                 .map_err(|e| {
                                     e.context("Occured an error during user merchant get balance in external billing.")
@@ -225,7 +226,7 @@ impl<
     fn get_store_balance(&self, id: StoreId) -> ServiceFuture<Vec<MerchantBalance>> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
-        let client = self.static_context.client_handle.clone();
+        let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
             merchant_url,
             login_url,
@@ -245,7 +246,7 @@ impl<
                     let mut headers = Headers::new();
                     headers.set(ContentType::json());
                     client
-                        .request::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
+                        .request_json::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
                         .map_err(|e| {
                             e.context("Occured an error during receiving authorization token in external billing.")
                                 .context(Error::HttpClient)
@@ -257,7 +258,7 @@ impl<
                             headers.set(Authorization(Bearer { token: ext_token.token }));
                             headers.set(ContentType::json());
                             client
-                                .request::<ExternalBillingMerchant>(Get, url, None, Some(headers))
+                                .request_json::<ExternalBillingMerchant>(Get, url, None, Some(headers))
                                 .map(|ex_merchant| ex_merchant.balance.unwrap_or_default())
                                 .map_err(|e| {
                                     e.context("Occured an error during store merchant get balance in external billing.")
