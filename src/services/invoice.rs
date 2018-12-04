@@ -339,7 +339,9 @@ pub mod tests {
             quantity: Quantity(1),
             currency: Currency::STQ,
             total_amount: ProductPrice(3232.32),
+            product_cashback: None,
         };
+
         let create_order = CreateInvoice {
             saga_id: SagaId::new(),
             customer_id: UserId(1),

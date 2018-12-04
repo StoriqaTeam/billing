@@ -11,6 +11,7 @@ pub struct Order {
     pub quantity: Quantity,
     pub currency: Currency,
     pub total_amount: ProductPrice,
+    pub product_cashback: Option<CashbackPercent>,
 }
 
 impl fmt::Display for Order {
