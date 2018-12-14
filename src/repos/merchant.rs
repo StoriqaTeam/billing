@@ -67,7 +67,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|merch| {
                 acl::check(&*self.acl, Resource::Merchant, Action::Read, self, Some(&merch))?;
                 Ok(merch)
-            }).map_err(|e: FailureError| e.context(format!("get merchant by subject id {:?} error occured.", id)).into())
+            })
+            .map_err(|e: FailureError| e.context(format!("get merchant by subject id {:?} error occured.", id)).into())
     }
 
     /// Returns merchant by merchant identifier
@@ -79,7 +80,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|merch| {
                 acl::check(&*self.acl, Resource::Merchant, Action::Read, self, Some(&merch))?;
                 Ok(merch)
-            }).map_err(|e: FailureError| e.context(format!("get merchant by merchant id {} error occured.", id)).into())
+            })
+            .map_err(|e: FailureError| e.context(format!("get merchant by merchant id {} error occured.", id)).into())
     }
 
     /// Create a new store merchant
@@ -92,7 +94,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|merch| {
                 acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
                 Ok(merch)
-            }).map_err(|e: FailureError| e.context(format!("Create a new store merchant {:?} error occured", payload)).into())
+            })
+            .map_err(|e: FailureError| e.context(format!("Create a new store merchant {:?} error occured", payload)).into())
     }
 
     /// Delete store merchant
@@ -107,7 +110,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|merch| {
                 acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
                 Ok(merch)
-            }).map_err(|e: FailureError| e.context(format!("Delete store {} merchant error occured", store_id_arg)).into())
+            })
+            .map_err(|e: FailureError| e.context(format!("Delete store {} merchant error occured", store_id_arg)).into())
     }
 
     /// Create a new user merchant
@@ -120,7 +124,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|merch| {
                 acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
                 Ok(merch)
-            }).map_err(|e: FailureError| e.context(format!("Create a new user merchant {:?} error occured", payload)).into())
+            })
+            .map_err(|e: FailureError| e.context(format!("Create a new user merchant {:?} error occured", payload)).into())
     }
 
     /// Delete user merchant
@@ -135,7 +140,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|merch| {
                 acl::check(&*self.acl, Resource::Merchant, Action::Write, self, Some(&merch))?;
                 Ok(merch)
-            }).map_err(|e: FailureError| e.context(format!("Delete user {} merchant error occured", user_id_arg)).into())
+            })
+            .map_err(|e: FailureError| e.context(format!("Delete user {} merchant error occured", user_id_arg)).into())
     }
 }
 
@@ -162,7 +168,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                                         false
                                     }
                                 })
-                            }).unwrap_or_else(|_: FailureError| false)
+                            })
+                            .unwrap_or_else(|_: FailureError| false)
                     } else {
                         false
                     }
