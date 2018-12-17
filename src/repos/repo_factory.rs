@@ -22,6 +22,8 @@ where
     fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a>;
     fn create_user_roles_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
+    fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a>;
+    fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -126,9 +128,22 @@ where
             self.roles_cache.clone(),
         )) as Box<UserRolesRepo>
     }
+
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
         let acl = self.get_acl(db_conn, user_id);
         Box::new(UserRolesRepoImpl::new(db_conn, acl, self.roles_cache.clone())) as Box<UserRolesRepo>
+    }
+
+    fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a> {
+        Box::new(AccountsRepoImpl::new(
+            db_conn,
+            Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, Account>>,
+        )) as Box<AccountsRepo>
+    }
+
+    fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(AccountsRepoImpl::new(db_conn, acl)) as Box<AccountsRepo>
     }
 }
 
@@ -173,6 +188,7 @@ pub mod tests {
 
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
+    use models::Currency as BillingCurrency;
     use models::*;
     use repos::*;
     use services::*;
@@ -208,8 +224,17 @@ pub mod tests {
         fn create_user_roles_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
             Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
         }
+
         fn create_user_roles_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
             Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
+        }
+
+        fn create_accounts_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<AccountsRepo + 'a> {
+            Box::new(AccountsRepoMock::default()) as Box<AccountsRepoMock>
+        }
+
+        fn create_accounts_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
+            Box::new(AccountsRepoMock::default()) as Box<AccountsRepoMock>
         }
     }
 
@@ -391,6 +416,34 @@ pub mod tests {
                 user_id: UserId(1),
                 name: BillingRole::User,
                 data: None,
+            })
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct AccountsRepoMock;
+
+    impl AccountsRepo for AccountsRepoMock {
+        fn get(&self, _account_id: AccountId) -> RepoResult<Option<Account>> {
+            Ok(None)
+        }
+
+        fn create(&self, payload: NewAccount) -> RepoResult<Account> {
+            let NewAccount { id, currency, is_pooled } = payload;
+            Ok(Account {
+                id,
+                currency,
+                is_pooled,
+                created_at: SystemTime::UNIX_EPOCH,
+            })
+        }
+
+        fn delete(&self, _account_id: AccountId) -> RepoResult<Account> {
+            Ok(Account {
+                id: AccountId::new(Uuid::nil()),
+                currency: BillingCurrency::Stq,
+                is_pooled: false,
+                created_at: SystemTime::UNIX_EPOCH,
             })
         }
     }

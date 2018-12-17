@@ -324,7 +324,7 @@ pub mod tests {
     use std::time::SystemTime;
     use tokio_core::reactor::Core;
 
-    use stq_static_resources::*;
+    use stq_static_resources::Currency;
     use stq_types::*;
 
     use models::*;

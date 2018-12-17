@@ -56,6 +56,7 @@ impl ApplicationAcl {
                 permission!(Resource::Merchant),
                 permission!(Resource::UserRoles),
                 permission!(Resource::Invoice),
+                permission!(Resource::Account),
             ],
         );
         hash.insert(
