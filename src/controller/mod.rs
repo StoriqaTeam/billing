@@ -116,7 +116,8 @@ impl<
                     .context(Error::NotFound)
                     .into(),
             )),
-        }.map_err(|err| {
+        }
+        .map_err(|err| {
             let wrapper = ErrorMessageWrapper::<Error>::from(&err);
             if wrapper.inner.code == 500 {
                 log_and_capture_error(&err);

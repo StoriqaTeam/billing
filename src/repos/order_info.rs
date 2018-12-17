@@ -64,7 +64,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     acl::check(&*self.acl, Resource::OrderInfo, Action::Read, self, Some(order_info_arg))?;
                 };
                 Ok(order_info_arg)
-            }).map_err(|e: FailureError| {
+            })
+            .map_err(|e: FailureError| {
                 e.context(format!("Find specific order_info with id {} error occured", id_arg))
                     .into()
             })
@@ -82,7 +83,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     acl::check(&*self.acl, Resource::OrderInfo, Action::Read, self, Some(order_info_arg))?;
                 };
                 Ok(order_info_arg)
-            }).map_err(|e: FailureError| {
+            })
+            .map_err(|e: FailureError| {
                 e.context(format!("Find specific order_info with order id {} error occured", order_id_arg))
                     .into()
             })
@@ -99,7 +101,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     acl::check(&*self.acl, Resource::OrderInfo, Action::Read, self, Some(order_info_arg))?;
                 }
                 Ok(order_info_args)
-            }).map_err(|e: FailureError| {
+            })
+            .map_err(|e: FailureError| {
                 e.context(format!("Find order_infos by saga id {} error occured", saga_id_arg))
                     .into()
             })
@@ -114,7 +117,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .and_then(|order_info_arg| {
                 acl::check(&*self.acl, Resource::OrderInfo, Action::Write, self, Some(&order_info_arg))?;
                 Ok(order_info_arg)
-            }).map_err(|e: FailureError| e.context(format!("Create a new order_info {:?} error occured", payload)).into())
+            })
+            .map_err(|e: FailureError| e.context(format!("Create a new order_info {:?} error occured", payload)).into())
     }
 
     /// Set specific order_info new status
@@ -143,7 +147,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                     acl::check(&*self.acl, Resource::OrderInfo, Action::Write, self, Some(order_info_arg))?;
                 }
                 Ok(order_info_args)
-            }).map_err(|e: FailureError| {
+            })
+            .map_err(|e: FailureError| {
                 e.context(format!("Delete order info by saga id {} error occured", saga_id_arg))
                     .into()
             })
