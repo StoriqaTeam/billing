@@ -16,6 +16,7 @@ pub struct Config {
     pub saga_addr: SagaAddr,
     pub callback: Callback,
     pub external_billing: ExternalBilling,
+    pub payments: Option<Payments>,
     pub graylog: Option<GrayLogConfig>,
     pub sentry: Option<SentryConfig>,
 }
@@ -61,6 +62,14 @@ pub struct ExternalBilling {
     pub username: String,
     pub password: String,
     pub amount_recalculate_timeout_sec: i32,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Payments {
+    pub url: String,
+    pub jwt_public_key_base64: String,
+    pub user_jwt: String,
+    pub user_private_key: String,
 }
 
 /// Creates new app config struct

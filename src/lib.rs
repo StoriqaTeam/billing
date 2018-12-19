@@ -9,6 +9,8 @@
 //! or `HttpClient` repo.
 
 #![allow(proc_macro_derive_resolution_fallback)]
+
+extern crate base64;
 extern crate config as config_crate;
 #[macro_use]
 extern crate diesel;
@@ -18,17 +20,21 @@ extern crate failure;
 extern crate chrono;
 extern crate futures;
 extern crate futures_cpupool;
+extern crate hex;
 extern crate hyper;
 extern crate hyper_tls;
+extern crate jsonwebtoken as jwt;
 #[macro_use]
 extern crate log;
 extern crate r2d2;
 extern crate r2d2_diesel;
 extern crate r2d2_redis;
+extern crate secp256k1;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate sha2;
 extern crate stq_cache;
 extern crate stq_http;
 extern crate stq_logging;
@@ -42,11 +48,13 @@ extern crate validator;
 #[macro_use]
 extern crate sentry;
 
+#[macro_use]
+pub mod macros;
+
+pub mod client;
 pub mod config;
 pub mod controller;
 pub mod errors;
-#[macro_use]
-pub mod macros;
 pub mod models;
 pub mod repos;
 pub mod schema;
