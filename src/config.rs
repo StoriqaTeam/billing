@@ -70,6 +70,8 @@ pub struct Payments {
     pub jwt_public_key_base64: String,
     pub user_jwt: String,
     pub user_private_key: String,
+    pub min_pooled_accounts: u32,
+    pub max_accounts: u32,
 }
 
 /// Creates new app config struct

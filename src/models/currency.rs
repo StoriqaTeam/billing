@@ -1,10 +1,12 @@
 use std::fmt::{self, Display};
 use std::io::Write;
+use std::str::FromStr;
 
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::Pg;
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::VarChar;
+use failure::Fail;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, Eq, PartialEq, Hash)]
 #[sql_type = "VarChar"]
@@ -13,6 +15,23 @@ pub enum Currency {
     Eth,
     Stq,
     Btc,
+}
+
+#[derive(Debug, Clone, Fail)]
+#[fail(display = "failed to parse currency")]
+pub struct ParseCurrencyError;
+
+impl FromStr for Currency {
+    type Err = ParseCurrencyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "eth" => Ok(Currency::Eth),
+            "stq" => Ok(Currency::Stq),
+            "btc" => Ok(Currency::Btc),
+            _ => Err(ParseCurrencyError),
+        }
+    }
 }
 
 impl FromSql<VarChar, Pg> for Currency {

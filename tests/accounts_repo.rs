@@ -23,7 +23,7 @@ where
 }
 
 #[test]
-fn accounts_repo_test() {
+fn accounts_repo_crud_happy() {
     let system_acl = Box::new(SystemACL::default()); // as Box<Acl<Resource, Action, Scope, FailureError, Account>>;
 
     let new_account = NewAccount {
