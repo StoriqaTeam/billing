@@ -36,7 +36,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     fn count(&self) -> RepoResultV2<AccountCount> {
         debug!("Getting account count");
 
-        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Internal))?;
+        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let query = Accounts::accounts.select((Accounts::currency, Accounts::is_pooled));
         let accounts = query.get_results::<(Currency, bool)>(self.db_conn).map_err(|e| {
@@ -68,7 +68,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     fn get(&self, account_id: AccountId) -> RepoResultV2<Option<Account>> {
         debug!("Getting an account with ID: {}", account_id);
 
-        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Internal))?;
+        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let query = Accounts::accounts.filter(Accounts::id.eq(account_id));
 
@@ -85,7 +85,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     fn get_many(&self, account_ids: &[AccountId]) -> RepoResultV2<Vec<Account>> {
         debug!("Getting accounts with IDs: {:?}", account_ids);
 
-        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Internal))?;
+        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let query = Accounts::accounts.filter(Accounts::id.eq_any(account_ids));
 
@@ -101,7 +101,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     fn create(&self, payload: NewAccount) -> RepoResultV2<Account> {
         debug!("Creating an account using payload: {:?}", payload);
 
-        acl::check(&*self.acl, Resource::Account, Action::Write, self, None).map_err(ectx!(try ErrorKind::Internal))?;
+        acl::check(&*self.acl, Resource::Account, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::insert_into(Accounts::accounts).values(&payload);
 
@@ -114,7 +114,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     fn delete(&self, account_id: AccountId) -> RepoResultV2<Option<Account>> {
         debug!("Deleting an account with ID: {}", account_id);
 
-        acl::check(&*self.acl, Resource::Account, Action::Write, self, None).map_err(ectx!(try ErrorKind::Internal))?;
+        acl::check(&*self.acl, Resource::Account, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::delete(Accounts::accounts.filter(Accounts::id.eq(account_id)));
 

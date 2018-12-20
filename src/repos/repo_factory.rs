@@ -24,6 +24,8 @@ where
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
     fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a>;
     fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a>;
+    fn create_invoices_v2_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InvoicesV2Repo + 'a>;
+    fn create_invoices_v2_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<InvoicesV2Repo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -145,6 +147,15 @@ where
         let acl = self.get_acl(db_conn, user_id);
         Box::new(AccountsRepoImpl::new(db_conn, acl)) as Box<AccountsRepo>
     }
+
+    fn create_invoices_v2_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InvoicesV2Repo + 'a> {
+        Box::new(InvoicesV2RepoImpl::new(db_conn, Box::new(SystemACL::default()))) as Box<InvoicesV2Repo>
+    }
+
+    fn create_invoices_v2_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<InvoicesV2Repo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(InvoicesV2RepoImpl::new(db_conn, acl)) as Box<InvoicesV2Repo>
+    }
 }
 
 #[cfg(test)]
@@ -185,10 +196,12 @@ pub mod tests {
     use std::collections::HashMap;
     use stq_http::client::TimeLimitedHttpClient;
     use stq_static_resources::{Currency, OrderState};
+    use stq_types::UserId;
     use stq_types::*;
 
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
+    use models::invoice_v2::{InvoiceId as InvoiceV2Id, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
     use models::Currency as BillingCurrency;
     use models::*;
     use repos::*;
@@ -236,6 +249,14 @@ pub mod tests {
 
         fn create_accounts_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
             Box::new(AccountsRepoMock::default()) as Box<AccountsRepoMock>
+        }
+
+        fn create_invoices_v2_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoicesV2Repo + 'a> {
+            Box::new(InvoicesV2RepoMock::default()) as Box<InvoicesV2RepoMock>
+        }
+
+        fn create_invoices_v2_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<InvoicesV2Repo + 'a> {
+            Box::new(InvoicesV2RepoMock::default()) as Box<InvoicesV2RepoMock>
         }
     }
 
@@ -457,6 +478,42 @@ pub mod tests {
                 is_pooled: false,
                 created_at: SystemTime::UNIX_EPOCH,
             }))
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct InvoicesV2RepoMock;
+
+    impl InvoicesV2Repo for InvoicesV2RepoMock {
+        fn get(&self, _account_id: InvoiceV2Id) -> RepoResultV2<Option<RawInvoiceV2>> {
+            Ok(None)
+        }
+
+        fn create(&self, payload: NewInvoiceV2) -> RepoResultV2<RawInvoiceV2> {
+            let NewInvoiceV2 {
+                id,
+                account_id,
+                buyer_currency,
+                amount_captured,
+                buyer_user_id,
+            } = payload;
+
+            Ok(RawInvoiceV2 {
+                id,
+                account_id,
+                buyer_currency,
+                amount_captured,
+                final_amount_paid: None,
+                final_cashback_amount: None,
+                paid_at: None,
+                created_at: SystemTime::UNIX_EPOCH,
+                updated_at: SystemTime::UNIX_EPOCH,
+                buyer_user_id,
+            })
+        }
+
+        fn delete(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Option<RawInvoiceV2>> {
+            Ok(None)
         }
     }
 

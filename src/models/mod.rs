@@ -6,10 +6,12 @@ pub mod amount;
 pub mod authorization;
 pub mod currency;
 pub mod invoice;
+pub mod invoice_v2;
 pub mod merchant;
 pub mod order;
 pub mod order_info;
 pub mod role;
+pub mod user;
 
 pub use self::account::*;
 pub use self::amount::*;
@@ -20,3 +22,4 @@ pub use self::merchant::*;
 pub use self::order::*;
 pub use self::order_info::*;
 pub use self::role::*;
+pub use self::user::*;

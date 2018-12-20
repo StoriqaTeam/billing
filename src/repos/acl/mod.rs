@@ -112,6 +112,7 @@ impl<T> Acl<Resource, Action, Scope, FailureError, T> for ApplicationAcl {
 mod tests {
     use repos::legacy_acl::{Acl, CheckScope};
     use stq_static_resources::OrderState;
+    use stq_types::UserId;
     use stq_types::*;
 
     use models::*;

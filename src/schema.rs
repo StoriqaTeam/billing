@@ -57,12 +57,13 @@ table! {
         id -> Uuid,
         account_id -> Nullable<Uuid>,
         buyer_currency -> VarChar,
-        amount_captured -> Int8,
-        final_amount_paid -> Nullable<Int8>,
-        final_cashback_amount -> Nullable<Int8>,
+        amount_captured -> Numeric,
+        final_amount_paid -> Nullable<Numeric>,
+        final_cashback_amount -> Nullable<Numeric>,
         paid_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        buyer_user_id -> Integer,
     }
 }
 
@@ -70,8 +71,8 @@ table! {
     orders (id) {
         id -> Uuid,
         seller_currency -> VarChar,
-        total_amount -> Int8,
-        cashback_amount -> Int8,
+        total_amount -> Numeric,
+        cashback_amount -> Numeric,
         invoice_id -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
