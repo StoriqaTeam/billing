@@ -22,6 +22,8 @@ where
     fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a>;
     fn create_user_roles_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
+    fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a>;
+    fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -126,9 +128,22 @@ where
             self.roles_cache.clone(),
         )) as Box<UserRolesRepo>
     }
+
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
         let acl = self.get_acl(db_conn, user_id);
         Box::new(UserRolesRepoImpl::new(db_conn, acl, self.roles_cache.clone())) as Box<UserRolesRepo>
+    }
+
+    fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a> {
+        Box::new(AccountsRepoImpl::new(
+            db_conn,
+            Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, Account>>,
+        )) as Box<AccountsRepo>
+    }
+
+    fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(AccountsRepoImpl::new(db_conn, acl)) as Box<AccountsRepo>
     }
 }
 
@@ -167,12 +182,14 @@ pub mod tests {
     use tokio_core::reactor::Handle;
     use uuid::Uuid;
 
+    use std::collections::HashMap;
     use stq_http::client::TimeLimitedHttpClient;
     use stq_static_resources::{Currency, OrderState};
     use stq_types::*;
 
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
+    use models::Currency as BillingCurrency;
     use models::*;
     use repos::*;
     use services::*;
@@ -208,8 +225,17 @@ pub mod tests {
         fn create_user_roles_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
             Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
         }
+
         fn create_user_roles_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
             Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
+        }
+
+        fn create_accounts_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<AccountsRepo + 'a> {
+            Box::new(AccountsRepoMock::default()) as Box<AccountsRepoMock>
+        }
+
+        fn create_accounts_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
+            Box::new(AccountsRepoMock::default()) as Box<AccountsRepoMock>
         }
     }
 
@@ -395,6 +421,45 @@ pub mod tests {
         }
     }
 
+    #[derive(Clone, Default)]
+    pub struct AccountsRepoMock;
+
+    impl AccountsRepo for AccountsRepoMock {
+        fn count(&self) -> RepoResultV2<AccountCount> {
+            Ok(AccountCount {
+                unpooled: HashMap::default(),
+                pooled: HashMap::default(),
+            })
+        }
+
+        fn get(&self, _account_id: AccountId) -> RepoResultV2<Option<Account>> {
+            Ok(None)
+        }
+
+        fn get_many(&self, _account_ids: &[AccountId]) -> RepoResultV2<Vec<Account>> {
+            Ok(vec![])
+        }
+
+        fn create(&self, payload: NewAccount) -> RepoResultV2<Account> {
+            let NewAccount { id, currency, is_pooled } = payload;
+            Ok(Account {
+                id,
+                currency,
+                is_pooled,
+                created_at: SystemTime::UNIX_EPOCH,
+            })
+        }
+
+        fn delete(&self, _account_id: AccountId) -> RepoResultV2<Option<Account>> {
+            Ok(Some(Account {
+                id: AccountId::new(Uuid::nil()),
+                currency: BillingCurrency::Stq,
+                is_pooled: false,
+                created_at: SystemTime::UNIX_EPOCH,
+            }))
+        }
+    }
+
     pub fn create_service(
         user_id: Option<UserId>,
         handle: Arc<Handle>,
@@ -412,7 +477,7 @@ pub mod tests {
         let static_context = StaticContext::new(db_pool, cpu_pool, client_handle.clone(), Arc::new(config), MOCK_REPO_FACTORY);
 
         let time_limited_http_client = TimeLimitedHttpClient::new(client_handle, Duration::new(1, 0));
-        let dynamic_context = DynamicContext::new(user_id, String::default(), time_limited_http_client);
+        let dynamic_context = DynamicContext::new(user_id, String::default(), time_limited_http_client, None);
 
         Service::new(static_context, dynamic_context)
     }

@@ -7,22 +7,28 @@ name = "billing_lib"
 path = "src/lib.rs"
 
 [dependencies]
+base64 = "0.10"
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
 config = { version = "0.9", default-features = false, features = ["toml"] }
-diesel = { version = "1.3", features = ["postgres", "extras"] }
-env_logger = "0.5"
+diesel = { version = "1.3", features = ["numeric", "postgres", "extras"] }
+enum-iterator = "0.2"
+env_logger = "0.6"
 failure = "0.1"
 futures = "0.1"
 futures-cpupool = "0.1"
+hex = "0.3"
 hyper = "0.11"
 hyper-tls = { git = "https://github.com/storiqateam/hyper-tls", tag = "v0.1.4-fresh-tls" }
+jsonwebtoken = "5.0"
 log = "0.4"
 r2d2 = "0.8"
 r2d2-diesel = "1.0"
 r2d2_redis = "0.8"
+secp256k1 = "0.12"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
+sha2 = "0.8"
 stq_cache = { path = "vendor/libstqbackend/cache" }
 stq_http = { path = "vendor/libstqbackend/http" }
 stq_logging = { path = "vendor/libstqbackend/logging" }
@@ -32,6 +38,6 @@ stq_types = { path = "vendor/libstqbackend/types" }
 tokio-core = "0.1"
 tokio-signal = "0.2"
 uuid = { version = "0.6", features = ["use_std", "v4", "serde"] }
-validator = "0.7"
-validator_derive = "0.7"
+validator = "0.8"
+validator_derive = "0.8"
 sentry = "0.12"

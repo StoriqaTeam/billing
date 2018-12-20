@@ -7,6 +7,7 @@ use sentry_integration::SentryConfig;
 
 use stq_http;
 use stq_logging::GrayLogConfig;
+use uuid::Uuid;
 
 /// Basic settings - HTTP binding, saga and external billing addresses
 #[derive(Debug, Deserialize, Clone)]
@@ -16,6 +17,7 @@ pub struct Config {
     pub saga_addr: SagaAddr,
     pub callback: Callback,
     pub external_billing: ExternalBilling,
+    pub payments: Option<Payments>,
     pub graylog: Option<GrayLogConfig>,
     pub sentry: Option<SentryConfig>,
 }
@@ -61,6 +63,26 @@ pub struct ExternalBilling {
     pub username: String,
     pub password: String,
     pub amount_recalculate_timeout_sec: i32,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Payments {
+    pub url: String,
+    pub jwt_public_key_base64: String,
+    pub user_jwt: String,
+    pub user_private_key: String,
+    pub min_pooled_accounts: u32,
+    pub max_accounts: u32,
+    pub callback_endpoint: String,
+    pub accounts: Accounts,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Accounts {
+    pub main_stq: Uuid,
+    pub main_eth: Uuid,
+    pub main_btc: Uuid,
+    pub cashback_stq: Uuid,
 }
 
 /// Creates new app config struct

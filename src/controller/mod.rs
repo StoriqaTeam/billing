@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use futures::{future, Future};
-use hyper::{header::Authorization, server::Request, Delete, Get, Post};
+use hyper::{header::Authorization, server::Request, Delete, Get, Method, Post};
 use r2d2::ManageConnection;
 
 use stq_http::{
@@ -24,6 +24,7 @@ use stq_types::UserId;
 
 use self::context::{DynamicContext, StaticContext};
 use self::routes::Route;
+use client::payments::PaymentsClientImpl;
 use errors::Error;
 use models::*;
 use repos::repo_factory::*;
@@ -77,10 +78,18 @@ impl<
 
         let time_limited_http_client = TimeLimitedHttpClient::new(self.static_context.client_handle.clone(), request_timeout);
 
-        let dynamic_context = DynamicContext::new(user_id, correlation_token, time_limited_http_client);
+        let payments_client = self
+            .static_context
+            .config
+            .payments
+            .clone()
+            .and_then(|config| PaymentsClientImpl::create_from_config(time_limited_http_client.clone(), config.into()).ok());
+
+        let dynamic_context = DynamicContext::new(user_id, correlation_token, time_limited_http_client, payments_client);
         let service = Service::new(self.static_context.clone(), dynamic_context);
 
         let path = req.path().to_string();
+
         let fut = match (&req.method().clone(), self.static_context.route_parser.test(req.path())) {
             (&Post, Some(Route::ExternalBillingCallback)) => {
                 serialize_future({ parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| service.update_invoice(data)) })
@@ -111,11 +120,7 @@ impl<
             (Delete, Some(Route::RoleById { id })) => serialize_future({ service.delete_user_role_by_id(id) }),
 
             // Fallback
-            (m, _) => Box::new(future::err(
-                format_err!("Request to non existing endpoint in billing microservice! {:?} {:?}", m, path)
-                    .context(Error::NotFound)
-                    .into(),
-            )),
+            (m, _) => not_found(m, path),
         }
         .map_err(|err| {
             let wrapper = ErrorMessageWrapper::<Error>::from(&err);
@@ -127,6 +132,14 @@ impl<
 
         Box::new(fut)
     }
+}
+
+fn not_found(method: &Method, path: String) -> Box<Future<Item = String, Error = failure::Error>> {
+    Box::new(future::err(
+        format_err!("Request to non existing endpoint in billing microservice! {:?} {:?}", method, path)
+            .context(Error::NotFound)
+            .into(),
+    ))
 }
 
 fn get_user_id(req: &Request) -> Option<UserId> {
