@@ -7,6 +7,7 @@ use sentry_integration::SentryConfig;
 
 use stq_http;
 use stq_logging::GrayLogConfig;
+use uuid::Uuid;
 
 /// Basic settings - HTTP binding, saga and external billing addresses
 #[derive(Debug, Deserialize, Clone)]
@@ -73,6 +74,15 @@ pub struct Payments {
     pub min_pooled_accounts: u32,
     pub max_accounts: u32,
     pub callback_endpoint: String,
+    pub accounts: Accounts,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Accounts {
+    pub main_stq: Uuid,
+    pub main_eth: Uuid,
+    pub main_btc: Uuid,
+    pub cashback_stq: Uuid,
 }
 
 /// Creates new app config struct

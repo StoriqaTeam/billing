@@ -148,7 +148,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
     );
 
     if let Some(config) = config.payments {
-        info!("Payments config found - initializing account pools");
+        info!("Payments config found - initializing accounts");
 
         let payments_client = PaymentsClientImpl::create_from_config(client_handle, payments::Config::from(config.clone()))
             .expect("Failed to create Payments client");
@@ -159,12 +159,18 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
             config.min_pooled_accounts,
             payments_client,
             "".to_string(),
+            config.accounts.into(),
         );
 
-        core.run(account_service.init_account_pools()).expect("Failed to initialize account pools");
-        info!("Finished initializing account pools");
+        core.run(account_service.init_system_accounts())
+            .expect("Failed to initialize system accounts");
+
+        core.run(account_service.init_account_pools())
+            .expect("Failed to initialize account pools");
+
+        info!("Finished initializing accounts");
     } else {
-        info!("Payments config not found - skipping account pool initialization");
+        info!("Payments config not found - skipping account initialization");
     }
 
     let serve = Http::new()

@@ -10,7 +10,7 @@ use controller::context::{DynamicContext, StaticContext};
 use errors::Error;
 use repos::repo_factory::*;
 
-use super::{Error as ServiceError};
+use super::Error as ServiceError;
 
 /// Service layer Future
 pub type ServiceFuture<T> = Box<Future<Item = T, Error = FailureError>>;

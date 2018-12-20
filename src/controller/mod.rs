@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use futures::{future, Future};
-use hyper::{header::Authorization, server::Request, Method, Delete, Get, Post};
+use hyper::{header::Authorization, server::Request, Delete, Get, Method, Post};
 use r2d2::ManageConnection;
 
 use stq_http::{
@@ -78,7 +78,11 @@ impl<
 
         let time_limited_http_client = TimeLimitedHttpClient::new(self.static_context.client_handle.clone(), request_timeout);
 
-        let payments_client = self.static_context.config.payments.clone()
+        let payments_client = self
+            .static_context
+            .config
+            .payments
+            .clone()
             .and_then(|config| PaymentsClientImpl::create_from_config(time_limited_http_client.clone(), config.into()).ok());
 
         let dynamic_context = DynamicContext::new(user_id, correlation_token, time_limited_http_client, payments_client);

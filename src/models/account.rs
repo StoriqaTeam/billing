@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::time::SystemTime;
 use uuid::{self, Uuid};
 
+use config;
 use models::currency::Currency;
 use schema::accounts;
 
@@ -89,4 +90,69 @@ pub struct NewAccount {
     pub id: AccountId,
     pub currency: Currency,
     pub is_pooled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SystemAccountType {
+    Main,
+    Cashback,
+}
+
+impl Display for SystemAccountType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SystemAccountType::Main => f.write_str("Main"),
+            SystemAccountType::Cashback => f.write_str("Cashback"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemAccount {
+    pub id: AccountId,
+    pub currency: Currency,
+    pub account_type: SystemAccountType,
+}
+
+impl Display for SystemAccount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(&format!("{} {}", self.account_type, self.currency))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemAccounts(pub Vec<SystemAccount>);
+
+impl From<config::Accounts> for SystemAccounts {
+    fn from(config: config::Accounts) -> SystemAccounts {
+        let config::Accounts {
+            main_stq,
+            main_eth,
+            main_btc,
+            cashback_stq,
+        } = config;
+
+        SystemAccounts(vec![
+            SystemAccount {
+                id: AccountId::new(main_stq),
+                currency: Currency::Stq,
+                account_type: SystemAccountType::Main,
+            },
+            SystemAccount {
+                id: AccountId::new(main_eth),
+                currency: Currency::Eth,
+                account_type: SystemAccountType::Main,
+            },
+            SystemAccount {
+                id: AccountId::new(main_btc),
+                currency: Currency::Btc,
+                account_type: SystemAccountType::Main,
+            },
+            SystemAccount {
+                id: AccountId::new(cashback_stq),
+                currency: Currency::Stq,
+                account_type: SystemAccountType::Cashback,
+            },
+        ])
+    }
 }

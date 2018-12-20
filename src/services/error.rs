@@ -1,8 +1,8 @@
 use failure::{Backtrace, Context, Fail};
 use std::fmt;
 
-use client::payments::{ErrorKind as PaymentsClientErrorKind};
-use repos::{ErrorKind as RepoErrorKind};
+use client::payments::ErrorKind as PaymentsClientErrorKind;
+use repos::ErrorKind as RepoErrorKind;
 
 #[derive(Debug)]
 pub struct Error {
@@ -30,4 +30,3 @@ impl From<PaymentsClientErrorKind> for ErrorKind {
         ErrorKind::Internal
     }
 }
-

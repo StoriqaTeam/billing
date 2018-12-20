@@ -15,10 +15,10 @@ max_accounts = 1000
 callback_endpoint = "/callback/payments/new_tx"
 
 [payments.accounts]
-main_stq = ""
-main_eth = ""
-main_btc = ""
-cashback_stq = ""
+main_stq = "a46cd01b-6409-4399-8eb1-2435656d0b40"
+main_eth = "152d01b7-3945-49d2-8bc7-0f89bbac17ac"
+main_btc = "db6faeac-d385-43b7-81ea-ea36fae625ed"
+cashback_stq = "36af4a96-918b-4d43-9f8f-e7c44602c28d"
 
 [external_billing]
 invoice_url = "http://payments.tugush.com/api/v1/invoices/"

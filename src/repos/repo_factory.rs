@@ -436,6 +436,10 @@ pub mod tests {
             Ok(None)
         }
 
+        fn get_many(&self, _account_ids: &[AccountId]) -> RepoResultV2<Vec<Account>> {
+            Ok(vec![])
+        }
+
         fn create(&self, payload: NewAccount) -> RepoResultV2<Account> {
             let NewAccount { id, currency, is_pooled } = payload;
             Ok(Account {

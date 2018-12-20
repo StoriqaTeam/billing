@@ -4,7 +4,7 @@ use futures::future::Future;
 use r2d2;
 use r2d2_diesel::ConnectionManager;
 
-use repos::{Error as RepoError};
+use repos::Error as RepoError;
 
 /// Repos layer Future
 pub type RepoFuture<T> = Box<Future<Item = T, Error = FailureError>>;
