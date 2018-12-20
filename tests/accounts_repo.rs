@@ -61,5 +61,5 @@ fn accounts_repo_crud_happy() {
         })
         .unwrap()
     };
-    assert_eq!(new_account.id, deleted_account.id);
+    assert_eq!(Some(new_account.id), deleted_account.map(|a| a.id));
 }

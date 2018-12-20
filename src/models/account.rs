@@ -1,4 +1,5 @@
 use diesel::sql_types::Uuid as SqlUuid;
+use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -39,6 +40,12 @@ impl Display for AccountId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&format!("{}", self.0.hyphenated()))
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountCount {
+    pub pooled: HashMap<Currency, u64>,
+    pub unpooled: HashMap<Currency, u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

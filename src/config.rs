@@ -72,6 +72,7 @@ pub struct Payments {
     pub user_private_key: String,
     pub min_pooled_accounts: u32,
     pub max_accounts: u32,
+    pub callback_endpoint: String,
 }
 
 /// Creates new app config struct

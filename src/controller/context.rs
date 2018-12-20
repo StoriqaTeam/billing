@@ -12,6 +12,7 @@ use stq_router::RouteParser;
 use stq_types::UserId;
 
 use super::routes::*;
+use client::payments::PaymentsClientImpl;
 use config::Config;
 use repos::repo_factory::*;
 
@@ -74,15 +75,22 @@ pub struct DynamicContext {
     pub user_id: Option<UserId>,
     pub correlation_token: String,
     pub http_client: TimeLimitedHttpClient<ClientHandle>,
+    pub payments_client: Option<PaymentsClientImpl<TimeLimitedHttpClient<ClientHandle>>>,
 }
 
 impl DynamicContext {
     /// Create a new dynamic context for each request
-    pub fn new(user_id: Option<UserId>, correlation_token: String, http_client: TimeLimitedHttpClient<ClientHandle>) -> Self {
+    pub fn new(
+        user_id: Option<UserId>,
+        correlation_token: String,
+        http_client: TimeLimitedHttpClient<ClientHandle>,
+        payments_client: Option<PaymentsClientImpl<TimeLimitedHttpClient<ClientHandle>>>,
+    ) -> Self {
         Self {
             user_id,
             correlation_token,
             http_client,
+            payments_client,
         }
     }
 }

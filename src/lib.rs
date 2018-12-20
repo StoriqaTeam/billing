@@ -14,6 +14,7 @@ extern crate base64;
 extern crate config as config_crate;
 #[macro_use]
 extern crate diesel;
+extern crate enum_iterator;
 extern crate env_logger;
 #[macro_use]
 extern crate failure;
@@ -77,11 +78,13 @@ use stq_cache::cache::{redis::RedisCache, Cache, NullCache, TypedCache};
 use stq_http::controller::Application;
 use tokio_core::reactor::Core;
 
+use client::payments::{self, PaymentsClientImpl};
 use config::Config;
 use controller::context::StaticContext;
 use errors::Error;
 use repos::acl::RolesCacheImpl;
 use repos::repo_factory::ReposFactoryImpl;
+use services::accounts::{AccountService, AccountServiceImpl};
 
 /// Starts new web service from provided `Config`
 pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>, callback: F) {
@@ -136,7 +139,33 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
 
     let repo_factory = ReposFactoryImpl::new(roles_cache);
 
-    let context = StaticContext::new(db_pool, cpu_pool, client_handle, Arc::new(config), repo_factory);
+    let context = StaticContext::new(
+        db_pool.clone(),
+        cpu_pool.clone(),
+        client_handle.clone(),
+        Arc::new(config.clone()),
+        repo_factory.clone(),
+    );
+
+    if let Some(config) = config.payments {
+        info!("Payments config found - initializing account pools");
+
+        let payments_client = PaymentsClientImpl::create_from_config(client_handle, payments::Config::from(config.clone()))
+            .expect("Failed to create Payments client");
+        let account_service = AccountServiceImpl::new(
+            db_pool,
+            cpu_pool,
+            repo_factory,
+            config.min_pooled_accounts,
+            payments_client,
+            "".to_string(),
+        );
+
+        core.run(account_service.init_account_pools()).expect("Failed to initialize account pools");
+        info!("Finished initializing account pools");
+    } else {
+        info!("Payments config not found - skipping account pool initialization");
+    }
 
     let serve = Http::new()
         .serve_addr_handle(&address, &handle, move || {

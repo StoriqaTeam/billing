@@ -1,14 +1,15 @@
 use diesel::{connection::AnsiTransactionManager, pg::Pg, prelude::*, query_dsl::RunQueryDsl, Connection};
+use enum_iterator::IntoEnumIterator;
 use failure::{Error as FailureError, Fail};
-
+use std::collections::HashMap;
 use stq_types::UserId;
 
-use models::{authorization::*, Account, AccountId, NewAccount, RawAccount};
+use models::{authorization::*, Account, AccountCount, AccountId, Currency, NewAccount, RawAccount};
 use repos::{
     acl,
     error::{ErrorKind, ErrorSource},
     legacy_acl::*,
-    types::RepoResult,
+    types::RepoResultV2,
 };
 use schema::accounts::dsl as Accounts;
 
@@ -18,9 +19,10 @@ pub struct AccountsRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager =
 }
 
 pub trait AccountsRepo {
-    fn get(&self, account_id: AccountId) -> RepoResult<Option<Account>>;
-    fn create(&self, payload: NewAccount) -> RepoResult<Account>;
-    fn delete(&self, account_id: AccountId) -> RepoResult<Account>;
+    fn count(&self) -> RepoResultV2<AccountCount>;
+    fn get(&self, account_id: AccountId) -> RepoResultV2<Option<Account>>;
+    fn create(&self, payload: NewAccount) -> RepoResultV2<Account>;
+    fn delete(&self, account_id: AccountId) -> RepoResultV2<Option<Account>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> AccountsRepoImpl<'a, T> {
@@ -30,10 +32,49 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> AccountsRepo for AccountsRepoImpl<'a, T> {
-    fn get(&self, account_id: AccountId) -> RepoResult<Option<Account>> {
+    fn count(&self) -> RepoResultV2<AccountCount> {
+        debug!("Getting account count");
+
+        acl::check(&*self.acl, Resource::Account, Action::Read, self, None)
+            .map_err(ectx!(try ErrorKind::Internal))?;
+
+        let query = Accounts::accounts.select((Accounts::currency, Accounts::is_pooled));
+        let accounts = query
+            .get_results::<(Currency, bool)>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        // add initial zero counts for every currency to simplify account pool initialization logic
+        let empty_hashmap = Currency::into_enum_iter()
+            .map(|currency| (currency, 0))
+            .collect::<HashMap<_, _>>();
+
+        let account_count = accounts.into_iter().fold(
+            AccountCount { pooled: empty_hashmap.clone(), unpooled: empty_hashmap },
+            |mut account_count, (currency, is_pooled)| {
+                if is_pooled {
+                    account_count.pooled.entry(currency)
+                        .and_modify(|count| { *count += 1 })
+                        .or_insert(1);
+                } else {
+                    account_count.unpooled.entry(currency)
+                        .and_modify(|count| { *count += 1 })
+                        .or_insert(1);
+                };
+                account_count
+            }
+        );
+
+        Ok(account_count)
+    }
+    
+    fn get(&self, account_id: AccountId) -> RepoResultV2<Option<Account>> {
         debug!("Getting an account with ID: {}", account_id);
 
-        acl::check(&*self.acl, Resource::Account, Action::Read, self, None)?;
+        acl::check(&*self.acl, Resource::Account, Action::Read, self, None)
+            .map_err(ectx!(try ErrorKind::Internal))?;
 
         let query = Accounts::accounts.filter(Accounts::id.eq(account_id));
 
@@ -47,10 +88,11 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             })
     }
 
-    fn create(&self, payload: NewAccount) -> RepoResult<Account> {
+    fn create(&self, payload: NewAccount) -> RepoResultV2<Account> {
         debug!("Creating an account using payload: {:?}", payload);
 
-        acl::check(&*self.acl, Resource::Account, Action::Write, self, None)?;
+        acl::check(&*self.acl, Resource::Account, Action::Write, self, None)
+            .map_err(ectx!(try ErrorKind::Internal))?;
 
         let command = diesel::insert_into(Accounts::accounts).values(&payload);
 
@@ -60,17 +102,21 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         })
     }
 
-    fn delete(&self, account_id: AccountId) -> RepoResult<Account> {
+    fn delete(&self, account_id: AccountId) -> RepoResultV2<Option<Account>> {
         debug!("Deleting an account with ID: {}", account_id);
 
-        acl::check(&*self.acl, Resource::Account, Action::Write, self, None)?;
+        acl::check(&*self.acl, Resource::Account, Action::Write, self, None)
+            .map_err(ectx!(try ErrorKind::Internal))?;
 
         let command = diesel::delete(Accounts::accounts.filter(Accounts::id.eq(account_id)));
 
-        command.get_result::<RawAccount>(self.db_conn).map(Account::from).map_err(|e| {
-            let error_kind = ErrorKind::from(&e);
-            ectx!(err e, ErrorSource::Diesel, error_kind => account_id)
-        })
+        command.get_result::<RawAccount>(self.db_conn)
+            .map(Account::from)
+            .optional()
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(err e, ErrorSource::Diesel, error_kind => account_id)
+            })
     }
 }
 

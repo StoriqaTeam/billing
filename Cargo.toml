@@ -11,6 +11,7 @@ base64 = "0.10"
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
 config = { version = "0.9", default-features = false, features = ["toml"] }
 diesel = { version = "1.3", features = ["numeric", "postgres", "extras"] }
+enum-iterator = "0.2"
 env_logger = "0.6"
 failure = "0.1"
 futures = "0.1"

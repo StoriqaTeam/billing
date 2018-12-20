@@ -6,9 +6,10 @@ use diesel::deserialize::{self, FromSql};
 use diesel::pg::Pg;
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::VarChar;
+use enum_iterator::IntoEnumIterator;
 use failure::Fail;
 
-#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, Eq, PartialEq, Hash, IntoEnumIterator)]
 #[sql_type = "VarChar"]
 #[serde(rename_all = "lowercase")]
 pub enum Currency {

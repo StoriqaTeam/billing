@@ -182,6 +182,7 @@ pub mod tests {
     use tokio_core::reactor::Handle;
     use uuid::Uuid;
 
+    use std::collections::HashMap;
     use stq_http::client::TimeLimitedHttpClient;
     use stq_static_resources::{Currency, OrderState};
     use stq_types::*;
@@ -424,11 +425,18 @@ pub mod tests {
     pub struct AccountsRepoMock;
 
     impl AccountsRepo for AccountsRepoMock {
-        fn get(&self, _account_id: AccountId) -> RepoResult<Option<Account>> {
+        fn count(&self) -> RepoResultV2<AccountCount> {
+            Ok(AccountCount {
+                unpooled: HashMap::default(),
+                pooled: HashMap::default(),
+            })
+        }
+
+        fn get(&self, _account_id: AccountId) -> RepoResultV2<Option<Account>> {
             Ok(None)
         }
 
-        fn create(&self, payload: NewAccount) -> RepoResult<Account> {
+        fn create(&self, payload: NewAccount) -> RepoResultV2<Account> {
             let NewAccount { id, currency, is_pooled } = payload;
             Ok(Account {
                 id,
@@ -438,13 +446,13 @@ pub mod tests {
             })
         }
 
-        fn delete(&self, _account_id: AccountId) -> RepoResult<Account> {
-            Ok(Account {
+        fn delete(&self, _account_id: AccountId) -> RepoResultV2<Option<Account>> {
+            Ok(Some(Account {
                 id: AccountId::new(Uuid::nil()),
                 currency: BillingCurrency::Stq,
                 is_pooled: false,
                 created_at: SystemTime::UNIX_EPOCH,
-            })
+            }))
         }
     }
 
@@ -465,7 +473,7 @@ pub mod tests {
         let static_context = StaticContext::new(db_pool, cpu_pool, client_handle.clone(), Arc::new(config), MOCK_REPO_FACTORY);
 
         let time_limited_http_client = TimeLimitedHttpClient::new(client_handle, Duration::new(1, 0));
-        let dynamic_context = DynamicContext::new(user_id, String::default(), time_limited_http_client);
+        let dynamic_context = DynamicContext::new(user_id, String::default(), time_limited_http_client, None);
 
         Service::new(static_context, dynamic_context)
     }
