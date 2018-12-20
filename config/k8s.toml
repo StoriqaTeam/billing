@@ -9,21 +9,21 @@ url = "http://saga:8000"
 [callback]
 url = "http://billing:8000"
 
-[payments]
-url = "https://pay-nightly.stq.cloud"
-jwt_public_key_base64 = "MIIBCgKCAQEAt3TQPCbcWM/Fba2s6V/WRuQv8SlEQp4F56fSY4LQ+yW2xY3f2fLOw/SurObHMQF7QpnQ7x/2zhGqe11Ad0MHbWG+OARR/B/76X8QhA3xEneZpgc8aykagl0Tr616tazEKr0JxGuUo3qHy+e/dqSQ9T04EjGqccfr3+gfmVZlzml2/kN2EmaFa28Q8NseY5a2TVL9XcEDHHpGHVpoRQI8ibfa92i2Lwo7E33Iz8hpbp+GgeyReua2z341nxSNqk0VSYa6KtNUk03G5YYmsrsoE+ECC69GAD07R4YcGqF4NRKSA0T3L8jY8rVbl5HUCIFuZynZEHWWpFvyMYW+9ffMfwIDAQAB"
-user_jwt = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ1c2VyX2lkIjoxNTMsImV4cCI6MTU0NDc5NDEwNywicHJvdmlkZXIiOiJFbWFpbCJ9.qLnpvR5-vqzwA0LFsN0zzTz2R71mS7TKunA2H0n-mdNbvVrFqyws4vZ6sVN_s1XYUw90Tj4bCzqn0FbkPavvMTXsNM375MFmbkrZ6PSFAjBJ6SSS0j0LSdECfpXFGnK0b_0aPChjnFpXSTN7YOR0uyoM3vh3j1HKKKKIkkIy9mHngTb9YoPF4ehaeDKF6TBc_wM-3VLWZ7Nt2px2Uoh7WVGVvu-2F5duNyPT8sBMTkSO5oY9GENbJMAJXOlgu_xcybiwQOui8RSVj6QKytKv8rKK5-jRh-ya_NbQjg4LMud6rbARh4CKnVVU9Axw3bXAmJdfKSknEsmY3n8yeCTtQA"
-# user public key = 02b27f95a9f892a8e9460347ba19be421403da5d05e68281a980be865ad86dd02b
-user_private_key = "a7190fcbbb97a08e0a0f39be542186efc3e59790b61b6338f83960f2519acb4d"
-min_pooled_accounts = 10
-max_accounts = 1000
-callback_endpoint = "/callback/payments/new_tx"
-
-[payments.accounts]
-main_stq = "a46cd01b-6409-4399-8eb1-2435656d0b40"
-main_eth = "152d01b7-3945-49d2-8bc7-0f89bbac17ac"
-main_btc = "db6faeac-d385-43b7-81ea-ea36fae625ed"
-cashback_stq = "36af4a96-918b-4d43-9f8f-e7c44602c28d"
+# [payments]
+# url = "https://pay-nightly.stq.cloud"
+# jwt_public_key_base64 = "MIIBCgKCAQEAt3TQPCbcWM/Fba2s6V/WRuQv8SlEQp4F56fSY4LQ+yW2xY3f2fLOw/SurObHMQF7QpnQ7x/2zhGqe11Ad0MHbWG+OARR/B/76X8QhA3xEneZpgc8aykagl0Tr616tazEKr0JxGuUo3qHy+e/dqSQ9T04EjGqccfr3+gfmVZlzml2/kN2EmaFa28Q8NseY5a2TVL9XcEDHHpGHVpoRQI8ibfa92i2Lwo7E33Iz8hpbp+GgeyReua2z341nxSNqk0VSYa6KtNUk03G5YYmsrsoE+ECC69GAD07R4YcGqF4NRKSA0T3L8jY8rVbl5HUCIFuZynZEHWWpFvyMYW+9ffMfwIDAQAB"
+# user_jwt = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ1c2VyX2lkIjoxNTMsImV4cCI6MTU0NDc5NDEwNywicHJvdmlkZXIiOiJFbWFpbCJ9.qLnpvR5-vqzwA0LFsN0zzTz2R71mS7TKunA2H0n-mdNbvVrFqyws4vZ6sVN_s1XYUw90Tj4bCzqn0FbkPavvMTXsNM375MFmbkrZ6PSFAjBJ6SSS0j0LSdECfpXFGnK0b_0aPChjnFpXSTN7YOR0uyoM3vh3j1HKKKKIkkIy9mHngTb9YoPF4ehaeDKF6TBc_wM-3VLWZ7Nt2px2Uoh7WVGVvu-2F5duNyPT8sBMTkSO5oY9GENbJMAJXOlgu_xcybiwQOui8RSVj6QKytKv8rKK5-jRh-ya_NbQjg4LMud6rbARh4CKnVVU9Axw3bXAmJdfKSknEsmY3n8yeCTtQA"
+# # user public key = 02b27f95a9f892a8e9460347ba19be421403da5d05e68281a980be865ad86dd02b
+# user_private_key = "a7190fcbbb97a08e0a0f39be542186efc3e59790b61b6338f83960f2519acb4d"
+# min_pooled_accounts = 10
+# max_accounts = 1000
+# callback_endpoint = "/callback/payments/new_tx"
+# 
+# [payments.accounts]
+# main_stq = "a46cd01b-6409-4399-8eb1-2435656d0b40"
+# main_eth = "152d01b7-3945-49d2-8bc7-0f89bbac17ac"
+# main_btc = "db6faeac-d385-43b7-81ea-ea36fae625ed"
+# cashback_stq = "36af4a96-918b-4d43-9f8f-e7c44602c28d"
 
 [external_billing]
 invoice_url = "http://payments.tugush.com/api/v1/invoices/"
