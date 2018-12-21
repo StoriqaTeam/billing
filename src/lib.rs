@@ -11,6 +11,7 @@
 #![allow(proc_macro_derive_resolution_fallback)]
 
 extern crate base64;
+extern crate bigdecimal;
 extern crate config as config_crate;
 #[macro_use]
 extern crate diesel;

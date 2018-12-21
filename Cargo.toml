@@ -8,6 +8,7 @@ path = "src/lib.rs"
 
 [dependencies]
 base64 = "0.10"
+bigdecimal = { version = "0.0", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde", "rustc-serialize"] }
 config = { version = "0.9", default-features = false, features = ["toml"] }
 diesel = { version = "1.3", features = ["numeric", "postgres", "extras"] }

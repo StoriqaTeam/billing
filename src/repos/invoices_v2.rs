@@ -86,10 +86,18 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .filter(InvoicesV2::id.eq(invoice_id))
             .select(InvoicesV2::buyer_user_id)
             .get_result::<UserId>(self.db_conn)
+            .optional()
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(try err e, ErrorSource::Diesel, error_kind)
             })?;
+
+        let buyer_user_id = match buyer_user_id {
+            None => {
+                return Ok(None);
+            }
+            Some(buyer_user_id) => buyer_user_id,
+        };
 
         acl::check(
             &*self.acl,

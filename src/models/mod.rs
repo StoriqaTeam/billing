@@ -9,7 +9,9 @@ pub mod invoice;
 pub mod invoice_v2;
 pub mod merchant;
 pub mod order;
+pub mod order_exchange_rate;
 pub mod order_info;
+pub mod order_v2;
 pub mod role;
 pub mod user;
 
@@ -20,6 +22,7 @@ pub use self::currency::*;
 pub use self::invoice::*;
 pub use self::merchant::*;
 pub use self::order::*;
+pub use self::order_exchange_rate::*;
 pub use self::order_info::*;
 pub use self::role::*;
 pub use self::user::*;

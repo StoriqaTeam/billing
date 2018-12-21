@@ -81,7 +81,7 @@ table! {
 
 table! {
     order_exchange_rates (id) {
-        id -> Int4,
+        id -> Int8,
         order_id -> Uuid,
         exchange_id -> Nullable<Uuid>,
         exchange_rate -> Numeric,
@@ -90,3 +90,8 @@ table! {
         updated_at -> Timestamp,
     }
 }
+
+joinable!(invoices_v2 -> accounts (account_id));
+joinable!(orders -> invoices_v2 (invoice_id));
+joinable!(order_exchange_rates -> orders (order_id));
+allow_tables_to_appear_in_same_query!(accounts, invoices_v2, orders, order_exchange_rates);
