@@ -1,16 +1,9 @@
 use std::fmt::{self, Display};
-use std::io::Write;
 use std::str::FromStr;
 use std::time::SystemTime;
 
 use bigdecimal::BigDecimal;
-use diesel::pg::Pg;
-use diesel::sql_types::{BigInt, VarChar};
-use diesel::types::{FromSql, IsNull, ToSql};
-use diesel::{
-    deserialize,
-    serialize::{self, Output},
-};
+use diesel::sql_types::BigInt;
 
 use models::order_v2::{ExchangeId, OrderId};
 use schema::order_exchange_rates;
@@ -44,8 +37,7 @@ impl Display for OrderExchangeRateId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, Eq, PartialEq, Hash)]
-#[sql_type = "VarChar"]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash, DieselTypes)]
 #[serde(rename_all = "lowercase")]
 pub enum ExchangeRateStatus {
     Active,
@@ -65,32 +57,6 @@ impl FromStr for ExchangeRateStatus {
             "expired" => Ok(ExchangeRateStatus::Expired),
             _ => Err(ParseExchangeRateStatusError),
         }
-    }
-}
-
-impl FromSql<VarChar, Pg> for ExchangeRateStatus {
-    fn from_sql(data: Option<&[u8]>) -> deserialize::Result<Self> {
-        match data {
-            Some(b"active") => Ok(ExchangeRateStatus::Active),
-            Some(b"expired") => Ok(ExchangeRateStatus::Expired),
-            Some(v) => Err(format!(
-                "Unrecognized enum variant: {:?}",
-                String::from_utf8(v.to_vec()).unwrap_or_else(|_| "Non - UTF8 value".to_string()),
-            )
-            .to_string()
-            .into()),
-            None => Err("Unexpected null for non-null column".into()),
-        }
-    }
-}
-
-impl ToSql<VarChar, Pg> for ExchangeRateStatus {
-    fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> serialize::Result {
-        match self {
-            ExchangeRateStatus::Active => out.write_all(b"active"),
-            ExchangeRateStatus::Expired => out.write_all(b"expired"),
-        }?;
-        Ok(IsNull::No)
     }
 }
 

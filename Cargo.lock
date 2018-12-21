@@ -126,6 +126,7 @@ dependencies = [
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "stq_cache 0.1.0",
+ "stq_diesel_macro_derive 0.1.0",
  "stq_http 0.1.0",
  "stq_logging 0.1.0",
  "stq_router 0.1.0",

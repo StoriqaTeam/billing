@@ -39,6 +39,8 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate sha2;
 extern crate stq_cache;
+#[macro_use]
+extern crate stq_diesel_macro_derive;
 extern crate stq_http;
 extern crate stq_logging;
 extern crate stq_router;
