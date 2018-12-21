@@ -1,3 +1,4 @@
+use diesel::result::Error as DieselError;
 use failure::{Backtrace, Context, Fail};
 use serde_json;
 use std::fmt;
@@ -40,5 +41,19 @@ impl From<PaymentsClientErrorKind> for ErrorKind {
             PaymentsClientErrorKind::Unauthorized => ErrorKind::Internal,
             PaymentsClientErrorKind::Validation(value) => ErrorKind::Validation(value),
         }
+    }
+}
+
+impl From<DieselError> for Error {
+    fn from(e: DieselError) -> Self {
+        Error {
+            inner: ErrorKind::from(&e).into(),
+        }
+    }
+}
+
+impl<'a> From<&'a DieselError> for ErrorKind {
+    fn from(_e: &DieselError) -> Self {
+        ErrorKind::Internal
     }
 }

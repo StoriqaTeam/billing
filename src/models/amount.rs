@@ -27,6 +27,8 @@ pub struct Amount(u128);
 pub struct ParseAmountError;
 
 impl Amount {
+    pub const MAX: Amount = Amount(std::u128::MAX);
+
     ///Make addition, return None on overflow
     pub fn checked_add(&self, other: Amount) -> Option<Self> {
         self.0.checked_add(other.0).map(Amount)
@@ -39,6 +41,10 @@ impl Amount {
 
     pub fn new(v: u128) -> Self {
         Amount(v)
+    }
+
+    pub fn inner(&self) -> u128 {
+        self.0.clone()
     }
 }
 

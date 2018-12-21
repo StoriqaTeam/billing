@@ -15,9 +15,10 @@ use serde_json;
 use stq_http::client::HttpClient;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
-use super::types::ServiceFuture;
+use super::types::{ServiceFuture, ServiceFutureV2};
 use config::ExternalBilling;
 use errors::Error;
+use models::invoice_v2::{self, calculate_invoice_price, InvoicePrice};
 use models::*;
 use repos::repo_factory::ReposFactory;
 use repos::RepoResult;
@@ -38,6 +39,9 @@ pub trait InvoiceService {
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// Creates orders in billing system, returning url for payment
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
+    /// Either calculate the current total price of the invoice in the currency of the buyer
+    /// or get the final price of the invoice if it has been paid
+    fn get_current_invoice_price(&self, invoice_id: invoice_v2::InvoiceId) -> ServiceFutureV2<Option<InvoicePrice>>;
 }
 
 impl<
@@ -313,6 +317,51 @@ impl<
                     })
             })
             .map_err(|e: FailureError| e.context("Service invoice, update endpoint error occured.").into())
+        })
+    }
+
+    /// Either calculate the current total price of the invoice in the currency of the buyer
+    /// or get the final price of the invoice if it has been paid
+    fn get_current_invoice_price(&self, invoice_id: invoice_v2::InvoiceId) -> ServiceFutureV2<Option<InvoicePrice>> {
+        debug!("Getting current invoice price for the invoice with ID: {}", invoice_id);
+
+        let current_user = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+
+        self.spawn_on_pool_v2(move |conn| {
+            let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, current_user);
+            let orders_repo = repo_factory.create_orders_repo(&conn, current_user);
+            let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, current_user);
+
+            conn.transaction(move || {
+                let invoice = invoices_repo.get(invoice_id.clone()).map_err(ectx!(try convert => invoice_id))?;
+
+                let invoice = match invoice {
+                    None => return Ok(None),
+                    Some(invoice) => invoice,
+                };
+
+                let orders_with_rates = orders_repo
+                    .get_many_by_invoice_id(invoice.id.clone())
+                    .map_err({
+                        let invoice_id = invoice.id.clone();
+                        ectx!(try convert => invoice_id)
+                    })
+                    .and_then(|orders| {
+                        orders
+                            .into_iter()
+                            .map(|order| {
+                                let rate = order_exchange_rates_repo.get_active_rate_for_order(order.id.clone()).map_err({
+                                    let order_id = order.id.clone();
+                                    ectx!(try convert => order_id)
+                                })?;
+                                Ok((order, rate))
+                            })
+                            .collect::<Result<Vec<_>, _>>()
+                    })?;
+
+                Ok(Some(calculate_invoice_price(invoice, orders_with_rates)))
+            })
         })
     }
 }
