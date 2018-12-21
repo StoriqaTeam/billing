@@ -1,1 +1,1 @@
-ALTER TABLE order_exchange_rates ALTER COLUMN id TYPE serial;
+ALTER TABLE order_exchange_rates ALTER COLUMN id TYPE integer;
