@@ -84,6 +84,9 @@ impl Display for ExchangeId {
     }
 }
 
+#[derive(Clone, Copy, Debug, Display, Default, PartialEq, Eq, PartialOrd, Ord, From, FromStr, Hash, Serialize, Deserialize, DieselTypes)]
+pub struct StoreId(i32);
+
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "orders"]
 pub struct RawOrder {
@@ -94,6 +97,7 @@ pub struct RawOrder {
     pub invoice_id: InvoiceId,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub store_id: StoreId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
@@ -104,6 +108,7 @@ pub struct NewOrder {
     pub total_amount: Amount,
     pub cashback_amount: Amount,
     pub invoice_id: InvoiceId,
+    pub store_id: StoreId,
 }
 
 #[derive(Debug, Clone)]

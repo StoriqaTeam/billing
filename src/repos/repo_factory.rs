@@ -579,6 +579,7 @@ pub mod tests {
                 total_amount,
                 cashback_amount,
                 invoice_id,
+                store_id,
             } = payload;
 
             Ok(RawOrder {
@@ -589,6 +590,7 @@ pub mod tests {
                 invoice_id,
                 created_at: NaiveDateTime::from_timestamp(0, 0),
                 updated_at: NaiveDateTime::from_timestamp(0, 0),
+                store_id,
             })
         }
 

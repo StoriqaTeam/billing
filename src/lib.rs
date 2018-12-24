@@ -14,6 +14,8 @@ extern crate base64;
 extern crate bigdecimal;
 extern crate config as config_crate;
 #[macro_use]
+extern crate derive_more;
+#[macro_use]
 extern crate diesel;
 extern crate enum_iterator;
 extern crate env_logger;
