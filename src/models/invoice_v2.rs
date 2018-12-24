@@ -94,16 +94,16 @@ impl From<RawInvoice> for InvoiceAccess {
 pub struct BuyerAmounts {
     pub exchange_rate: BigDecimal,
     pub currency: Currency,
-    pub price: Amount,
-    pub cashback: Amount,
+    pub price: BigDecimal,
+    pub cashback: BigDecimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderPrice {
     pub order_id: OrderId,
     pub seller_currency: Currency,
-    pub seller_price: Amount,
-    pub seller_cashback: Amount,
+    pub seller_price: BigDecimal,
+    pub seller_cashback: BigDecimal,
     pub buyer_amounts: Option<BuyerAmounts>,
 }
 
@@ -111,9 +111,9 @@ pub struct OrderPrice {
 pub struct InvoicePrice {
     pub invoice_id: InvoiceId,
     pub buyer_currency: Currency,
-    pub amount_captured: Amount,
-    pub total_price: Amount,
-    pub total_cashback: Amount,
+    pub amount_captured: BigDecimal,
+    pub total_price: BigDecimal,
+    pub total_cashback: BigDecimal,
     pub order_prices: Vec<OrderPrice>,
     pub has_missing_rates: bool,
     pub created_at: NaiveDateTime,
@@ -127,6 +127,21 @@ pub struct InvoicePriceCalculationData {
 }
 
 pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Option<RawOrderExchangeRate>)>) -> InvoicePrice {
+    let RawInvoice {
+        id,
+        buyer_currency,
+        amount_captured,
+        final_amount_paid,
+        final_cashback_amount,
+        created_at,
+        paid_at,
+        ..
+    } = invoice;
+
+    let amount_captured = amount_captured.to_super_unit(buyer_currency);
+    let final_amount_paid = final_amount_paid.map(|amount| amount.to_super_unit(buyer_currency));
+    let final_cashback_amount = final_cashback_amount.map(|amount| amount.to_super_unit(buyer_currency));
+
     let order_prices = orders
         .into_iter()
         .map(|(order, rate)| {
@@ -141,32 +156,23 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Optio
             OrderPrice {
                 order_id: id,
                 seller_currency,
-                seller_price: total_amount,
-                seller_cashback: cashback_amount,
+                seller_price: total_amount.to_super_unit(seller_currency),
+                seller_cashback: cashback_amount.to_super_unit(seller_currency),
                 buyer_amounts: rate.map(|RawOrderExchangeRate { exchange_rate, .. }| BuyerAmounts {
                     exchange_rate: exchange_rate.clone(),
-                    currency: invoice.buyer_currency.clone(),
+                    currency: buyer_currency.clone(),
                     price: Amount::new(decimal_to_u128_round_up(
                         u128_to_decimal(total_amount.inner()) * exchange_rate.clone(),
-                    )),
-                    cashback: Amount::new(decimal_to_u128_round_down(u128_to_decimal(cashback_amount.inner()) * exchange_rate)),
+                    ))
+                    .to_super_unit(buyer_currency.clone()),
+                    cashback: Amount::new(decimal_to_u128_round_down(u128_to_decimal(cashback_amount.inner()) * exchange_rate))
+                        .to_super_unit(buyer_currency.clone()),
                 }),
             }
         })
         .collect::<Vec<_>>();
 
     let has_missing_rates = order_prices.iter().any(|op| op.buyer_amounts.is_none());
-
-    let RawInvoice {
-        id,
-        buyer_currency,
-        amount_captured,
-        final_amount_paid,
-        final_cashback_amount,
-        created_at,
-        paid_at,
-        ..
-    } = invoice;
 
     // Check if the invoice has been paid. If it has, return the final prices.
     // Either all of the fields must contain a value or none of them,
@@ -188,8 +194,8 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Optio
                 invoice_id: id,
                 buyer_currency,
                 amount_captured,
-                total_price: Amount::new(0),
-                total_cashback: Amount::new(0),
+                total_price: BigDecimal::from(0),
+                total_cashback: BigDecimal::from(0),
                 order_prices,
                 has_missing_rates,
                 created_at,
@@ -197,8 +203,8 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Optio
             },
             |mut invoice, order_price| {
                 if let Some(BuyerAmounts { price, cashback, .. }) = order_price.buyer_amounts {
-                    invoice.total_price = invoice.total_price.checked_add(price).unwrap_or(Amount::MAX);
-                    invoice.total_cashback = invoice.total_cashback.checked_add(cashback).unwrap_or(Amount::MAX);
+                    invoice.total_price = invoice.total_price + price;
+                    invoice.total_cashback = invoice.total_cashback + cashback;
                 };
                 invoice
             },
