@@ -64,6 +64,8 @@ table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         buyer_user_id -> Integer,
+        status -> VarChar,
+        wallet_address -> Nullable<VarChar>,
     }
 }
 

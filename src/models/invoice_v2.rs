@@ -1,9 +1,10 @@
-use bigdecimal::BigDecimal;
-use chrono::NaiveDateTime;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
+use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use diesel::sql_types::Uuid as SqlUuid;
+use stq_static_resources::OrderState;
 use uuid::{self, Uuid};
 
 use models::order_v2::{OrderId, RawOrder};
@@ -44,6 +45,29 @@ impl Display for InvoiceId {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash, DieselTypes)]
+pub struct WalletAddress(String);
+
+impl From<String> for WalletAddress {
+    fn from(address: String) -> Self {
+        WalletAddress::new(address)
+    }
+}
+
+impl WalletAddress {
+    pub fn new(address: String) -> Self {
+        WalletAddress(address)
+    }
+
+    pub fn inner(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "invoices_v2"]
 pub struct RawInvoice {
@@ -57,6 +81,8 @@ pub struct RawInvoice {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub buyer_user_id: UserId,
+    pub status: OrderState,
+    pub wallet_address: Option<WalletAddress>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
@@ -67,6 +93,7 @@ pub struct NewInvoice {
     pub buyer_currency: Currency,
     pub amount_captured: Amount,
     pub buyer_user_id: UserId,
+    pub wallet_address: Option<WalletAddress>,
 }
 
 #[derive(Debug, Clone)]
@@ -153,12 +180,18 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Optio
                 ..
             } = order;
 
+            let exchange_rate = if buyer_currency == seller_currency {
+                Some(BigDecimal::from(1))
+            } else {
+                rate.map(|RawOrderExchangeRate { exchange_rate, .. }| exchange_rate)
+            };
+
             OrderPrice {
                 order_id: id,
                 seller_currency,
                 seller_price: total_amount.to_super_unit(seller_currency),
                 seller_cashback: cashback_amount.to_super_unit(seller_currency),
-                buyer_amounts: rate.map(|RawOrderExchangeRate { exchange_rate, .. }| BuyerAmounts {
+                buyer_amounts: exchange_rate.map(|exchange_rate| BuyerAmounts {
                     exchange_rate: exchange_rate.clone(),
                     currency: buyer_currency.clone(),
                     price: Amount::new(decimal_to_u128_round_up(
