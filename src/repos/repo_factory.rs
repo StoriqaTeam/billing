@@ -197,6 +197,7 @@ pub mod tests {
     use std::sync::Arc;
     use std::time::{Duration, SystemTime};
 
+    use chrono::NaiveDateTime;
     use diesel::connection::AnsiTransactionManager;
     use diesel::connection::SimpleConnection;
     use diesel::deserialize::QueryableByName;
@@ -506,7 +507,7 @@ pub mod tests {
                 id,
                 currency,
                 is_pooled,
-                created_at: SystemTime::UNIX_EPOCH,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
             })
         }
 
@@ -515,7 +516,7 @@ pub mod tests {
                 id: AccountId::new(Uuid::nil()),
                 currency: BillingCurrency::Stq,
                 is_pooled: false,
-                created_at: SystemTime::UNIX_EPOCH,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
             }))
         }
     }
@@ -545,8 +546,8 @@ pub mod tests {
                 final_amount_paid: None,
                 final_cashback_amount: None,
                 paid_at: None,
-                created_at: SystemTime::UNIX_EPOCH,
-                updated_at: SystemTime::UNIX_EPOCH,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
+                updated_at: NaiveDateTime::from_timestamp(0, 0),
                 buyer_user_id,
             })
         }
@@ -583,8 +584,8 @@ pub mod tests {
                 total_amount,
                 cashback_amount,
                 invoice_id,
-                created_at: SystemTime::UNIX_EPOCH,
-                updated_at: SystemTime::UNIX_EPOCH,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
+                updated_at: NaiveDateTime::from_timestamp(0, 0),
             })
         }
 
@@ -623,8 +624,8 @@ pub mod tests {
                     exchange_id,
                     exchange_rate,
                     status: ExchangeRateStatus::Active,
-                    created_at: SystemTime::UNIX_EPOCH,
-                    updated_at: SystemTime::UNIX_EPOCH,
+                    created_at: NaiveDateTime::from_timestamp(0, 0),
+                    updated_at: NaiveDateTime::from_timestamp(0, 0),
                 },
                 last_expired_rate: None,
             })

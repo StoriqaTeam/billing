@@ -1,8 +1,8 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
-use std::time::SystemTime;
 
 use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use diesel::sql_types::BigInt;
 
 use models::order_v2::{ExchangeId, OrderId};
@@ -77,8 +77,8 @@ pub struct RawOrderExchangeRate {
     pub exchange_id: Option<ExchangeId>,
     pub exchange_rate: BigDecimal,
     pub status: ExchangeRateStatus,
-    pub created_at: SystemTime,
-    pub updated_at: SystemTime,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

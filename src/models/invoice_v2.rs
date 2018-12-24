@@ -1,7 +1,7 @@
 use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use std::fmt::{self, Display};
 use std::str::FromStr;
-use std::time::SystemTime;
 
 use diesel::sql_types::Uuid as SqlUuid;
 use uuid::{self, Uuid};
@@ -53,9 +53,9 @@ pub struct RawInvoice {
     pub amount_captured: Amount,
     pub final_amount_paid: Option<Amount>,
     pub final_cashback_amount: Option<Amount>,
-    pub paid_at: Option<SystemTime>,
-    pub created_at: SystemTime,
-    pub updated_at: SystemTime,
+    pub paid_at: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
     pub buyer_user_id: UserId,
 }
 
@@ -116,8 +116,8 @@ pub struct InvoicePrice {
     pub total_cashback: Amount,
     pub order_prices: Vec<OrderPrice>,
     pub has_missing_rates: bool,
-    pub created_at: SystemTime,
-    pub paid_at: Option<SystemTime>,
+    pub created_at: NaiveDateTime,
+    pub paid_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

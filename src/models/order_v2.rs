@@ -1,8 +1,8 @@
 use std::fmt::{self, Display};
 use std::io::Write;
 use std::str::FromStr;
-use std::time::SystemTime;
 
+use chrono::NaiveDateTime;
 use diesel::pg::Pg;
 use diesel::sql_types::Uuid as SqlUuid;
 use diesel::types::{FromSql, ToSql};
@@ -92,8 +92,8 @@ pub struct RawOrder {
     pub total_amount: Amount,
     pub cashback_amount: Amount,
     pub invoice_id: InvoiceId,
-    pub created_at: SystemTime,
-    pub updated_at: SystemTime,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
