@@ -17,7 +17,7 @@ use config;
 
 pub use self::error::*;
 use self::types::AccountResponse;
-pub use self::types::{Account, CreateAccount};
+pub use self::types::{Account, CreateAccount, GetRate, GetRateResponse, Rate};
 
 pub trait PaymentsClient: Send + Sync + 'static {
     fn get_account(&self, account_id: Uuid) -> Box<Future<Item = Account, Error = Error> + Send>;
@@ -27,6 +27,8 @@ pub trait PaymentsClient: Send + Sync + 'static {
     fn create_account(&self, input: CreateAccount) -> Box<Future<Item = Account, Error = Error> + Send>;
 
     fn delete_account(&self, account_id: Uuid) -> Box<Future<Item = (), Error = Error> + Send>;
+
+    fn get_rate(&self, input: GetRate) -> Box<Future<Item = Rate, Error = Error> + Send>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -207,6 +209,15 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
         Box::new(
             self.request_with_auth::<_, ()>(Method::Delete, query.clone(), json!({}))
                 .map_err(ectx!(ErrorKind::Internal => Method::Delete, query, json!({}))),
+        )
+    }
+
+    fn get_rate(&self, input: GetRate) -> Box<Future<Item = Rate, Error = Error> + Send> {
+        let query = format!("/v1/rate");
+        Box::new(
+            self.request_with_auth::<_, GetRateResponse>(Method::Post, query.clone(), input.clone())
+                .map_err(ectx!(ErrorKind::Internal => Method::Post, query, input))
+                .map(Rate::from),
         )
     }
 }

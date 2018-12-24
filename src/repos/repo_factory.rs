@@ -536,6 +536,7 @@ pub mod tests {
                 buyer_currency,
                 amount_captured,
                 buyer_user_id,
+                wallet_address,
             } = payload;
 
             Ok(RawInvoiceV2 {
@@ -549,6 +550,8 @@ pub mod tests {
                 created_at: NaiveDateTime::from_timestamp(0, 0),
                 updated_at: NaiveDateTime::from_timestamp(0, 0),
                 buyer_user_id,
+                status: OrderState::New,
+                wallet_address,
             })
         }
 

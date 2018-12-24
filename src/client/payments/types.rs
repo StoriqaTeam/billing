@@ -1,3 +1,5 @@
+use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use failure::Fail;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -48,5 +50,66 @@ impl AccountResponse {
             currency,
             name,
         })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetRate {
+    pub id: Uuid,
+    pub from: Currency,
+    pub to: Currency,
+    pub amount_currency: Currency,
+    pub amount: Amount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetRateResponse {
+    pub id: Uuid,
+    pub from: Currency,
+    pub to: Currency,
+    pub amount: Amount,
+    pub rate: f64,
+    pub expiration: NaiveDateTime,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Rate {
+    pub id: Uuid,
+    pub from: Currency,
+    pub to: Currency,
+    pub amount: Amount,
+    pub rate: BigDecimal,
+    pub expiration: NaiveDateTime,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+impl From<GetRateResponse> for Rate {
+    fn from(response: GetRateResponse) -> Self {
+        let GetRateResponse {
+            id,
+            from,
+            to,
+            amount,
+            rate,
+            expiration,
+            created_at,
+            updated_at,
+        } = response;
+
+        Rate {
+            id,
+            from,
+            to,
+            amount,
+            rate: BigDecimal::from(rate),
+            expiration,
+            created_at,
+            updated_at,
+        }
     }
 }
