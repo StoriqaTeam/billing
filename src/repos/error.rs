@@ -15,6 +15,8 @@ pub enum ErrorKind {
     Constraints(ValidationErrors),
     #[fail(display = "repo error - internal")]
     Internal,
+    #[fail(display = "repo error - access forbidden")]
+    Forbidden,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]

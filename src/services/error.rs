@@ -1,4 +1,6 @@
+use diesel::result::Error as DieselError;
 use failure::{Backtrace, Context, Fail};
+use serde_json;
 use std::fmt;
 
 use client::payments::ErrorKind as PaymentsClientErrorKind;
@@ -13,20 +15,45 @@ pub struct Error {
 pub enum ErrorKind {
     #[fail(display = "service error - internal")]
     Internal,
+    #[fail(display = "service error - forbidden")]
+    Forbidden,
+    #[fail(display = "service error - validation")]
+    Validation(serde_json::Value),
 }
 
 derive_error_impls!();
 
 impl From<RepoErrorKind> for ErrorKind {
-    fn from(_e: RepoErrorKind) -> Self {
-        // TODO: map error correctly
-        ErrorKind::Internal
+    fn from(e: RepoErrorKind) -> Self {
+        match e {
+            RepoErrorKind::Constraints(errors) => ErrorKind::Validation(serde_json::to_value(errors).unwrap_or(json!({}))),
+            RepoErrorKind::Forbidden => ErrorKind::Forbidden,
+            RepoErrorKind::Internal => ErrorKind::Internal,
+        }
     }
 }
 
 impl From<PaymentsClientErrorKind> for ErrorKind {
-    fn from(_e: PaymentsClientErrorKind) -> Self {
-        // TODO: map error correctly
+    fn from(e: PaymentsClientErrorKind) -> Self {
+        match e {
+            PaymentsClientErrorKind::Internal => ErrorKind::Internal,
+            PaymentsClientErrorKind::MalformedInput => ErrorKind::Internal,
+            PaymentsClientErrorKind::Unauthorized => ErrorKind::Internal,
+            PaymentsClientErrorKind::Validation(value) => ErrorKind::Validation(value),
+        }
+    }
+}
+
+impl From<DieselError> for Error {
+    fn from(e: DieselError) -> Self {
+        Error {
+            inner: ErrorKind::from(&e).into(),
+        }
+    }
+}
+
+impl<'a> From<&'a DieselError> for ErrorKind {
+    fn from(_e: &DieselError) -> Self {
         ErrorKind::Internal
     }
 }

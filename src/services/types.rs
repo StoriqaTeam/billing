@@ -10,7 +10,7 @@ use controller::context::{DynamicContext, StaticContext};
 use errors::Error;
 use repos::repo_factory::*;
 
-use super::Error as ServiceError;
+use super::{Error as ServiceError, ErrorKind};
 
 /// Service layer Future
 pub type ServiceFuture<T> = Box<Future<Item = T, Error = FailureError>>;
@@ -49,6 +49,16 @@ impl<
         let db_pool = self.static_context.db_pool.clone();
         let cpu_pool = self.static_context.cpu_pool.clone();
         Box::new(cpu_pool.spawn_fn(move || db_pool.get().map_err(|e| e.context(Error::Connection).into()).and_then(f)))
+    }
+
+    pub fn spawn_on_pool_v2<R, Func>(&self, f: Func) -> ServiceFutureV2<R>
+    where
+        Func: FnOnce(PooledConnection<M>) -> Result<R, ServiceError> + Send + 'static,
+        R: Send + 'static,
+    {
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+        Box::new(cpu_pool.spawn_fn(move || db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(f)))
     }
 }
 

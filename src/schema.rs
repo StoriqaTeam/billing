@@ -57,12 +57,13 @@ table! {
         id -> Uuid,
         account_id -> Nullable<Uuid>,
         buyer_currency -> VarChar,
-        amount_captured -> Int8,
-        final_amount_paid -> Nullable<Int8>,
-        final_cashback_amount -> Nullable<Int8>,
+        amount_captured -> Numeric,
+        final_amount_paid -> Nullable<Numeric>,
+        final_cashback_amount -> Nullable<Numeric>,
         paid_at -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        buyer_user_id -> Integer,
     }
 }
 
@@ -70,8 +71,8 @@ table! {
     orders (id) {
         id -> Uuid,
         seller_currency -> VarChar,
-        total_amount -> Int8,
-        cashback_amount -> Int8,
+        total_amount -> Numeric,
+        cashback_amount -> Numeric,
         invoice_id -> Uuid,
         created_at -> Timestamp,
         updated_at -> Timestamp,
@@ -80,7 +81,7 @@ table! {
 
 table! {
     order_exchange_rates (id) {
-        id -> Int4,
+        id -> Int8,
         order_id -> Uuid,
         exchange_id -> Nullable<Uuid>,
         exchange_rate -> Numeric,
@@ -89,3 +90,8 @@ table! {
         updated_at -> Timestamp,
     }
 }
+
+joinable!(invoices_v2 -> accounts (account_id));
+joinable!(orders -> invoices_v2 (invoice_id));
+joinable!(order_exchange_rates -> orders (order_id));
+allow_tables_to_appear_in_same_query!(accounts, invoices_v2, orders, order_exchange_rates);

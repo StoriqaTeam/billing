@@ -24,6 +24,12 @@ where
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
     fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a>;
     fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a>;
+    fn create_invoices_v2_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InvoicesV2Repo + 'a>;
+    fn create_invoices_v2_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<InvoicesV2Repo + 'a>;
+    fn create_orders_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<OrdersRepo + 'a>;
+    fn create_orders_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrdersRepo + 'a>;
+    fn create_order_exchange_rates_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<OrderExchangeRatesRepo + 'a>;
+    fn create_order_exchange_rates_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -145,6 +151,33 @@ where
         let acl = self.get_acl(db_conn, user_id);
         Box::new(AccountsRepoImpl::new(db_conn, acl)) as Box<AccountsRepo>
     }
+
+    fn create_invoices_v2_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InvoicesV2Repo + 'a> {
+        Box::new(InvoicesV2RepoImpl::new(db_conn, Box::new(SystemACL::default()))) as Box<InvoicesV2Repo>
+    }
+
+    fn create_invoices_v2_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<InvoicesV2Repo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(InvoicesV2RepoImpl::new(db_conn, acl)) as Box<InvoicesV2Repo>
+    }
+
+    fn create_orders_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<OrdersRepo + 'a> {
+        Box::new(OrdersRepoImpl::new(db_conn, Box::new(SystemACL::default()))) as Box<OrdersRepo>
+    }
+
+    fn create_orders_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrdersRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(OrdersRepoImpl::new(db_conn, acl)) as Box<OrdersRepo>
+    }
+
+    fn create_order_exchange_rates_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<OrderExchangeRatesRepo + 'a> {
+        Box::new(OrderExchangeRatesRepoImpl::new(db_conn, Box::new(SystemACL::default()))) as Box<OrderExchangeRatesRepo>
+    }
+
+    fn create_order_exchange_rates_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(OrderExchangeRatesRepoImpl::new(db_conn, acl)) as Box<OrderExchangeRatesRepo>
+    }
 }
 
 #[cfg(test)]
@@ -164,6 +197,7 @@ pub mod tests {
     use std::sync::Arc;
     use std::time::{Duration, SystemTime};
 
+    use chrono::NaiveDateTime;
     use diesel::connection::AnsiTransactionManager;
     use diesel::connection::SimpleConnection;
     use diesel::deserialize::QueryableByName;
@@ -185,10 +219,13 @@ pub mod tests {
     use std::collections::HashMap;
     use stq_http::client::TimeLimitedHttpClient;
     use stq_static_resources::{Currency, OrderState};
+    use stq_types::UserId;
     use stq_types::*;
 
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
+    use models::invoice_v2::{InvoiceId as InvoiceV2Id, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
+    use models::order_v2::{NewOrder, OrderId as OrderV2Id, RawOrder};
     use models::Currency as BillingCurrency;
     use models::*;
     use repos::*;
@@ -199,43 +236,67 @@ pub mod tests {
 
     impl<C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> ReposFactory<C> for ReposFactoryMock {
         fn create_order_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrderInfoRepo + 'a> {
-            Box::new(OrderInfoRepoMock::default()) as Box<OrderInfoRepo>
+            Box::new(OrderInfoRepoMock::default())
         }
 
         fn create_order_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderInfoRepo + 'a> {
-            Box::new(OrderInfoRepoMock::default()) as Box<OrderInfoRepo>
+            Box::new(OrderInfoRepoMock::default())
         }
 
         fn create_invoice_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<InvoiceRepo + 'a> {
-            Box::new(InvoiceRepoMock::default()) as Box<InvoiceRepo>
+            Box::new(InvoiceRepoMock::default())
         }
 
         fn create_invoice_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoiceRepo + 'a> {
-            Box::new(InvoiceRepoMock::default()) as Box<InvoiceRepo>
+            Box::new(InvoiceRepoMock::default())
         }
 
         fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a> {
-            Box::new(MerchantRepoMock::default()) as Box<MerchantRepo>
+            Box::new(MerchantRepoMock::default())
         }
 
         fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a> {
-            Box::new(MerchantRepoMock::default()) as Box<MerchantRepo>
+            Box::new(MerchantRepoMock::default())
         }
 
         fn create_user_roles_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
-            Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
+            Box::new(UserRolesRepoMock::default())
         }
 
         fn create_user_roles_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
-            Box::new(UserRolesRepoMock::default()) as Box<UserRolesRepo>
+            Box::new(UserRolesRepoMock::default())
         }
 
         fn create_accounts_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<AccountsRepo + 'a> {
-            Box::new(AccountsRepoMock::default()) as Box<AccountsRepoMock>
+            Box::new(AccountsRepoMock::default())
         }
 
         fn create_accounts_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
-            Box::new(AccountsRepoMock::default()) as Box<AccountsRepoMock>
+            Box::new(AccountsRepoMock::default())
+        }
+
+        fn create_invoices_v2_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoicesV2Repo + 'a> {
+            Box::new(InvoicesV2RepoMock::default())
+        }
+
+        fn create_invoices_v2_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<InvoicesV2Repo + 'a> {
+            Box::new(InvoicesV2RepoMock::default())
+        }
+
+        fn create_orders_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrdersRepo + 'a> {
+            Box::new(OrdersRepoMock::default())
+        }
+
+        fn create_orders_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrdersRepo + 'a> {
+            Box::new(OrdersRepoMock::default())
+        }
+
+        fn create_order_exchange_rates_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderExchangeRatesRepo + 'a> {
+            Box::new(OrderExchangeRatesRepoMock::default())
+        }
+
+        fn create_order_exchange_rates_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a> {
+            Box::new(OrderExchangeRatesRepoMock::default())
         }
     }
 
@@ -446,7 +507,7 @@ pub mod tests {
                 id,
                 currency,
                 is_pooled,
-                created_at: SystemTime::UNIX_EPOCH,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
             })
         }
 
@@ -455,8 +516,127 @@ pub mod tests {
                 id: AccountId::new(Uuid::nil()),
                 currency: BillingCurrency::Stq,
                 is_pooled: false,
-                created_at: SystemTime::UNIX_EPOCH,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
             }))
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct InvoicesV2RepoMock;
+
+    impl InvoicesV2Repo for InvoicesV2RepoMock {
+        fn get(&self, _account_id: InvoiceV2Id) -> RepoResultV2<Option<RawInvoiceV2>> {
+            Ok(None)
+        }
+
+        fn create(&self, payload: NewInvoiceV2) -> RepoResultV2<RawInvoiceV2> {
+            let NewInvoiceV2 {
+                id,
+                account_id,
+                buyer_currency,
+                amount_captured,
+                buyer_user_id,
+            } = payload;
+
+            Ok(RawInvoiceV2 {
+                id,
+                account_id,
+                buyer_currency,
+                amount_captured,
+                final_amount_paid: None,
+                final_cashback_amount: None,
+                paid_at: None,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
+                updated_at: NaiveDateTime::from_timestamp(0, 0),
+                buyer_user_id,
+            })
+        }
+
+        fn delete(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Option<RawInvoiceV2>> {
+            Ok(None)
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct OrdersRepoMock;
+
+    impl OrdersRepo for OrdersRepoMock {
+        fn get(&self, _order_id: OrderV2Id) -> RepoResultV2<Option<RawOrder>> {
+            Ok(None)
+        }
+
+        fn get_many_by_invoice_id(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Vec<RawOrder>> {
+            Ok(vec![])
+        }
+
+        fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder> {
+            let NewOrder {
+                id,
+                seller_currency,
+                total_amount,
+                cashback_amount,
+                invoice_id,
+            } = payload;
+
+            Ok(RawOrder {
+                id,
+                seller_currency,
+                total_amount,
+                cashback_amount,
+                invoice_id,
+                created_at: NaiveDateTime::from_timestamp(0, 0),
+                updated_at: NaiveDateTime::from_timestamp(0, 0),
+            })
+        }
+
+        fn delete(&self, _order_id: OrderV2Id) -> RepoResultV2<Option<RawOrder>> {
+            Ok(None)
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct OrderExchangeRatesRepoMock;
+
+    impl OrderExchangeRatesRepo for OrderExchangeRatesRepoMock {
+        fn get(&self, _rate_id: OrderExchangeRateId) -> RepoResultV2<Option<RawOrderExchangeRate>> {
+            Ok(None)
+        }
+
+        fn get_active_rate_for_order(&self, _order_id: OrderV2Id) -> RepoResultV2<Option<RawOrderExchangeRate>> {
+            Ok(None)
+        }
+
+        fn get_all_rates_for_order(&self, _order_id: OrderV2Id) -> RepoResultV2<Vec<RawOrderExchangeRate>> {
+            Ok(vec![])
+        }
+
+        fn add_new_active_rate(&self, new_rate: NewOrderExchangeRate) -> RepoResultV2<LatestExchangeRates> {
+            let NewOrderExchangeRate {
+                order_id,
+                exchange_id,
+                exchange_rate,
+            } = new_rate;
+
+            Ok(LatestExchangeRates {
+                active_rate: RawOrderExchangeRate {
+                    id: OrderExchangeRateId::new(1),
+                    order_id,
+                    exchange_id,
+                    exchange_rate,
+                    status: ExchangeRateStatus::Active,
+                    created_at: NaiveDateTime::from_timestamp(0, 0),
+                    updated_at: NaiveDateTime::from_timestamp(0, 0),
+                },
+                last_expired_rate: None,
+            })
+        }
+
+        fn expire_current_active_rate(&self, _order_id: OrderV2Id) -> RepoResultV2<Option<RawOrderExchangeRate>> {
+            Ok(None)
+        }
+
+        fn delete(&self, _rate_id: OrderExchangeRateId) -> RepoResultV2<Option<RawOrderExchangeRate>> {
+            Ok(None)
         }
     }
 

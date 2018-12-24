@@ -57,6 +57,7 @@ impl ApplicationAcl {
                 permission!(Resource::UserRoles),
                 permission!(Resource::Invoice),
                 permission!(Resource::Account),
+                permission!(Resource::OrderExchangeRate),
             ],
         );
         hash.insert(
@@ -68,6 +69,7 @@ impl ApplicationAcl {
                 permission!(Resource::OrderInfo, Action::Write, Scope::Owned),
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
+                permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
             ],
         );
         hash.insert(
@@ -76,6 +78,7 @@ impl ApplicationAcl {
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::UserRoles, Action::Read, Scope::Owned),
+                permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
             ],
         );
         ApplicationAcl {
@@ -112,6 +115,7 @@ impl<T> Acl<Resource, Action, Scope, FailureError, T> for ApplicationAcl {
 mod tests {
     use repos::legacy_acl::{Acl, CheckScope};
     use stq_static_resources::OrderState;
+    use stq_types::UserId;
     use stq_types::*;
 
     use models::*;

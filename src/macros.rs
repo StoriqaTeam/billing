@@ -175,6 +175,23 @@ macro_rules! derive_newtype_sql {
     };
 }
 
+#[macro_export]
+macro_rules! newtype_from_to_sql {
+    ($sql_type:ty, $type:ty, $constructor:expr) => {
+        impl FromSql<$sql_type, Pg> for $type {
+            fn from_sql(data: Option<&[u8]>) -> deserialize::Result<Self> {
+                FromSql::<$sql_type, Pg>::from_sql(data).map($constructor)
+            }
+        }
+
+        impl ToSql<$sql_type, Pg> for $type {
+            fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> serialize::Result {
+                ToSql::<$sql_type, Pg>::to_sql(&self.0, out)
+            }
+        }
+    };
+}
+
 /// Masks logs for this type by deriving `Debug` and `Display` appropriately.
 ///
 /// This macro displays type as `*******`. Use it for sensitive info like passwords, tokens, etc...

@@ -1,8 +1,8 @@
+use chrono::NaiveDateTime;
 use diesel::sql_types::Uuid as SqlUuid;
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::str::FromStr;
-use std::time::SystemTime;
 use uuid::{self, Uuid};
 
 use config;
@@ -54,7 +54,7 @@ pub struct Account {
     pub id: AccountId,
     pub currency: Currency,
     pub is_pooled: bool,
-    pub created_at: SystemTime,
+    pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
@@ -63,7 +63,7 @@ pub struct RawAccount {
     pub id: AccountId,
     pub currency: Currency,
     pub is_pooled: bool,
-    pub created_at: SystemTime,
+    pub created_at: NaiveDateTime,
 }
 
 impl From<RawAccount> for Account {

@@ -3,12 +3,20 @@ use std::fmt::{self, Display};
 use std::io::prelude::*;
 use std::str::FromStr;
 
+use bigdecimal::BigDecimal;
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::data_types::PgNumeric;
 use diesel::pg::Pg;
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Numeric;
 use failure::Fail;
+
+use models::Currency;
+
+const WEI_IN_ETH: u32 = 18;
+const SATOSHIS_IN_BTC: u32 = 8;
+const MAX_WEI_PRECISION: i64 = 8;
+const MAX_SATOSHIS_PRECISION: i64 = 8;
 
 /// This is a wrapper for monetary amounts in blockchain.
 /// You have to be careful that it has a limited amount of 38 significant digits
@@ -27,6 +35,8 @@ pub struct Amount(u128);
 pub struct ParseAmountError;
 
 impl Amount {
+    pub const MAX: Amount = Amount(std::u128::MAX);
+
     ///Make addition, return None on overflow
     pub fn checked_add(&self, other: Amount) -> Option<Self> {
         self.0.checked_add(other.0).map(Amount)
@@ -39,6 +49,38 @@ impl Amount {
 
     pub fn new(v: u128) -> Self {
         Amount(v)
+    }
+
+    pub fn inner(&self) -> u128 {
+        self.0.clone()
+    }
+
+    pub fn from_super_unit(currency: Currency, value: f64) -> Amount {
+        let exp = match currency {
+            Currency::Btc => 10i64.pow(SATOSHIS_IN_BTC),
+            Currency::Eth => 10i64.pow(WEI_IN_ETH),
+            Currency::Stq => 10i64.pow(WEI_IN_ETH),
+        };
+
+        let decimal = (BigDecimal::from(value) * BigDecimal::from(exp)).with_scale(0);
+
+        Amount(u128::from_str(&decimal.to_string()).unwrap()) // unwrap never panics
+    }
+
+    pub fn to_super_unit(&self, current_currency: Currency) -> BigDecimal {
+        let exp = match current_currency {
+            Currency::Btc => 10i64.pow(SATOSHIS_IN_BTC),
+            Currency::Eth => 10i64.pow(WEI_IN_ETH),
+            Currency::Stq => 10i64.pow(WEI_IN_ETH),
+        };
+
+        let decimal = BigDecimal::from_str(&self.0.to_string()).unwrap() / BigDecimal::from(exp);
+
+        match current_currency {
+            Currency::Btc => decimal.with_scale(MAX_SATOSHIS_PRECISION),
+            Currency::Eth => decimal.with_scale(MAX_WEI_PRECISION),
+            Currency::Stq => decimal.with_scale(MAX_WEI_PRECISION),
+        }
     }
 }
 
@@ -329,4 +371,50 @@ mod tests {
         assert_eq!(Amount(8).checked_sub(Amount(11)), None);
     }
 
+    #[test]
+    fn test_to_super_unit() {
+        let cases = [
+            // 0.1 ETH
+            (
+                100_000_000_000_000_000,
+                Currency::Eth,
+                BigDecimal::from(0.099999),
+                BigDecimal::from(0.100001),
+            ),
+            // 1 STQ
+            (
+                1_000_000_000_000_000_000,
+                Currency::Stq,
+                BigDecimal::from(0.999999),
+                BigDecimal::from(1.000001),
+            ),
+            // 0.01 BTC
+            (1_000_000, Currency::Btc, BigDecimal::from(0.00999999), BigDecimal::from(0.01000001)),
+            // 0.001 BTC
+            (100_000, Currency::Btc, BigDecimal::from(0.00099999), BigDecimal::from(0.00100001)),
+        ];
+        for (amount, currency, lower, upper) in cases.into_iter() {
+            let converted = Amount::new(*amount).to_super_unit(*currency);
+            assert!(
+                (converted > *lower) && (converted < *upper),
+                "original: {}, converted: {}, lower: {}, upper: {}",
+                amount,
+                converted,
+                lower,
+                upper
+            );
+        }
+    }
+
+    #[test]
+    fn test_from_super_unit() {
+        assert_eq!(Amount::from_super_unit(Currency::Stq, 0.0), Amount(0u128));
+        assert_eq!(Amount::from_super_unit(Currency::Stq, 1.0), Amount(1_000_000_000_000_000_000u128));
+        assert_eq!(Amount::from_super_unit(Currency::Stq, 1.01), Amount(1_010_000_000_000_000_000u128));
+        assert_eq!(
+            Amount::from_super_unit(Currency::Stq, 1.000_000_000_1),
+            Amount(1_000_000_000_100_000_000u128)
+        );
+        assert_eq!(Amount::from_super_unit(Currency::Btc, 1.0), Amount(100_000_000u128));
+    }
 }

@@ -11,6 +11,7 @@
 #![allow(proc_macro_derive_resolution_fallback)]
 
 extern crate base64;
+extern crate bigdecimal;
 extern crate config as config_crate;
 #[macro_use]
 extern crate diesel;
@@ -38,6 +39,8 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate sha2;
 extern crate stq_cache;
+#[macro_use]
+extern crate stq_diesel_macro_derive;
 extern crate stq_http;
 extern crate stq_logging;
 extern crate stq_router;
