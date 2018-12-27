@@ -6,10 +6,13 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use r2d2::ManageConnection;
 
+use stq_http::client::HttpClient;
 use stq_types::{BillingRole, RoleId, UserId};
 
+use client::payments::PaymentsClient;
 use models::{NewUserRole, UserRole};
 use repos::ReposFactory;
+use services::accounts::AccountService;
 use services::types::ServiceFuture;
 use services::Service;
 
@@ -28,7 +31,10 @@ impl<
         T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
         M: ManageConnection<Connection = T>,
         F: ReposFactory<T>,
-    > UserRolesService for Service<T, M, F>
+        C: HttpClient + Clone,
+        PC: PaymentsClient + Clone,
+        AS: AccountService + Clone,
+    > UserRolesService for Service<T, M, F, C, PC, AS>
 {
     /// Returns role by user ID
     fn get_roles(&self, user_id: UserId) -> ServiceFuture<Vec<BillingRole>> {

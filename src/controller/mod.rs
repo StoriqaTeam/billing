@@ -29,6 +29,7 @@ use errors::Error;
 use models::*;
 use repos::repo_factory::*;
 use sentry_integration::log_and_capture_error;
+use services::accounts::AccountServiceImpl;
 use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
 use services::user_roles::UserRolesService;
@@ -78,14 +79,33 @@ impl<
 
         let time_limited_http_client = TimeLimitedHttpClient::new(self.static_context.client_handle.clone(), request_timeout);
 
-        let payments_client = self
-            .static_context
-            .config
-            .payments
-            .clone()
-            .and_then(|config| PaymentsClientImpl::create_from_config(time_limited_http_client.clone(), config.into()).ok());
+        let (payments_client, account_service) = match self.static_context.config.payments.clone() {
+            None => (None, None),
+            Some(config) => PaymentsClientImpl::create_from_config(time_limited_http_client.clone(), config.clone().into())
+                .ok()
+                .map(|payments_client| {
+                    let account_service = AccountServiceImpl::new(
+                        self.static_context.db_pool.clone(),
+                        self.static_context.cpu_pool.clone(),
+                        self.static_context.repo_factory.clone(),
+                        config.min_pooled_accounts,
+                        payments_client.clone(),
+                        "".to_string(),
+                        config.accounts.into(),
+                    );
+                    (Some(payments_client), Some(account_service))
+                })
+                .unwrap_or((None, None)),
+        };
 
-        let dynamic_context = DynamicContext::new(user_id, correlation_token, time_limited_http_client, payments_client);
+        let dynamic_context = DynamicContext::new(
+            user_id,
+            correlation_token,
+            time_limited_http_client,
+            payments_client,
+            account_service,
+        );
+
         let service = Service::new(self.static_context.clone(), dynamic_context);
 
         let path = req.path().to_string();
@@ -107,9 +127,16 @@ impl<
             (&Post, Some(Route::Invoices)) => {
                 serialize_future({ parse_body::<CreateInvoice>(req.body()).and_then(move |data| service.create_invoice(data)) })
             }
+            (&Post, Some(Route::InvoicesV2)) => serialize_future(
+                parse_body::<CreateInvoiceV2>(req.body())
+                    .and_then(move |data| service.create_invoice_v2(data).map_err(Error::from).map_err(failure::Error::from)),
+            ),
             (Delete, Some(Route::InvoiceBySagaId { id })) => serialize_future({ service.delete_invoice_by_saga_id(id) }),
             (Get, Some(Route::InvoiceByOrderId { id })) => serialize_future({ service.get_invoice_by_order_id(id) }),
             (Get, Some(Route::InvoiceById { id })) => serialize_future({ service.get_invoice_by_id(id) }),
+            (Get, Some(Route::InvoiceByIdV2 { id })) => {
+                serialize_future(service.recalc_invoice_v2(id).map_err(Error::from).map_err(failure::Error::from))
+            }
             (Post, Some(Route::InvoiceByIdRecalc { id })) => serialize_future({ service.recalc_invoice(id) }),
             (Get, Some(Route::InvoiceOrdersIds { id })) => serialize_future({ service.get_invoice_orders_ids(id) }),
             (Get, Some(Route::RolesByUserId { user_id })) => serialize_future({ service.get_roles(user_id) }),

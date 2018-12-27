@@ -4,6 +4,7 @@ use failure::{Error as FailureError, Fail};
 use std::collections::HashMap;
 use stq_types::UserId;
 
+use models::invoice_v2::RawInvoice;
 use models::{authorization::*, Account, AccountCount, AccountId, Currency, NewAccount, RawAccount};
 use repos::{
     acl,
@@ -12,6 +13,7 @@ use repos::{
     types::RepoResultV2,
 };
 use schema::accounts::dsl as Accounts;
+use schema::invoices_v2::dsl as InvoicesV2;
 
 pub struct AccountsRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
     pub db_conn: &'a T,
@@ -22,6 +24,7 @@ pub trait AccountsRepo {
     fn count(&self) -> RepoResultV2<AccountCount>;
     fn get(&self, account_id: AccountId) -> RepoResultV2<Option<Account>>;
     fn get_many(&self, account_ids: &[AccountId]) -> RepoResultV2<Vec<Account>>;
+    fn get_free_account(&self, currency: Currency) -> RepoResultV2<Option<Account>>;
     fn create(&self, payload: NewAccount) -> RepoResultV2<Account>;
     fn delete(&self, account_id: AccountId) -> RepoResultV2<Option<Account>>;
 }
@@ -95,6 +98,26 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(err e, ErrorSource::Diesel, error_kind => account_ids)
+            })
+    }
+
+    fn get_free_account(&self, currency: Currency) -> RepoResultV2<Option<Account>> {
+        debug!("Getting a free account for currency: {:?}", currency);
+
+        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        let query = Accounts::accounts
+            .filter(Accounts::currency.eq(currency).and(Accounts::is_pooled.eq(true)))
+            .left_join(InvoicesV2::invoices_v2)
+            .filter(InvoicesV2::id.is_null());
+
+        query
+            .get_result::<(RawAccount, Option<RawInvoice>)>(self.db_conn)
+            .map(|(raw_account, _)| Account::from(raw_account))
+            .optional()
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(err e, ErrorSource::Diesel, error_kind => currency)
             })
     }
 

@@ -157,6 +157,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
 
         let payments_client = PaymentsClientImpl::create_from_config(client_handle, payments::Config::from(config.clone()))
             .expect("Failed to create Payments client");
+
         let account_service = AccountServiceImpl::new(
             db_pool,
             cpu_pool,

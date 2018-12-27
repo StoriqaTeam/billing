@@ -32,7 +32,6 @@ fn invoices_v2_repo_crud_happy() {
         buyer_currency: Currency::Stq,
         amount_captured: Amount::new(0),
         buyer_user_id: UserId::new(1),
-        wallet_address: None,
     };
 
     let created_invoice = {

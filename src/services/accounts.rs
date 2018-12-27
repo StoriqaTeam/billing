@@ -2,14 +2,14 @@ use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
 use failure::Fail;
-use futures::{Future, Stream};
+use futures::{future, Future, Stream};
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool, PooledConnection};
 use uuid::Uuid;
 
 use super::error::{Error, ErrorKind};
 use super::types::ServiceFutureV2;
-use client::payments::{CreateAccount, PaymentsClient};
+use client::payments::{Account as PaymentsAccount, CreateAccount, PaymentsClient};
 use models::*;
 use repos::repo_factory::ReposFactory;
 
@@ -19,6 +19,8 @@ pub trait AccountService {
     fn init_account_pools(&self) -> ServiceFutureV2<()>;
 
     fn create_account(&self, account_id: Uuid, name: String, currency: Currency, is_pooled: bool) -> ServiceFutureV2<Account>;
+
+    fn get_or_create_free_pooled_account(&self, currency: Currency) -> ServiceFutureV2<Account>;
 }
 
 pub struct AccountServiceImpl<T, M, F, PC>
@@ -151,6 +153,36 @@ impl<
             move |(account_id, error)| self_clone.create_account_revert(account_id).then(|_| Err(error))
         }))
     }
+
+    fn get_or_create_free_pooled_account(&self, currency: Currency) -> ServiceFutureV2<Account> {
+        let fut = self
+            .spawn_on_pool({
+                let repo_factory = self.repo_factory.clone();
+                move |conn| {
+                    let account_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
+                    account_repo
+                        .get_free_account(currency)
+                        .map_err(ectx!(ErrorKind::Internal => currency))
+                }
+            })
+            .and_then({
+                let self_clone = self.clone();
+                move |free_account| match free_account {
+                    Some(free_account) => future::Either::A(future::ok(free_account)),
+                    None => {
+                        let id = Uuid::new_v4();
+                        let name = id.hyphenated().to_string();
+                        future::Either::B(
+                            self_clone
+                                .create_account(id.clone(), name.clone(), currency, true)
+                                .map_err(ectx!(convert => id, name, currency, true)),
+                        )
+                    }
+                }
+            });
+
+        Box::new(fut)
+    }
 }
 
 impl<
@@ -206,7 +238,7 @@ impl<
                     let repo_factory = self.repo_factory.clone();
                     let self_clone = self.clone();
 
-                    move |_account| {
+                    move |PaymentsAccount { account_address, .. }| {
                         self_clone
                             .spawn_on_pool(move |conn| {
                                 let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
@@ -214,6 +246,7 @@ impl<
                                     id: AccountId::new(account_id),
                                     currency,
                                     is_pooled,
+                                    wallet_address: Some(account_address),
                                 };
                                 accounts_repo.create(new_account.clone()).map_err(ectx!(convert => new_account))
                             })

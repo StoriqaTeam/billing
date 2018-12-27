@@ -50,10 +50,8 @@ impl Display for OrderId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
-#[sql_type = "SqlUuid"]
+#[derive(Clone, Copy, Debug, Display, Default, PartialEq, Eq, From, FromStr, Hash, Serialize, Deserialize, DieselTypes)]
 pub struct ExchangeId(Uuid);
-newtype_from_to_sql!(SqlUuid, ExchangeId, ExchangeId);
 
 impl ExchangeId {
     pub fn new(id: Uuid) -> Self {
@@ -66,21 +64,6 @@ impl ExchangeId {
 
     pub fn generate() -> Self {
         ExchangeId(Uuid::new_v4())
-    }
-}
-
-impl FromStr for ExchangeId {
-    type Err = uuid::ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let id = Uuid::parse_str(s)?;
-        Ok(ExchangeId::new(id))
-    }
-}
-
-impl Display for ExchangeId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{}", self.0.hyphenated()))
     }
 }
 

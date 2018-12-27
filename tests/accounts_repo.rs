@@ -30,6 +30,7 @@ fn accounts_repo_crud_happy() {
         id: AccountId::new(Uuid::new_v4()),
         currency: Currency::Stq,
         is_pooled: false,
+        wallet_address: Some("0x0".to_string().into()),
     };
 
     let created_account = {

@@ -192,10 +192,17 @@ pub mod tests {
     extern crate tokio_core;
     extern crate uuid;
 
+    use client::payments::{CreateAccount, GetRate, PaymentsClient, RateRefresh};
+    use futures::Future;
+    use hyper::Headers;
+    use services::accounts::AccountService;
+    use services::types::ServiceFutureV2;
     use std::error::Error;
     use std::fmt;
     use std::sync::Arc;
-    use std::time::{Duration, SystemTime};
+    use std::time::SystemTime;
+    use stq_http::client::HttpClient;
+    use stq_http::client::Response;
 
     use chrono::NaiveDateTime;
     use diesel::connection::AnsiTransactionManager;
@@ -217,11 +224,11 @@ pub mod tests {
     use uuid::Uuid;
 
     use std::collections::HashMap;
-    use stq_http::client::TimeLimitedHttpClient;
     use stq_static_resources::{Currency, OrderState};
     use stq_types::UserId;
     use stq_types::*;
 
+    use client::payments;
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
@@ -502,12 +509,18 @@ pub mod tests {
         }
 
         fn create(&self, payload: NewAccount) -> RepoResultV2<Account> {
-            let NewAccount { id, currency, is_pooled } = payload;
+            let NewAccount {
+                id,
+                currency,
+                is_pooled,
+                wallet_address,
+            } = payload;
             Ok(Account {
                 id,
                 currency,
                 is_pooled,
                 created_at: NaiveDateTime::from_timestamp(0, 0),
+                wallet_address,
             })
         }
 
@@ -517,7 +530,12 @@ pub mod tests {
                 currency: BillingCurrency::Stq,
                 is_pooled: false,
                 created_at: NaiveDateTime::from_timestamp(0, 0),
+                wallet_address: None,
             }))
+        }
+
+        fn get_free_account(&self, _currency: BillingCurrency) -> RepoResultV2<Option<Account>> {
+            Ok(None)
         }
     }
 
@@ -536,7 +554,6 @@ pub mod tests {
                 buyer_currency,
                 amount_captured,
                 buyer_user_id,
-                wallet_address,
             } = payload;
 
             Ok(RawInvoiceV2 {
@@ -551,7 +568,6 @@ pub mod tests {
                 updated_at: NaiveDateTime::from_timestamp(0, 0),
                 buyer_user_id,
                 status: OrderState::New,
-                wallet_address,
             })
         }
 
@@ -648,7 +664,7 @@ pub mod tests {
     pub fn create_service(
         user_id: Option<UserId>,
         handle: Arc<Handle>,
-    ) -> Service<MockConnection, MockConnectionManager, ReposFactoryMock> {
+    ) -> Service<MockConnection, MockConnectionManager, ReposFactoryMock, MockHttpClient, MockPaymentsClient, MockAccountService> {
         let manager = MockConnectionManager::default();
         let db_pool = r2d2::Pool::builder().build(manager).expect("Failed to create connection pool");
         let cpu_pool = CpuPool::new(1);
@@ -661,8 +677,7 @@ pub mod tests {
 
         let static_context = StaticContext::new(db_pool, cpu_pool, client_handle.clone(), Arc::new(config), MOCK_REPO_FACTORY);
 
-        let time_limited_http_client = TimeLimitedHttpClient::new(client_handle, Duration::new(1, 0));
-        let dynamic_context = DynamicContext::new(user_id, String::default(), time_limited_http_client, None);
+        let dynamic_context = DynamicContext::new(user_id, String::default(), MockHttpClient::default(), None, None);
 
         Service::new(static_context, dynamic_context)
     }
@@ -763,6 +778,77 @@ pub mod tests {
 
         fn has_broken(&self, _conn: &mut MockConnection) -> bool {
             false
+        }
+    }
+
+    #[derive(Default, Clone)]
+    pub struct MockHttpClient;
+
+    impl HttpClient for MockHttpClient {
+        fn request(
+            &self,
+            _method: hyper::Method,
+            _url: String,
+            _body: Option<String>,
+            _headers: Option<Headers>,
+        ) -> Box<Future<Item = Response, Error = stq_http::client::Error> + Send> {
+            unimplemented!()
+        }
+    }
+
+    #[derive(Default, Clone)]
+    pub struct MockPaymentsClient;
+
+    impl PaymentsClient for MockPaymentsClient {
+        fn get_account(&self, _account_id: Uuid) -> Box<Future<Item = payments::Account, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn list_accounts(&self) -> Box<Future<Item = Vec<payments::Account>, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn create_account(&self, _input: CreateAccount) -> Box<Future<Item = payments::Account, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn delete_account(&self, _account_id: Uuid) -> Box<Future<Item = (), Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn get_rate(&self, _input: GetRate) -> Box<Future<Item = payments::Rate, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn refresh_rate(&self, _exchange_id: Uuid) -> Box<Future<Item = RateRefresh, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+    }
+
+    #[derive(Default, Clone)]
+    pub struct MockAccountService;
+
+    impl AccountService for MockAccountService {
+        fn init_system_accounts(&self) -> ServiceFutureV2<()> {
+            unimplemented!()
+        }
+
+        fn init_account_pools(&self) -> ServiceFutureV2<()> {
+            unimplemented!()
+        }
+
+        fn create_account(
+            &self,
+            _account_id: Uuid,
+            _name: String,
+            _currency: BillingCurrency,
+            _is_pooled: bool,
+        ) -> ServiceFutureV2<Account> {
+            unimplemented!()
+        }
+
+        fn get_or_create_free_pooled_account(&self, _currency: BillingCurrency) -> ServiceFutureV2<Account> {
+            unimplemented!()
         }
     }
 

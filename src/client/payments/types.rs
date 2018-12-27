@@ -4,11 +4,12 @@ use failure::Fail;
 use std::str::FromStr;
 use uuid::Uuid;
 
-use models::{Amount, Currency};
+use models::{Amount, Currency, WalletAddress};
 
 use super::error::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateAccount {
     pub id: Uuid,
     pub currency: Currency,
@@ -22,14 +23,19 @@ pub struct Account {
     pub balance: Amount,
     pub currency: Currency,
     pub name: String,
+    pub account_address: WalletAddress,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AccountResponse {
     pub id: Uuid,
     pub balance: String,
     pub currency: String,
+    pub user_id: u32,
+    pub account_address: String,
     pub name: String,
+    pub erc_20_approved: bool,
 }
 
 impl AccountResponse {
@@ -39,16 +45,20 @@ impl AccountResponse {
             balance,
             currency,
             name,
+            account_address,
+            ..
         } = self;
 
         let balance = Amount::from_str(&balance).map_err(ectx!(try ErrorKind::Internal => balance))?;
         let currency = Currency::from_str(&currency).map_err(ectx!(try ErrorKind::Internal => currency))?;
+        let account_address = WalletAddress::from(account_address);
 
         Ok(Account {
             id,
             balance,
             currency,
             name,
+            account_address,
         })
     }
 }
@@ -74,6 +84,13 @@ pub struct GetRateResponse {
     pub expiration: NaiveDateTime,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshRateResponse {
+    pub rate: GetRateResponse,
+    pub is_new_rate: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,6 +127,23 @@ impl From<GetRateResponse> for Rate {
             expiration,
             created_at,
             updated_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RateRefresh {
+    pub rate: Rate,
+    pub is_new_rate: bool,
+}
+
+impl From<RefreshRateResponse> for RateRefresh {
+    fn from(response: RefreshRateResponse) -> Self {
+        let RefreshRateResponse { rate, is_new_rate } = response;
+
+        RateRefresh {
+            rate: Rate::from(rate),
+            is_new_rate,
         }
     }
 }

@@ -49,6 +49,7 @@ table! {
         currency -> VarChar,
         is_pooled -> Bool,
         created_at -> Timestamp,
+        wallet_address -> Nullable<VarChar>,
     }
 }
 
@@ -65,7 +66,6 @@ table! {
         updated_at -> Timestamp,
         buyer_user_id -> Integer,
         status -> VarChar,
-        wallet_address -> Nullable<VarChar>,
     }
 }
 
