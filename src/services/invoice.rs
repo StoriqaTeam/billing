@@ -555,7 +555,7 @@ pub fn get_rate<PC: PaymentsClient + Send + Clone + 'static>(
             id: Uuid::new_v4(),
             from: buyer_currency,
             to: seller_currency,
-            amount_currency: buyer_currency,
+            amount_currency: seller_currency,
             amount: total_amount,
         };
 

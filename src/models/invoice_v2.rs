@@ -172,18 +172,16 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Vec<R
                     .map(|RawOrderExchangeRate { ref exchange_rate, .. }| exchange_rate.clone())
             };
 
+            let seller_price = total_amount.to_super_unit(seller_currency);
             OrderDump {
                 id,
                 seller_currency,
-                seller_price: total_amount.to_super_unit(seller_currency),
+                seller_price: seller_price.clone(),
                 seller_cashback: cashback_amount.to_super_unit(seller_currency),
                 buyer_amounts: exchange_rate.map(|exchange_rate| BuyerAmounts {
                     exchange_rate: exchange_rate.clone(),
                     currency: buyer_currency.clone(),
-                    price: Amount::new(decimal_to_u128_round_up(
-                        u128_to_decimal(total_amount.inner()) * exchange_rate.clone(),
-                    ))
-                    .to_super_unit(buyer_currency.clone()),
+                    price: seller_price / exchange_rate.clone(),
                 }),
                 rates: rates
                     .into_iter()
@@ -244,15 +242,4 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Vec<R
             },
         ),
     }
-}
-
-fn u128_to_decimal(value: u128) -> BigDecimal {
-    value.to_string().parse().unwrap() // unwrap always succeeds
-}
-
-fn decimal_to_u128_round_up(value: BigDecimal) -> u128 {
-    let i = value.with_scale(0);
-    let rounded = if value > i { i + BigDecimal::from(1) } else { i };
-
-    rounded.to_string().parse().unwrap() // unwrap always succeeds
 }
