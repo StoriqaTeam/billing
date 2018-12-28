@@ -1,13 +1,17 @@
 use stq_router::RouteParser;
 use stq_types::{InvoiceId, OrderId, RoleId, SagaId, StoreId, UserId};
 
+use models::invoice_v2;
+
 /// List of all routes with params for the app
 #[derive(Clone, Debug, PartialEq)]
 pub enum Route {
     ExternalBillingCallback,
     Invoices,
+    InvoicesV2,
     InvoiceBySagaId { id: SagaId },
     InvoiceById { id: InvoiceId },
+    InvoiceByIdV2 { id: invoice_v2::InvoiceId },
     InvoiceByOrderId { id: OrderId },
     InvoiceOrdersIds { id: InvoiceId },
     InvoiceByIdRecalc { id: InvoiceId },
@@ -26,6 +30,7 @@ pub fn create_route_parser() -> RouteParser<Route> {
     let mut route_parser = RouteParser::default();
     route_parser.add_route(r"^/external_billing_callback$", || Route::ExternalBillingCallback);
     route_parser.add_route(r"^/invoices$", || Route::Invoices);
+    route_parser.add_route(r"^/v2/invoices$", || Route::InvoicesV2);
     route_parser.add_route_with_params(r"^/invoices/by-saga-id/([a-zA-Z0-9-]+)$", |params| {
         params
             .get(0)
@@ -49,6 +54,12 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::InvoiceById { id })
+    });
+    route_parser.add_route_with_params(r"^/v2/invoices/by-id/([a-zA-Z0-9-]+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::InvoiceByIdV2 { id })
     });
     route_parser.add_route_with_params(r"^/invoices/by-order-id/([a-zA-Z0-9-]+)$", |params| {
         params

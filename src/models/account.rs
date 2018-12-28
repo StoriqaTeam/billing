@@ -43,6 +43,19 @@ impl Display for AccountId {
     }
 }
 
+#[derive(Clone, Debug, Display, Default, PartialEq, Eq, From, FromStr, Hash, Serialize, Deserialize, DieselTypes)]
+pub struct WalletAddress(String);
+
+impl WalletAddress {
+    pub fn new(address: String) -> Self {
+        WalletAddress(address)
+    }
+
+    pub fn inner(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountCount {
     pub pooled: HashMap<Currency, u64>,
@@ -55,6 +68,7 @@ pub struct Account {
     pub currency: Currency,
     pub is_pooled: bool,
     pub created_at: NaiveDateTime,
+    pub wallet_address: Option<WalletAddress>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
@@ -64,6 +78,7 @@ pub struct RawAccount {
     pub currency: Currency,
     pub is_pooled: bool,
     pub created_at: NaiveDateTime,
+    pub wallet_address: Option<WalletAddress>,
 }
 
 impl From<RawAccount> for Account {
@@ -73,6 +88,7 @@ impl From<RawAccount> for Account {
             currency,
             is_pooled,
             created_at,
+            wallet_address,
         } = raw_account;
 
         Account {
@@ -80,6 +96,7 @@ impl From<RawAccount> for Account {
             currency,
             is_pooled,
             created_at,
+            wallet_address,
         }
     }
 }
@@ -90,6 +107,7 @@ pub struct NewAccount {
     pub id: AccountId,
     pub currency: Currency,
     pub is_pooled: bool,
+    pub wallet_address: Option<WalletAddress>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

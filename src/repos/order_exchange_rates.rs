@@ -113,7 +113,9 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         )
         .map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let query = OrderExchangeRates::order_exchange_rates.filter(OrderExchangeRates::order_id.eq(order_id));
+        let query = OrderExchangeRates::order_exchange_rates
+            .filter(OrderExchangeRates::order_id.eq(order_id))
+            .order(OrderExchangeRates::id.desc());
 
         query.get_results::<RawOrderExchangeRate>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);

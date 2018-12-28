@@ -27,10 +27,12 @@ pub fn check<T>(
     scope_checker: &CheckScope<Scope, T>,
     obj: Option<&T>,
 ) -> Result<(), FailureError> {
+    debug!("Requested to do {:?} on {:?} (scoped: {})", action, resource, obj.is_some());
     acl.allows(resource, action, scope_checker, obj).and_then(|allowed| {
         if allowed {
             Ok(())
         } else {
+            debug!("Denied request to do {:?} on {:?} (scoped: {})", action, resource, obj.is_some());
             Err(Error::Forbidden
                 .context(format!("Denied request to do {:?} on {:?}", action, resource))
                 .into())
@@ -70,6 +72,7 @@ impl ApplicationAcl {
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
+                permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
             ],
         );
         hash.insert(
@@ -79,6 +82,7 @@ impl ApplicationAcl {
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::UserRoles, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
+                permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
             ],
         );
         ApplicationAcl {

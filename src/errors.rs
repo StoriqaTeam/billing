@@ -4,6 +4,8 @@ use validator::ValidationErrors;
 
 use stq_http::errors::{Codeable, PayloadCarrier};
 
+use services;
+
 #[derive(Debug, Fail)]
 pub enum Error {
     #[fail(display = "Not found")]
@@ -20,15 +22,30 @@ pub enum Error {
     HttpClient,
     #[fail(display = "Invalid oauth token")]
     InvalidToken,
+    #[fail(display = "Internal error (error handling v2)")]
+    InternalV2,
+    #[fail(display = "Validation error (error handling v2)")]
+    ValidateV2(serde_json::Value),
+}
+
+impl From<services::Error> for Error {
+    fn from(error: services::Error) -> Error {
+        match error.kind() {
+            services::ErrorKind::Internal => Error::InternalV2,
+            services::ErrorKind::Forbidden => Error::Forbidden,
+            services::ErrorKind::Validation(value) => Error::ValidateV2(value),
+        }
+    }
 }
 
 impl Codeable for Error {
     fn code(&self) -> StatusCode {
         match *self {
             Error::NotFound => StatusCode::NotFound,
-            Error::Validate(_) => StatusCode::BadRequest,
-            Error::Parse => StatusCode::UnprocessableEntity,
-            Error::Connection | Error::HttpClient => StatusCode::InternalServerError,
+            Error::Validate(_) => StatusCode::UnprocessableEntity,
+            Error::ValidateV2(_) => StatusCode::UnprocessableEntity,
+            Error::Parse => StatusCode::BadRequest,
+            Error::Connection | Error::HttpClient | Error::InternalV2 => StatusCode::InternalServerError,
             Error::Forbidden | Error::InvalidToken => StatusCode::Forbidden,
         }
     }

@@ -14,6 +14,8 @@ extern crate base64;
 extern crate bigdecimal;
 extern crate config as config_crate;
 #[macro_use]
+extern crate derive_more;
+#[macro_use]
 extern crate diesel;
 extern crate enum_iterator;
 extern crate env_logger;
@@ -155,6 +157,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
 
         let payments_client = PaymentsClientImpl::create_from_config(client_handle, payments::Config::from(config.clone()))
             .expect("Failed to create Payments client");
+
         let account_service = AccountServiceImpl::new(
             db_pool,
             cpu_pool,

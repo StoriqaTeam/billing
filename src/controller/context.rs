@@ -7,14 +7,15 @@ use diesel::Connection;
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool};
 
-use stq_http::client::{ClientHandle, TimeLimitedHttpClient};
+use stq_http::client::{ClientHandle, HttpClient};
 use stq_router::RouteParser;
 use stq_types::UserId;
 
 use super::routes::*;
-use client::payments::PaymentsClientImpl;
+use client::payments::PaymentsClient;
 use config::Config;
 use repos::repo_factory::*;
+use services::accounts::AccountService;
 
 /// Static context for all app
 pub struct StaticContext<T, M, F>
@@ -71,26 +72,39 @@ impl<
 
 /// Dynamic context for each request
 #[derive(Clone)]
-pub struct DynamicContext {
+pub struct DynamicContext<C, PC, AS>
+where
+    C: HttpClient + Clone,
+    PC: PaymentsClient + Clone,
+    AS: AccountService + Clone + 'static,
+{
     pub user_id: Option<UserId>,
     pub correlation_token: String,
-    pub http_client: TimeLimitedHttpClient<ClientHandle>,
-    pub payments_client: Option<PaymentsClientImpl<TimeLimitedHttpClient<ClientHandle>>>,
+    pub http_client: C,
+    pub payments_client: Option<PC>,
+    pub account_service: Option<AS>,
 }
 
-impl DynamicContext {
+impl<C, PC, AS> DynamicContext<C, PC, AS>
+where
+    C: HttpClient + Clone,
+    PC: PaymentsClient + Clone,
+    AS: AccountService + Clone + 'static,
+{
     /// Create a new dynamic context for each request
     pub fn new(
         user_id: Option<UserId>,
         correlation_token: String,
-        http_client: TimeLimitedHttpClient<ClientHandle>,
-        payments_client: Option<PaymentsClientImpl<TimeLimitedHttpClient<ClientHandle>>>,
+        http_client: C,
+        payments_client: Option<PC>,
+        account_service: Option<AS>,
     ) -> Self {
         Self {
             user_id,
             correlation_token,
             http_client,
             payments_client,
+            account_service,
         }
     }
 }

@@ -1,13 +1,14 @@
-use bigdecimal::BigDecimal;
-use chrono::NaiveDateTime;
 use std::fmt::{self, Display};
 use std::str::FromStr;
 
+use bigdecimal::BigDecimal;
+use chrono::NaiveDateTime;
 use diesel::sql_types::Uuid as SqlUuid;
+use stq_static_resources::OrderState;
 use uuid::{self, Uuid};
 
 use models::order_v2::{OrderId, RawOrder};
-use models::{AccountId, Amount, Currency, RawOrderExchangeRate, UserId};
+use models::{AccountId, Amount, Currency, ExchangeRateStatus, OrderExchangeRateId, RawOrderExchangeRate, UserId};
 use schema::invoices_v2;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
@@ -57,6 +58,7 @@ pub struct RawInvoice {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub buyer_user_id: UserId,
+    pub status: OrderState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
@@ -95,38 +97,46 @@ pub struct BuyerAmounts {
     pub exchange_rate: BigDecimal,
     pub currency: Currency,
     pub price: BigDecimal,
-    pub cashback: BigDecimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OrderPrice {
-    pub order_id: OrderId,
+pub struct RateDump {
+    pub id: OrderExchangeRateId,
+    pub exchange_rate: BigDecimal,
+    pub status: ExchangeRateStatus,
+    pub reserved_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrderDump {
+    pub id: OrderId,
     pub seller_currency: Currency,
     pub seller_price: BigDecimal,
     pub seller_cashback: BigDecimal,
     pub buyer_amounts: Option<BuyerAmounts>,
+    pub rates: Vec<RateDump>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InvoicePrice {
-    pub invoice_id: InvoiceId,
+pub struct InvoiceDump {
+    pub id: InvoiceId,
     pub buyer_currency: Currency,
     pub amount_captured: BigDecimal,
     pub total_price: BigDecimal,
-    pub total_cashback: BigDecimal,
-    pub order_prices: Vec<OrderPrice>,
+    pub total_cashback: Option<BigDecimal>,
+    pub orders: Vec<OrderDump>,
     pub has_missing_rates: bool,
     pub created_at: NaiveDateTime,
     pub paid_at: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InvoicePriceCalculationData {
+pub struct InvoiceDumpCalculationData {
     pub invoice: RawInvoice,
     pub orders: (RawOrder, RawOrderExchangeRate),
 }
 
-pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Option<RawOrderExchangeRate>)>) -> InvoicePrice {
+pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Vec<RawOrderExchangeRate>)>) -> InvoiceDump {
     let RawInvoice {
         id,
         buyer_currency,
@@ -142,9 +152,9 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Optio
     let final_amount_paid = final_amount_paid.map(|amount| amount.to_super_unit(buyer_currency));
     let final_cashback_amount = final_cashback_amount.map(|amount| amount.to_super_unit(buyer_currency));
 
-    let order_prices = orders
+    let orders = orders
         .into_iter()
-        .map(|(order, rate)| {
+        .map(|(order, rates)| {
             let RawOrder {
                 id,
                 seller_currency,
@@ -153,76 +163,83 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Optio
                 ..
             } = order;
 
-            OrderPrice {
-                order_id: id,
+            let exchange_rate = if buyer_currency == seller_currency {
+                Some(BigDecimal::from(1))
+            } else {
+                rates
+                    .iter()
+                    .find(|rate| rate.status == ExchangeRateStatus::Active)
+                    .map(|RawOrderExchangeRate { ref exchange_rate, .. }| exchange_rate.clone())
+            };
+
+            let seller_price = total_amount.to_super_unit(seller_currency);
+            OrderDump {
+                id,
                 seller_currency,
-                seller_price: total_amount.to_super_unit(seller_currency),
+                seller_price: seller_price.clone(),
                 seller_cashback: cashback_amount.to_super_unit(seller_currency),
-                buyer_amounts: rate.map(|RawOrderExchangeRate { exchange_rate, .. }| BuyerAmounts {
+                buyer_amounts: exchange_rate.map(|exchange_rate| BuyerAmounts {
                     exchange_rate: exchange_rate.clone(),
                     currency: buyer_currency.clone(),
-                    price: Amount::new(decimal_to_u128_round_up(
-                        u128_to_decimal(total_amount.inner()) * exchange_rate.clone(),
-                    ))
-                    .to_super_unit(buyer_currency.clone()),
-                    cashback: Amount::new(decimal_to_u128_round_down(u128_to_decimal(cashback_amount.inner()) * exchange_rate))
-                        .to_super_unit(buyer_currency.clone()),
+                    price: seller_price / exchange_rate.clone(),
                 }),
+                rates: rates
+                    .into_iter()
+                    .map(|rate| {
+                        let RawOrderExchangeRate {
+                            id,
+                            exchange_rate,
+                            status,
+                            created_at,
+                            ..
+                        } = rate;
+                        RateDump {
+                            id,
+                            exchange_rate,
+                            status,
+                            reserved_at: created_at,
+                        }
+                    })
+                    .collect(),
             }
         })
         .collect::<Vec<_>>();
 
-    let has_missing_rates = order_prices.iter().any(|op| op.buyer_amounts.is_none());
+    let has_missing_rates = orders.iter().any(|op| op.buyer_amounts.is_none());
 
     // Check if the invoice has been paid. If it has, return the final prices.
     // Either all of the fields must contain a value or none of them,
     // otherwise it means that the database contains invalid data
     match (final_amount_paid, final_cashback_amount, paid_at) {
-        (Some(total_price), Some(total_cashback), Some(paid_at)) => InvoicePrice {
-            invoice_id: id,
+        (Some(total_price), Some(total_cashback), Some(paid_at)) => InvoiceDump {
+            id,
             buyer_currency,
             amount_captured,
             total_price,
-            total_cashback,
-            order_prices,
+            total_cashback: Some(total_cashback),
+            orders,
             has_missing_rates,
             created_at,
             paid_at: Some(paid_at),
         },
-        _ => order_prices.clone().into_iter().fold(
-            InvoicePrice {
-                invoice_id: id,
+        _ => orders.clone().into_iter().fold(
+            InvoiceDump {
+                id,
                 buyer_currency,
                 amount_captured,
                 total_price: BigDecimal::from(0),
-                total_cashback: BigDecimal::from(0),
-                order_prices,
+                total_cashback: None,
+                orders,
                 has_missing_rates,
                 created_at,
                 paid_at: None,
             },
             |mut invoice, order_price| {
-                if let Some(BuyerAmounts { price, cashback, .. }) = order_price.buyer_amounts {
-                    invoice.total_price = invoice.total_price + price;
-                    invoice.total_cashback = invoice.total_cashback + cashback;
+                if let Some(BuyerAmounts { price, .. }) = order_price.buyer_amounts {
+                    invoice.total_price += price;
                 };
                 invoice
             },
         ),
     }
-}
-
-fn u128_to_decimal(value: u128) -> BigDecimal {
-    value.to_string().parse().unwrap() // unwrap always succeeds
-}
-
-fn decimal_to_u128_round_up(value: BigDecimal) -> u128 {
-    let i = value.with_scale(0);
-    let rounded = if value > i { i + BigDecimal::from(1) } else { i };
-
-    rounded.to_string().parse().unwrap() // unwrap always succeeds
-}
-
-fn decimal_to_u128_round_down(value: BigDecimal) -> u128 {
-    value.with_scale(0).to_string().parse().unwrap() // unwrap always succeeds
 }

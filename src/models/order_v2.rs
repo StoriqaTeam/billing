@@ -50,10 +50,8 @@ impl Display for OrderId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
-#[sql_type = "SqlUuid"]
+#[derive(Clone, Copy, Debug, Display, Default, PartialEq, Eq, From, FromStr, Hash, Serialize, Deserialize, DieselTypes)]
 pub struct ExchangeId(Uuid);
-newtype_from_to_sql!(SqlUuid, ExchangeId, ExchangeId);
 
 impl ExchangeId {
     pub fn new(id: Uuid) -> Self {
@@ -69,20 +67,8 @@ impl ExchangeId {
     }
 }
 
-impl FromStr for ExchangeId {
-    type Err = uuid::ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let id = Uuid::parse_str(s)?;
-        Ok(ExchangeId::new(id))
-    }
-}
-
-impl Display for ExchangeId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{}", self.0.hyphenated()))
-    }
-}
+#[derive(Clone, Copy, Debug, Display, Default, PartialEq, Eq, PartialOrd, Ord, From, FromStr, Hash, Serialize, Deserialize, DieselTypes)]
+pub struct StoreId(i32);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "orders"]
@@ -94,6 +80,7 @@ pub struct RawOrder {
     pub invoice_id: InvoiceId,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub store_id: StoreId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
@@ -104,6 +91,7 @@ pub struct NewOrder {
     pub total_amount: Amount,
     pub cashback_amount: Amount,
     pub invoice_id: InvoiceId,
+    pub store_id: StoreId,
 }
 
 #[derive(Debug, Clone)]
