@@ -3,6 +3,8 @@ use stq_types::{InvoiceId, OrderId, RoleId, SagaId, StoreId, UserId};
 
 use models::invoice_v2;
 
+pub const PAYMENTS_CALLBACK_ENDPOINT: &'static str = "/v2/callback/payments/inbound_tx";
+
 /// List of all routes with params for the app
 #[derive(Clone, Debug, PartialEq)]
 pub enum Route {

@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use diesel::sql_types::Uuid as SqlUuid;
 use std::collections::HashMap;
@@ -108,6 +109,16 @@ pub struct NewAccount {
     pub currency: Currency,
     pub is_pooled: bool,
     pub wallet_address: Option<WalletAddress>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentsCallback {
+    pub url: String,
+    pub amount_captured: BigDecimal,
+    pub currency: Currency,
+    pub address: WalletAddress,
+    pub account_id: AccountId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

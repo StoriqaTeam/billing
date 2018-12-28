@@ -152,20 +152,20 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         repo_factory.clone(),
     );
 
-    if let Some(config) = config.payments {
+    if let Some(payments_config) = config.payments.clone() {
         info!("Payments config found - initializing accounts");
 
-        let payments_client = PaymentsClientImpl::create_from_config(client_handle, payments::Config::from(config.clone()))
+        let payments_client = PaymentsClientImpl::create_from_config(client_handle, payments::Config::from(payments_config.clone()))
             .expect("Failed to create Payments client");
 
         let account_service = AccountServiceImpl::new(
             db_pool,
             cpu_pool,
             repo_factory,
-            config.min_pooled_accounts,
+            payments_config.min_pooled_accounts,
             payments_client,
-            "".to_string(),
-            config.accounts.into(),
+            format!("{}{}", config.callback.url, controller::routes::PAYMENTS_CALLBACK_ENDPOINT),
+            payments_config.accounts.into(),
         );
 
         core.run(account_service.init_system_accounts())
