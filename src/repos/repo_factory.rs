@@ -232,7 +232,7 @@ pub mod tests {
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
-    use models::order_v2::{NewOrder, OrderId as OrderV2Id, RawOrder};
+    use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
     use models::Currency as BillingCurrency;
     use models::*;
     use repos::*;
@@ -820,7 +820,7 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn refresh_rate(&self, _exchange_id: Uuid) -> Box<Future<Item = RateRefresh, Error = payments::Error> + Send> {
+        fn refresh_rate(&self, _exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = payments::Error> + Send> {
             unimplemented!()
         }
     }

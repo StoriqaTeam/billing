@@ -365,7 +365,6 @@ impl<
         })
     }
 
-    // TODO: notify saga (/orders/update_state)
     fn recalc_invoice_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Option<InvoiceDump>> {
         let payments_client = if let Some(payments_client) = self.dynamic_context.payments_client.clone() {
             payments_client
@@ -378,6 +377,8 @@ impl<
         let cpu_pool = self.static_context.cpu_pool.clone();
 
         let fut = spawn_on_pool(db_pool, cpu_pool, {
+            // Load invoice data (invoice, orders, active rates) for provided invoice ID
+
             let user_id = self.dynamic_context.user_id.clone();
             let repo_factory = self.static_context.repo_factory.clone();
 
@@ -421,12 +422,13 @@ impl<
             move |invoice_data| match invoice_data {
                 None => future::Either::A(future::ok(None)),
                 Some((invoice, current_order_rates)) => future::Either::B(Some(future::lazy(move || {
+                    // Get missing rates from Payments gateway and refresh existing rates
                     refresh_rates(payments_client, invoice.buyer_currency.clone(), current_order_rates)
+                        // Save new and updated rates to database
                         .and_then({
                             let db_pool = db_pool.clone();
                             let cpu_pool = cpu_pool.clone();
                             let repo_factory = repo_factory.clone();
-
                             move |new_active_rates| {
                                 spawn_on_pool(db_pool, cpu_pool, move |conn| {
                                     let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
@@ -443,6 +445,7 @@ impl<
                                 })
                             }
                         })
+                        // Load updated invoice data with the new rates and calculate total price of the invoice
                         .and_then(move |_| {
                             spawn_on_pool(db_pool, cpu_pool, move |conn| {
                                 let invoice_id = invoice.id.clone();
@@ -549,8 +552,11 @@ pub fn get_rate<PC: PaymentsClient + Send + Clone + 'static>(
     total_amount: Amount,
 ) -> Box<Future<Item = (Option<ExchangeId>, BigDecimal), Error = ServiceError>> {
     Box::new(if buyer_currency == seller_currency {
+        // Return dummy rate is the buyer pays with the same currency as seller
         future::Either::A(future::ok((None, BigDecimal::from(1))))
     } else {
+        // Otherwise get the rate from Payments gateway
+
         let input = GetRate {
             id: Uuid::new_v4(),
             from: buyer_currency,
@@ -568,6 +574,7 @@ pub fn get_rate<PC: PaymentsClient + Send + Clone + 'static>(
     })
 }
 
+/// Gets all of the invoice data for the DB and calculates the total price
 pub fn get_invoice_price(
     invoices_repo: &InvoicesV2Repo,
     orders_repo: &OrdersRepo,
@@ -597,6 +604,7 @@ pub fn get_invoice_price(
     Ok(Some(calculate_invoice_price(invoice, orders_with_rates)))
 }
 
+/// Returns new and updated active rates which then have to be saved in the database. Rates that remained the same get filetered out
 pub fn refresh_rates<PC: PaymentsClient + Send + Clone + 'static>(
     payments_client: PC,
     buyer_currency: Currency,
@@ -614,6 +622,7 @@ pub fn refresh_rates<PC: PaymentsClient + Send + Clone + 'static>(
     )
 }
 
+/// Gets or refreshes an exchange rate. If the rate remains the same the function will return `None`
 pub fn reserve_or_refresh_rate<PC: PaymentsClient + Send + Clone + 'static>(
     payments_client: PC,
     buyer_currency: Currency,
@@ -627,6 +636,7 @@ pub fn reserve_or_refresh_rate<PC: PaymentsClient + Send + Clone + 'static>(
         ..
     } = order;
     let fut = match current_rate {
+        // If the current rate wasn't provided, reserve a new rate though Payments API
         None => future::Either::A(get_rate(&payments_client, buyer_currency, seller_currency, total_amount).map(
             move |(exchange_id, exchange_rate)| {
                 Some(NewOrderExchangeRate {
@@ -637,16 +647,15 @@ pub fn reserve_or_refresh_rate<PC: PaymentsClient + Send + Clone + 'static>(
             },
         )),
         Some(RawOrderExchangeRate { exchange_id, .. }) => future::Either::B(match exchange_id {
-            None => future::Either::A(future::ok(Some(NewOrderExchangeRate {
-                order_id,
-                exchange_id: None,
-                exchange_rate: BigDecimal::from(1),
-            }))),
+            // If the current rate didn't have an exchange ID, which means that it's a dummy rate (1.0), then leave it be
+            None => future::Either::A(future::ok(None)),
+            // If the current rate has an exchange ID, refresh it through Payments API
             Some(id) => future::Either::B(future::lazy(move || {
                 payments_client
-                    .refresh_rate(id.inner().clone())
+                    .refresh_rate(id.clone())
                     .map_err(ectx!(convert ErrorKind::Internal => exchange_id))
                     .map(move |RateRefresh { rate, is_new_rate }| {
+                        // If we got an updated rate from Payments API, return it
                         if is_new_rate {
                             let Rate {
                                 id, rate: exchange_rate, ..
@@ -656,6 +665,7 @@ pub fn reserve_or_refresh_rate<PC: PaymentsClient + Send + Clone + 'static>(
                                 exchange_id: Some(ExchangeId::new(id)),
                                 exchange_rate,
                             })
+                        // Otherwise, the rate remained unchanged so we don't create a new one
                         } else {
                             None
                         }

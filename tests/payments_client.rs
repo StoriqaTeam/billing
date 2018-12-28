@@ -35,7 +35,6 @@ where
         jwt_public_key_base64: "MIIBCgKCAQEAt3TQPCbcWM/Fba2s6V/WRuQv8SlEQp4F56fSY4LQ+yW2xY3f2fLOw/SurObHMQF7QpnQ7x/2zhGqe11Ad0MHbWG+OARR/B/76X8QhA3xEneZpgc8aykagl0Tr616tazEKr0JxGuUo3qHy+e/dqSQ9T04EjGqccfr3+gfmVZlzml2/kN2EmaFa28Q8NseY5a2TVL9XcEDHHpGHVpoRQI8ibfa92i2Lwo7E33Iz8hpbp+GgeyReua2z341nxSNqk0VSYa6KtNUk03G5YYmsrsoE+ECC69GAD07R4YcGqF4NRKSA0T3L8jY8rVbl5HUCIFuZynZEHWWpFvyMYW+9ffMfwIDAQAB".to_string(),
         user_jwt: "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ1c2VyX2lkIjoxNjYsImV4cCI6MTU0NTc0NDg3NywicHJvdmlkZXIiOiJFbWFpbCJ9.LZwLgbxB2azZIQA_POG8c2iMsVjqgfOcdnB29xihMt_d41Xhwew7nsl3HiZJgNe86P0U7GECi0eXHP_jW9UUJRbGlAKRq7xB6AI4fN4n4jUFgzp_h8dflZ9KOWyhM8LAYyrJUqnS3aZS16WMfktyyTdONZ4igCgV-Zr8tmlXB4B1eik2w5I2_WruPL8hO6xObiiEViBFUT1oowv2wAVyBTtTb-SA5FvQNwi8vls9mWrhLIcpOoIvVLY6-ZTixJW6QkBd3SzbNBRJOf9_27B3nKgbALt0Z58ofpBE0s0MrsC9g1dwY4IPa7Yyya_8r35RH-t-8S-bDD71sjTFajqGdQ".to_string(),
         user_private_key: "a7190fcbbb97a08e0a0f39be542186efc3e59790b61b6338f83960f2519acb4d".to_string(),
-        max_accounts: 1000,
     };
 
     let http_client_config = client::Config {

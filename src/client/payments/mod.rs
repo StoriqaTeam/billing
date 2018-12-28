@@ -14,6 +14,7 @@ use stq_http::client::HttpClient;
 use uuid::Uuid;
 
 use config;
+use models::order_v2::ExchangeId;
 
 pub use self::error::*;
 use self::types::AccountResponse;
@@ -30,7 +31,7 @@ pub trait PaymentsClient: Send + Sync + 'static {
 
     fn get_rate(&self, input: GetRate) -> Box<Future<Item = Rate, Error = Error> + Send>;
 
-    fn refresh_rate(&self, exchange_id: Uuid) -> Box<Future<Item = RateRefresh, Error = Error> + Send>;
+    fn refresh_rate(&self, exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = Error> + Send>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,7 +40,6 @@ pub struct Config {
     pub jwt_public_key_base64: String,
     pub user_jwt: String,
     pub user_private_key: String,
-    pub max_accounts: u32,
 }
 
 impl From<config::Payments> for Config {
@@ -49,7 +49,6 @@ impl From<config::Payments> for Config {
             jwt_public_key_base64,
             user_jwt,
             user_private_key,
-            max_accounts,
             ..
         } = config;
         Config {
@@ -57,7 +56,6 @@ impl From<config::Payments> for Config {
             jwt_public_key_base64,
             user_jwt,
             user_private_key,
-            max_accounts,
         }
     }
 }
@@ -76,17 +74,17 @@ pub struct PaymentsClientImpl<C: HttpClient + Clone> {
     user_id: u32,
     user_jwt: String,
     user_private_key: SecretKey,
-    max_accounts: u32,
 }
 
 impl<C: HttpClient + Clone + Send> PaymentsClientImpl<C> {
+    const MAX_ACCOUNTS: u32 = 1_000_000;
+
     pub fn create_from_config(client: C, config: Config) -> Result<Self, Error> {
         let Config {
             url,
             jwt_public_key_base64,
             user_jwt,
             user_private_key,
-            max_accounts,
         } = config;
 
         let jwt_public_key = base64::decode(jwt_public_key_base64.as_str()).map_err({
@@ -120,7 +118,6 @@ impl<C: HttpClient + Clone + Send> PaymentsClientImpl<C> {
             user_id,
             user_jwt,
             user_private_key,
-            max_accounts,
         })
     }
 
@@ -183,7 +180,7 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
     }
 
     fn list_accounts(&self) -> Box<Future<Item = Vec<Account>, Error = Error> + Send> {
-        let query = format!("/v1/users/{}/accounts?offset=0&limit={}", self.user_id, self.max_accounts);
+        let query = format!("/v1/users/{}/accounts?offset=0&limit={}", self.user_id, Self::MAX_ACCOUNTS);
         Box::new(
             self.request_with_auth::<_, Vec<AccountResponse>>(Method::Get, query.clone(), json!({}))
                 .map_err(ectx!(ErrorKind::Internal => Method::Get, query, json!({})))
@@ -223,7 +220,7 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
         )
     }
 
-    fn refresh_rate(&self, exchange_id: Uuid) -> Box<Future<Item = RateRefresh, Error = Error> + Send> {
+    fn refresh_rate(&self, exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = Error> + Send> {
         let query = format!("/v1/rate/refresh");
         Box::new(
             self.request_with_auth::<_, RefreshRateResponse>(Method::Post, query.clone(), json!({ "rateId": exchange_id }))

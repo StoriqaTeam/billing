@@ -16,7 +16,6 @@ url = "http://billing:8000"
 # # user public key = 02b27f95a9f892a8e9460347ba19be421403da5d05e68281a980be865ad86dd02b
 # user_private_key = "a7190fcbbb97a08e0a0f39be542186efc3e59790b61b6338f83960f2519acb4d"
 # min_pooled_accounts = 10
-# max_accounts = 1000
 # callback_endpoint = "/callback/payments/new_tx"
 # 
 # [payments.accounts]
