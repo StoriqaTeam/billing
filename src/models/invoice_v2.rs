@@ -8,7 +8,8 @@ use stq_static_resources::OrderState;
 use uuid::{self, Uuid};
 
 use models::order_v2::{OrderId, RawOrder};
-use models::{AccountId, Amount, Currency, ExchangeRateStatus, OrderExchangeRateId, RawOrderExchangeRate, UserId};
+use models::{AccountId, Amount, Currency, ExchangeRateStatus, OrderExchangeRateId, RawOrderExchangeRate, TransactionId, UserId};
+use schema::amounts_received;
 use schema::invoices_v2;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
@@ -61,14 +62,94 @@ pub struct RawInvoice {
     pub status: OrderState,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
+#[table_name = "amounts_received"]
+pub struct RawAmountReceived {
+    pub id: TransactionId,
+    pub invoice_id: InvoiceId,
+    pub amount_received: Amount,
+    pub created_at: NaiveDateTime,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
-#[table_name = "invoices_v2"]
+#[table_name = "amounts_received"]
+pub struct NewAmountReceived {
+    pub id: TransactionId,
+    pub invoice_id: InvoiceId,
+    pub amount_received: Amount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewInvoice {
     pub id: InvoiceId,
     pub account_id: Option<AccountId>,
     pub buyer_currency: Currency,
     pub amount_captured: Amount,
     pub buyer_user_id: UserId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Insertable)]
+#[table_name = "invoices_v2"]
+pub struct RawNewInvoice {
+    pub id: InvoiceId,
+    pub account_id: Option<AccountId>,
+    pub buyer_currency: Currency,
+    pub amount_captured: Amount,
+    pub buyer_user_id: UserId,
+    pub status: OrderState,
+}
+
+impl From<NewInvoice> for RawNewInvoice {
+    fn from(invoice: NewInvoice) -> Self {
+        let NewInvoice {
+            id,
+            account_id,
+            buyer_currency,
+            amount_captured,
+            buyer_user_id,
+        } = invoice;
+
+        Self {
+            id,
+            account_id,
+            buyer_currency,
+            amount_captured,
+            buyer_user_id,
+            status: OrderState::PaymentAwaited,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InvoiceSetAmountPaid {
+    pub final_amount_paid: Amount,
+    pub final_cashback_amount: Amount,
+    pub paid_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, AsChangeset)]
+#[table_name = "invoices_v2"]
+pub struct RawInvoiceSetAmountPaid {
+    pub final_amount_paid: Amount,
+    pub final_cashback_amount: Amount,
+    pub paid_at: NaiveDateTime,
+    pub status: OrderState,
+}
+
+impl From<InvoiceSetAmountPaid> for RawInvoiceSetAmountPaid {
+    fn from(payload: InvoiceSetAmountPaid) -> Self {
+        let InvoiceSetAmountPaid {
+            final_amount_paid,
+            final_cashback_amount,
+            paid_at,
+        } = payload;
+        Self {
+            final_amount_paid,
+            final_cashback_amount,
+            paid_at,
+            status: OrderState::Paid,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -228,7 +309,7 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Vec<R
                 buyer_currency,
                 amount_captured,
                 total_price: BigDecimal::from(0),
-                total_cashback: None,
+                total_cashback: Some(BigDecimal::from(0)),
                 orders,
                 has_missing_rates,
                 created_at,

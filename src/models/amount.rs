@@ -55,14 +55,14 @@ impl Amount {
         self.0.clone()
     }
 
-    pub fn from_super_unit(currency: Currency, value: f64) -> Amount {
+    pub fn from_super_unit(currency: Currency, value: BigDecimal) -> Amount {
         let exp = match currency {
             Currency::Btc => 10i64.pow(SATOSHIS_IN_BTC),
             Currency::Eth => 10i64.pow(WEI_IN_ETH),
             Currency::Stq => 10i64.pow(WEI_IN_ETH),
         };
 
-        let decimal = (BigDecimal::from(value) * BigDecimal::from(exp)).with_scale(0);
+        let decimal = (value * BigDecimal::from(exp)).with_scale(0);
 
         Amount(u128::from_str(&decimal.to_string()).unwrap()) // unwrap never panics
     }
@@ -408,13 +408,19 @@ mod tests {
 
     #[test]
     fn test_from_super_unit() {
-        assert_eq!(Amount::from_super_unit(Currency::Stq, 0.0), Amount(0u128));
-        assert_eq!(Amount::from_super_unit(Currency::Stq, 1.0), Amount(1_000_000_000_000_000_000u128));
-        assert_eq!(Amount::from_super_unit(Currency::Stq, 1.01), Amount(1_010_000_000_000_000_000u128));
+        assert_eq!(Amount::from_super_unit(Currency::Stq, 0.0.into()), Amount(0u128));
         assert_eq!(
-            Amount::from_super_unit(Currency::Stq, 1.000_000_000_1),
+            Amount::from_super_unit(Currency::Stq, 1.0.into()),
+            Amount(1_000_000_000_000_000_000u128)
+        );
+        assert_eq!(
+            Amount::from_super_unit(Currency::Stq, 1.01.into()),
+            Amount(1_010_000_000_000_000_000u128)
+        );
+        assert_eq!(
+            Amount::from_super_unit(Currency::Stq, 1.000_000_000_1.into()),
             Amount(1_000_000_000_100_000_000u128)
         );
-        assert_eq!(Amount::from_super_unit(Currency::Btc, 1.0), Amount(100_000_000u128));
+        assert_eq!(Amount::from_super_unit(Currency::Btc, 1.0.into()), Amount(100_000_000u128));
     }
 }

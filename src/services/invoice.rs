@@ -9,6 +9,8 @@ use futures::{future, stream, Future, IntoFuture, Stream};
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::Headers;
 use hyper::Post;
+use models::invoice_v2::InvoiceSetAmountPaid;
+use models::invoice_v2::RawInvoice;
 use r2d2::ManageConnection;
 use serde_json;
 use uuid::Uuid;
@@ -23,6 +25,7 @@ use errors::Error;
 use models::invoice_v2::{calculate_invoice_price, InvoiceDump, InvoiceId as InvoiceV2Id, NewInvoice};
 use models::order_v2::{ExchangeId, NewOrder, RawOrder};
 use models::*;
+use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
 use repos::{InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, RepoResult};
 use services::accounts::AccountService;
@@ -51,6 +54,8 @@ pub trait InvoiceService {
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// Creates orders in billing system, returning url for payment
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
+    /// Handles the callback from Payments gateway which carries a new inbound transaction
+    fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
 }
 
 impl<
@@ -188,10 +193,13 @@ impl<
                     product_cashback: seller_cashback_percent,
                 } = create_order;
 
-                let total_amount = Amount::from_super_unit(seller_currency, seller_total_amount);
+                let total_amount = Amount::from_super_unit(seller_currency, BigDecimal::from(seller_total_amount));
                 let cashback_amount = match seller_cashback_percent {
                     None => Amount::new(0),
-                    Some(cashback_fraction) => Amount::from_super_unit(seller_currency, seller_total_amount * cashback_fraction),
+                    Some(cashback_fraction) => Amount::from_super_unit(
+                        seller_currency,
+                        BigDecimal::from(seller_total_amount) * BigDecimal::from(cashback_fraction),
+                    ),
                 };
 
                 let new_order = NewOrder {
@@ -397,18 +405,7 @@ impl<
                     Some(invoice) => invoice,
                 };
 
-                let current_order_rates = orders_repo
-                    .get_many_by_invoice_id(id.clone())
-                    .map_err(ectx!(try convert => id_clone))?
-                    .into_iter()
-                    .map(|order| {
-                        let order_id = order.id.clone();
-                        rates_repo
-                            .get_active_rate_for_order(order_id.clone())
-                            .map_err(ectx!(convert => order_id))
-                            .map(|rate| (order, rate))
-                    })
-                    .collect::<Result<Vec<_>, ServiceError>>()?;
+                let current_order_rates = get_order_active_rates(&*orders_repo, &*rates_repo, id)?;
 
                 Ok(Some((invoice, current_order_rates)))
             }
@@ -422,8 +419,17 @@ impl<
             move |invoice_data| match invoice_data {
                 None => future::Either::A(future::ok(None)),
                 Some((invoice, current_order_rates)) => future::Either::B(Some(future::lazy(move || {
+                    // Calculate invoice price without refreshing rates if the invoice has already been paid
+                    if invoice.paid_at.is_some() {
+                        let current_order_rates = current_order_rates
+                            .into_iter()
+                            .map(|(order, rate)| (order, rate.into_iter().collect::<Vec<_>>()))
+                            .collect::<Vec<_>>();
+                        return future::Either::A(future::ok(calculate_invoice_price(invoice, current_order_rates)));
+                    }
+
                     // Get missing rates from Payments gateway and refresh existing rates
-                    refresh_rates(payments_client, invoice.buyer_currency.clone(), current_order_rates)
+                    let fut = refresh_rates(payments_client, invoice.buyer_currency.clone(), current_order_rates)
                         // Save new and updated rates to database
                         .and_then({
                             let db_pool = db_pool.clone();
@@ -445,21 +451,27 @@ impl<
                                 })
                             }
                         })
-                        // Load updated invoice data with the new rates and calculate total price of the invoice
-                        .and_then(move |_| {
-                            spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                                let invoice_id = invoice.id.clone();
+                        .and_then({
+                            let db_pool = db_pool.clone();
+                            let cpu_pool = cpu_pool.clone();
+                            move |_| {
+                                spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                                    let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                                    let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+                                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
 
-                                let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
-                                let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
-                                let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
-
-                                get_invoice_price(&*invoices_repo, &*orders_repo, &*rates_repo, invoice_id)?.ok_or_else(|| {
-                                    let e = format_err!("Invoice with ID {} got deleted during recalc", invoice_id);
-                                    ectx!(err e, ErrorKind::Internal => invoice_id)
+                                    calculate_invoice_price_and_set_final_price_if_paid(
+                                        &*conn,
+                                        &*invoices_repo,
+                                        &*orders_repo,
+                                        &*rates_repo,
+                                        invoice.id.clone(),
+                                    )
                                 })
-                            })
-                        })
+                            }
+                        });
+
+                    future::Either::B(fut)
                 }))),
             }
         });
@@ -543,6 +555,122 @@ impl<
             .map_err(|e: FailureError| e.context("Service invoice, update endpoint error occured.").into())
         })
     }
+
+    /// Handles the callback from Payments gateway which carries a new inbound transaction
+    fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()> {
+        let payments_client = if let Some(payments_client) = self.dynamic_context.payments_client.clone() {
+            payments_client
+        } else {
+            let e = err_msg("payments integration has not been configured");
+            return Box::new(future::err::<_, ServiceError>(ectx!(err e, ErrorKind::Internal)));
+        };
+
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let PaymentsCallback {
+            transaction_id,
+            account_id,
+            amount_captured: amount_received,
+            ..
+        } = callback;
+
+        let fut =
+            // Increase amount captured for the invoice
+            spawn_on_pool(
+                db_pool.clone(), cpu_pool.clone(),
+                {
+                    let repo_factory = repo_factory.clone();
+                    move |conn| {
+                        let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+
+                        invoices_repo.increase_amount_captured(account_id.clone(), transaction_id.clone(), amount_received)
+                            .or_else(|e| match e.kind() {
+                                // If the amount received has already been saved to the database, just get the invoice by account ID
+                                RepoErrorKind::Constraints(_) => {
+                                    invoices_repo.get_by_account_id(account_id.clone())
+                                        .map_err({ let account_id = account_id.clone(); ectx!(convert => account_id) })
+                                        .and_then(|invoice| invoice.ok_or_else(|| {
+                                            let account_id = account_id.clone();
+                                            let e = format_err!("Account with ID = {} is not linked to an invoice", account_id.clone());
+                                            ectx!(err e, ErrorKind::Internal => account_id)
+                                        }))
+                                },
+                                _ => Err(ectx!(convert err e => account_id, transaction_id, amount_received))
+                            })
+                    }
+                }
+            )
+            // Recalc the total price of the invoice and set the final price if the amount captured >= total price
+            .and_then({
+                let db_pool = db_pool.clone();
+                let cpu_pool = cpu_pool.clone();
+                let repo_factory = repo_factory.clone();
+                move |invoice| {
+                    match invoice.paid_at.clone() {
+                        // Do a recalc if the invoice is not paid
+                        None => future::Either::A(future::lazy(move ||
+                            spawn_on_pool(db_pool.clone(), cpu_pool.clone(), {
+                                let invoice_id = invoice.id.clone();
+                                let repo_factory = repo_factory.clone();
+                                move |conn| {
+                                    let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+                                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                    get_order_active_rates(&*orders_repo, &*rates_repo, invoice_id.clone())
+                                }
+                            })
+                            // Get missing rates from Payments gateway and refresh existing rates
+                            .and_then({
+                                let buyer_currency = invoice.buyer_currency.clone();
+                                move |current_order_rates| refresh_rates(payments_client, buyer_currency, current_order_rates)
+                            })
+                            // Save new and updated rates to database
+                            .and_then({
+                                let db_pool = db_pool.clone();
+                                let cpu_pool = cpu_pool.clone();
+                                let repo_factory = repo_factory.clone();
+                                move |new_active_rates| {
+                                    spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                                        let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+
+                                        new_active_rates
+                                            .into_iter()
+                                            .map(|new_rate| {
+                                                rates_repo
+                                                    .add_new_active_rate(new_rate.clone())
+                                                    .map_err(ectx!(convert => new_rate))
+                                                    .map(|_| ())
+                                            })
+                                            .collect::<Result<Vec<_>, ServiceError>>()
+                                    })
+                                }
+                            })
+                            .and_then({
+                                let db_pool = db_pool.clone();
+                                let cpu_pool = cpu_pool.clone();
+                                let invoice = invoice.clone();
+                                let repo_factory = repo_factory.clone();
+                                move |_| spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                                    let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                                    let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+                                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+
+                                    calculate_invoice_price_and_set_final_price_if_paid(&*conn, &*invoices_repo, &*orders_repo, &*rates_repo, invoice.id.clone())?;
+                                    Ok(invoice)
+                                })
+                            })
+                        )),
+                        // Skip recalc if the invoice is paid
+                        Some(_) => future::Either::B(future::ok(invoice)),
+                    }
+                }
+            });
+
+        // TODO: send status update to saga, drain account linked to invoice
+        Box::new(fut.map(|_| ()))
+    }
 }
 
 pub fn get_rate<PC: PaymentsClient + Send + Clone + 'static>(
@@ -574,8 +702,27 @@ pub fn get_rate<PC: PaymentsClient + Send + Clone + 'static>(
     })
 }
 
-/// Gets all of the invoice data for the DB and calculates the total price
-pub fn get_invoice_price(
+pub fn get_order_active_rates(
+    orders_repo: &OrdersRepo,
+    rates_repo: &OrderExchangeRatesRepo,
+    invoice_id: InvoiceV2Id,
+) -> Result<Vec<(RawOrder, Option<RawOrderExchangeRate>)>, ServiceError> {
+    orders_repo
+        .get_many_by_invoice_id(invoice_id.clone())
+        .map_err(ectx!(try convert => invoice_id))?
+        .into_iter()
+        .map(|order| {
+            let order_id = order.id.clone();
+            rates_repo
+                .get_active_rate_for_order(order_id.clone())
+                .map_err(ectx!(convert => order_id))
+                .map(|rate| (order, rate))
+        })
+        .collect::<Result<Vec<_>, _>>()
+}
+
+/// Gets all of the invoice data by invoice ID from the DB and calculates the total price
+pub fn get_invoice_price_by_invoice_id(
     invoices_repo: &InvoicesV2Repo,
     orders_repo: &OrdersRepo,
     rates_repo: &OrderExchangeRatesRepo,
@@ -583,11 +730,19 @@ pub fn get_invoice_price(
 ) -> Result<Option<InvoiceDump>, ServiceError> {
     let invoice = invoices_repo.get(invoice_id.clone()).map_err(ectx!(try convert => invoice_id))?;
 
-    let invoice = match invoice {
-        None => return Ok(None),
-        Some(invoice) => invoice,
-    };
+    match invoice {
+        None => Ok(None),
+        Some(invoice) => get_invoice_price(orders_repo, rates_repo, invoice).map(Some),
+    }
+}
 
+/// Gets all of the invoice data from the DB and calculates the total price
+pub fn get_invoice_price(
+    orders_repo: &OrdersRepo,
+    rates_repo: &OrderExchangeRatesRepo,
+    invoice: RawInvoice,
+) -> Result<InvoiceDump, ServiceError> {
+    let invoice_id = invoice.id.clone();
     let orders_with_rates = orders_repo
         .get_many_by_invoice_id(invoice_id.clone())
         .map_err(ectx!(try convert => invoice_id))?
@@ -600,8 +755,7 @@ pub fn get_invoice_price(
                 .map(|rates| (order, rates))
         })
         .collect::<Result<Vec<_>, ServiceError>>()?;
-
-    Ok(Some(calculate_invoice_price(invoice, orders_with_rates)))
+    Ok(calculate_invoice_price(invoice, orders_with_rates))
 }
 
 /// Returns new and updated active rates which then have to be saved in the database. Rates that remained the same get filetered out
@@ -674,6 +828,54 @@ pub fn reserve_or_refresh_rate<PC: PaymentsClient + Send + Clone + 'static>(
         }),
     };
     Box::new(fut)
+}
+
+pub fn calculate_invoice_price_and_set_final_price_if_paid<C>(
+    conn: &C,
+    invoices_repo: &InvoicesV2Repo,
+    orders_repo: &OrdersRepo,
+    rates_repo: &OrderExchangeRatesRepo,
+    invoice_id: InvoiceV2Id,
+) -> Result<InvoiceDump, ServiceError>
+where
+    C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
+{
+    conn.transaction::<_, ServiceError, _>(move || {
+        let invoice = invoices_repo
+            .get(invoice_id.clone())
+            .map_err(ectx!(try convert => invoice_id))?
+            .ok_or_else(|| {
+                let e = format_err!("Invoice with ID {} does not exist", invoice_id);
+                ectx!(try err e, ErrorKind::Internal => invoice_id)
+            })?;
+
+        let invoice_dump = get_invoice_price(&*orders_repo, &*rates_repo, invoice.clone())?;
+
+        // Do not update anything in DB if the invoice is already marked as paid
+        if invoice.paid_at.is_some() {
+            Ok(invoice_dump)
+        } else {
+            let has_become_paid = !invoice_dump.has_missing_rates
+                && invoice.amount_captured.clone().to_super_unit(invoice_dump.buyer_currency.clone()) >= invoice_dump.total_price;
+            // If the invoice became paid, save the total values and mark is as paid in the DB
+            if !has_become_paid {
+                Ok(invoice_dump)
+            } else {
+                let input = InvoiceSetAmountPaid {
+                    final_amount_paid: Amount::from_super_unit(invoice_dump.buyer_currency.clone(), invoice_dump.total_price.clone()),
+                    final_cashback_amount: Amount::from_super_unit(
+                        Currency::Stq,
+                        invoice_dump.total_cashback.clone().unwrap_or(BigDecimal::from(0)),
+                    ),
+                    paid_at: chrono::Utc::now().naive_utc(),
+                };
+                invoices_repo
+                    .set_amount_paid(invoice.id.clone(), input.clone())
+                    .map_err(ectx!(convert => invoice.id, input))
+                    .map(|_| invoice_dump)
+            }
+        }
+    })
 }
 
 #[cfg(test)]

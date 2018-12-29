@@ -120,6 +120,10 @@ impl<
             (&Post, Some(Route::ExternalBillingCallback)) => {
                 serialize_future({ parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| service.update_invoice(data)) })
             }
+            (&Post, Some(Route::PaymentsInboundTx)) => serialize_future(
+                parse_body::<PaymentsCallback>(req.body())
+                    .and_then(move |data| service.handle_inbound_tx(data).map_err(Error::from).map_err(failure::Error::from)),
+            ),
             (&Post, Some(Route::UserMerchants)) => {
                 serialize_future({ parse_body::<CreateUserMerchantPayload>(req.body()).and_then(move |data| service.create_user(data)) })
             }

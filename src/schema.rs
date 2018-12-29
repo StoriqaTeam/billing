@@ -94,7 +94,17 @@ table! {
     }
 }
 
+table! {
+    amounts_received (id) {
+        id -> Uuid,
+        invoice_id -> Uuid,
+        amount_received -> Numeric,
+        created_at -> Timestamp,
+    }
+}
+
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(orders -> invoices_v2 (invoice_id));
 joinable!(order_exchange_rates -> orders (order_id));
+joinable!(amounts_received -> invoices_v2 (invoice_id));
 allow_tables_to_appear_in_same_query!(accounts, invoices_v2, orders, order_exchange_rates);
