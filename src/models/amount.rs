@@ -15,8 +15,10 @@ use models::Currency;
 
 const WEI_IN_ETH: u32 = 18;
 const SATOSHIS_IN_BTC: u32 = 8;
+const CENTS_IN_DOLLAR: u32 = 2;
 const MAX_WEI_PRECISION: i64 = 8;
 const MAX_SATOSHIS_PRECISION: i64 = 8;
+const MAX_FIAT_PRECISION: i64 = 2;
 
 /// This is a wrapper for monetary amounts in blockchain.
 /// You have to be careful that it has a limited amount of 38 significant digits
@@ -60,6 +62,9 @@ impl Amount {
             Currency::Btc => 10i64.pow(SATOSHIS_IN_BTC),
             Currency::Eth => 10i64.pow(WEI_IN_ETH),
             Currency::Stq => 10i64.pow(WEI_IN_ETH),
+            Currency::Usd => 10i64.pow(CENTS_IN_DOLLAR),
+            Currency::Eur => 10i64.pow(CENTS_IN_DOLLAR),
+            Currency::Rub => 10i64.pow(CENTS_IN_DOLLAR),
         };
 
         let decimal = (BigDecimal::from(value) * BigDecimal::from(exp)).with_scale(0);
@@ -72,6 +77,9 @@ impl Amount {
             Currency::Btc => 10i64.pow(SATOSHIS_IN_BTC),
             Currency::Eth => 10i64.pow(WEI_IN_ETH),
             Currency::Stq => 10i64.pow(WEI_IN_ETH),
+            Currency::Usd => 10i64.pow(CENTS_IN_DOLLAR),
+            Currency::Eur => 10i64.pow(CENTS_IN_DOLLAR),
+            Currency::Rub => 10i64.pow(CENTS_IN_DOLLAR),
         };
 
         let decimal = BigDecimal::from_str(&self.0.to_string()).unwrap() / BigDecimal::from(exp);
@@ -80,6 +88,9 @@ impl Amount {
             Currency::Btc => decimal.with_scale(MAX_SATOSHIS_PRECISION),
             Currency::Eth => decimal.with_scale(MAX_WEI_PRECISION),
             Currency::Stq => decimal.with_scale(MAX_WEI_PRECISION),
+            Currency::Usd => decimal.with_scale(MAX_FIAT_PRECISION),
+            Currency::Eur => decimal.with_scale(MAX_FIAT_PRECISION),
+            Currency::Rub => decimal.with_scale(MAX_FIAT_PRECISION),
         }
     }
 }

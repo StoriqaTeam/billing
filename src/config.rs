@@ -20,6 +20,7 @@ pub struct Config {
     pub payments: Option<Payments>,
     pub graylog: Option<GrayLogConfig>,
     pub sentry: Option<SentryConfig>,
+    pub stripe: Stripe,
 }
 
 /// Common server settings
@@ -82,6 +83,12 @@ pub struct Accounts {
     pub main_eth: Uuid,
     pub main_btc: Uuid,
     pub cashback_stq: Uuid,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Stripe {
+    pub public_key: String,
+    pub secret_key: String,
 }
 
 /// Creates new app config struct

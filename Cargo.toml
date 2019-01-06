@@ -24,9 +24,10 @@ hyper-tls = { git = "https://github.com/storiqateam/hyper-tls", tag = "v0.1.4-fr
 jsonwebtoken = "5.0"
 log = "0.4"
 r2d2 = "0.8"
-r2d2-diesel = "1.0"
 r2d2_redis = "0.8"
+r2d2-diesel = "1.0"
 secp256k1 = "0.12"
+sentry = "0.12"
 serde = "1.0"
 serde_derive = "1.0"
 serde_json = "1.0"
@@ -38,9 +39,9 @@ stq_logging = { path = "vendor/libstqbackend/logging" }
 stq_router = { path = "vendor/libstqbackend/router" }
 stq_static_resources = { path = "vendor/libstqbackend/static_resources" }
 stq_types = { path = "vendor/libstqbackend/types" }
+stripe-rust = "0.7.2"
 tokio-core = "0.1"
 tokio-signal = "0.2"
 uuid = { version = "0.6", features = ["use_std", "v4", "serde"] }
 validator = "0.8"
 validator_derive = "0.8"
-sentry = "0.12"
