@@ -7,6 +7,8 @@ use uuid::{self, Uuid};
 
 use config;
 use models::currency::Currency;
+use models::Amount;
+use models::TransactionId;
 use schema::accounts;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, AsExpression, FromSqlRow)]
@@ -108,6 +110,17 @@ pub struct NewAccount {
     pub currency: Currency,
     pub is_pooled: bool,
     pub wallet_address: Option<WalletAddress>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentsCallback {
+    pub url: String,
+    pub transaction_id: TransactionId,
+    pub amount_captured: Amount,
+    pub currency: Currency,
+    pub address: WalletAddress,
+    pub account_id: AccountId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -231,10 +231,10 @@ pub mod tests {
     use client::payments;
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
-    use models::invoice_v2::{InvoiceId as InvoiceV2Id, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
+    use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
     use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
-    use models::Currency as BillingCurrency;
     use models::*;
+    use models::{Currency as BillingCurrency, TransactionId};
     use repos::*;
     use services::*;
 
@@ -573,6 +573,23 @@ pub mod tests {
 
         fn delete(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Option<RawInvoiceV2>> {
             Ok(None)
+        }
+
+        fn get_by_account_id(&self, _account_id: AccountId) -> RepoResultV2<Option<RawInvoiceV2>> {
+            unimplemented!()
+        }
+
+        fn increase_amount_captured(
+            &self,
+            _account_id: AccountId,
+            _transaction_id: TransactionId,
+            _amount_received: Amount,
+        ) -> RepoResultV2<RawInvoiceV2> {
+            unimplemented!()
+        }
+
+        fn set_amount_paid(&self, _invoice_id: InvoiceV2Id, _input: InvoiceSetAmountPaid) -> RepoResultV2<RawInvoiceV2> {
+            unimplemented!()
         }
     }
 
