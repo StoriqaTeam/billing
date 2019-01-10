@@ -33,3 +33,7 @@ amount_recalculate_timeout_sec = 600
 
 [graylog]
 addr = "udplog.stq.cloud:32303"
+
+[event_store]
+max_processing_attempts = 3
+stuck_threshold_sec = 300

@@ -142,7 +142,12 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         None => RolesCacheImpl::new(Box::new(NullCache::new()) as Box<_>),
     };
 
-    let repo_factory = ReposFactoryImpl::new(roles_cache);
+    let config::EventStore {
+        max_processing_attempts,
+        stuck_threshold_sec,
+    } = config.event_store.clone();
+
+    let repo_factory = ReposFactoryImpl::new(roles_cache, max_processing_attempts, stuck_threshold_sec);
 
     let context = StaticContext::new(
         db_pool.clone(),

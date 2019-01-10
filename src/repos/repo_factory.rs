@@ -23,13 +23,13 @@ where
     fn create_user_roles_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
     fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a>;
-    fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a>;
     fn create_invoices_v2_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InvoicesV2Repo + 'a>;
     fn create_invoices_v2_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<InvoicesV2Repo + 'a>;
     fn create_orders_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<OrdersRepo + 'a>;
     fn create_orders_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrdersRepo + 'a>;
     fn create_order_exchange_rates_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<OrderExchangeRatesRepo + 'a>;
     fn create_order_exchange_rates_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a>;
+    fn create_event_store_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<EventStoreRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -37,6 +37,8 @@ where
     C1: Cache<Vec<BillingRole>>,
 {
     roles_cache: Arc<RolesCacheImpl<C1>>,
+    max_processing_attempts: u32,
+    stuck_threshold_sec: u32,
 }
 
 impl<C1> Clone for ReposFactoryImpl<C1>
@@ -46,6 +48,8 @@ where
     fn clone(&self) -> Self {
         Self {
             roles_cache: self.roles_cache.clone(),
+            max_processing_attempts: self.max_processing_attempts.clone(),
+            stuck_threshold_sec: self.stuck_threshold_sec.clone(),
         }
     }
 }
@@ -54,9 +58,11 @@ impl<C1> ReposFactoryImpl<C1>
 where
     C1: Cache<Vec<BillingRole>> + Send + Sync + 'static,
 {
-    pub fn new(roles_cache: RolesCacheImpl<C1>) -> Self {
+    pub fn new(roles_cache: RolesCacheImpl<C1>, max_processing_attempts: u32, stuck_threshold_sec: u32) -> Self {
         Self {
             roles_cache: Arc::new(roles_cache),
+            max_processing_attempts,
+            stuck_threshold_sec,
         }
     }
 
@@ -147,11 +153,6 @@ where
         )) as Box<AccountsRepo>
     }
 
-    fn create_accounts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
-        let acl = self.get_acl(db_conn, user_id);
-        Box::new(AccountsRepoImpl::new(db_conn, acl)) as Box<AccountsRepo>
-    }
-
     fn create_invoices_v2_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InvoicesV2Repo + 'a> {
         Box::new(InvoicesV2RepoImpl::new(db_conn, Box::new(SystemACL::default()))) as Box<InvoicesV2Repo>
     }
@@ -177,6 +178,15 @@ where
     fn create_order_exchange_rates_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a> {
         let acl = self.get_acl(db_conn, user_id);
         Box::new(OrderExchangeRatesRepoImpl::new(db_conn, acl)) as Box<OrderExchangeRatesRepo>
+    }
+
+    fn create_event_store_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<EventStoreRepo + 'a> {
+        Box::new(EventStoreRepoImpl::new(
+            db_conn,
+            Box::new(SystemACL::default()),
+            self.max_processing_attempts,
+            self.stuck_threshold_sec,
+        )) as Box<EventStoreRepo>
     }
 }
 
@@ -278,10 +288,6 @@ pub mod tests {
             Box::new(AccountsRepoMock::default())
         }
 
-        fn create_accounts_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<AccountsRepo + 'a> {
-            Box::new(AccountsRepoMock::default())
-        }
-
         fn create_invoices_v2_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoicesV2Repo + 'a> {
             Box::new(InvoicesV2RepoMock::default())
         }
@@ -304,6 +310,10 @@ pub mod tests {
 
         fn create_order_exchange_rates_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a> {
             Box::new(OrderExchangeRatesRepoMock::default())
+        }
+
+        fn create_event_store_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<EventStoreRepo + 'a> {
+            Box::new(EventStoreRepoMock::default())
         }
     }
 
@@ -675,6 +685,72 @@ pub mod tests {
 
         fn delete(&self, _rate_id: OrderExchangeRateId) -> RepoResultV2<Option<RawOrderExchangeRate>> {
             Ok(None)
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct EventStoreRepoMock;
+
+    impl EventStoreRepo for EventStoreRepoMock {
+        fn add_event(&self, event: Event) -> RepoResultV2<EventEntry> {
+            Ok(EventEntry {
+                id: EventEntryId::new(1),
+                event,
+                status: EventStatus::Pending,
+                attempt_count: 0,
+                created_at: chrono::Utc::now().naive_utc(),
+                status_updated_at: chrono::Utc::now().naive_utc(),
+            })
+        }
+
+        fn get_events_for_processing(&self, limit: u32) -> RepoResultV2<Vec<EventEntry>> {
+            Ok(
+                (0..limit)
+                    .map(|i| EventEntry {
+                        id: EventEntryId::new(i as i64),
+                        event: Event {
+                            id: EventId::generate(),
+                            payload: EventPayload::NoOp,
+                        },
+                        status: EventStatus::InProgress,
+                        attempt_count: 1,
+                        created_at: chrono::Utc::now().naive_utc(),
+                        status_updated_at: chrono::Utc::now().naive_utc(),
+                    })
+                    .collect::<Vec<_>>()
+            )
+        }
+
+        fn reset_stuck_events(&self) -> RepoResultV2<Vec<EventEntry>> {
+            Ok(vec![])
+        }
+
+        fn complete_event(&self, event_entry_id: EventEntryId) -> RepoResultV2<EventEntry> {
+            Ok(EventEntry {
+                id: event_entry_id,
+                event: Event {
+                    id: EventId::generate(),
+                    payload: EventPayload::NoOp,
+                },
+                status: EventStatus::Completed,
+                attempt_count: 1,
+                created_at: chrono::Utc::now().naive_utc(),
+                status_updated_at: chrono::Utc::now().naive_utc(),
+            })
+        }
+
+        fn fail_event(&self, event_entry_id: EventEntryId) -> RepoResultV2<EventEntry> {
+            Ok(EventEntry {
+                id: event_entry_id,
+                event: Event {
+                    id: EventId::generate(),
+                    payload: EventPayload::NoOp,
+                },
+                status: EventStatus::Failed,
+                attempt_count: 5,
+                created_at: chrono::Utc::now().naive_utc(),
+                status_updated_at: chrono::Utc::now().naive_utc(),
+            })
         }
     }
 
