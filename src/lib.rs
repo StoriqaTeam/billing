@@ -196,7 +196,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
     };
 
     thread::spawn(move || {
-        debug!("Event processor is now running");
+        info!("Event processor is now running");
         let mut core = Core::new().expect("Failed to create a Tokio core for the event processor");
         let polling_rate = Duration::new(polling_rate_sec.into(), 0);
         core.run(event_handling::run(event_handling_context, polling_rate))
