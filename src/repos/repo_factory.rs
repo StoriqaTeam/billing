@@ -183,7 +183,6 @@ where
     fn create_event_store_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<EventStoreRepo + 'a> {
         Box::new(EventStoreRepoImpl::new(
             db_conn,
-            Box::new(SystemACL::default()),
             self.max_processing_attempts,
             self.stuck_threshold_sec,
         )) as Box<EventStoreRepo>
@@ -704,21 +703,19 @@ pub mod tests {
         }
 
         fn get_events_for_processing(&self, limit: u32) -> RepoResultV2<Vec<EventEntry>> {
-            Ok(
-                (0..limit)
-                    .map(|i| EventEntry {
-                        id: EventEntryId::new(i as i64),
-                        event: Event {
-                            id: EventId::generate(),
-                            payload: EventPayload::NoOp,
-                        },
-                        status: EventStatus::InProgress,
-                        attempt_count: 1,
-                        created_at: chrono::Utc::now().naive_utc(),
-                        status_updated_at: chrono::Utc::now().naive_utc(),
-                    })
-                    .collect::<Vec<_>>()
-            )
+            Ok((0..limit)
+                .map(|i| EventEntry {
+                    id: EventEntryId::new(i as i64),
+                    event: Event {
+                        id: EventId::generate(),
+                        payload: EventPayload::NoOp,
+                    },
+                    status: EventStatus::InProgress,
+                    attempt_count: 1,
+                    created_at: chrono::Utc::now().naive_utc(),
+                    status_updated_at: chrono::Utc::now().naive_utc(),
+                })
+                .collect::<Vec<_>>())
         }
 
         fn reset_stuck_events(&self) -> RepoResultV2<Vec<EventEntry>> {

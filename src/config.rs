@@ -89,6 +89,7 @@ pub struct Accounts {
 pub struct EventStore {
     pub max_processing_attempts: u32,
     pub stuck_threshold_sec: u32,
+    pub polling_rate_sec: u32,
 }
 
 /// Creates new app config struct
@@ -105,6 +106,7 @@ impl Config {
         s.set_default("server.processing_timeout_ms", 1000 as i64).unwrap();
         s.set_default("event_store.max_processing_attempts", 3 as i64).unwrap();
         s.set_default("event_store.stuck_threshold_sec", 300 as i64).unwrap();
+        s.set_default("event_store.polling_rate_sec", 10 as i64).unwrap();
 
         s.merge(File::with_name("config/base"))?;
 

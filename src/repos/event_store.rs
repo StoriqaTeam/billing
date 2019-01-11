@@ -3,13 +3,10 @@ use diesel::pg::Pg;
 use diesel::query_dsl::RunQueryDsl;
 use diesel::sql_types;
 use diesel::{sql_query, Connection, ExpressionMethods, QueryDsl};
-use failure::Error as FailureError;
 use failure::Fail;
 use std::str::FromStr;
 
-use models::authorization::{Action, Resource, Scope};
 use models::{Event, EventEntry, EventEntryId, EventStatus, RawEventEntry, RawNewEventEntry};
-use repos::acl::legacy_acl::{Acl, CheckScope};
 use schema::event_store::dsl as EventStore;
 
 use super::error::*;
@@ -27,20 +24,16 @@ pub trait EventStoreRepo {
     fn fail_event(&self, event_entry_id: EventEntryId) -> RepoResultV2<EventEntry>;
 }
 
-type EventStoreRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, ()>>;
-
 pub struct EventStoreRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
     pub db_conn: &'a T,
-    pub acl: EventStoreRepoAcl,
     pub max_processing_attempts: u32,
     pub stuck_threshold_sec: u32,
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> EventStoreRepoImpl<'a, T> {
-    pub fn new(db_conn: &'a T, acl: EventStoreRepoAcl, max_processing_attempts: u32, stuck_threshold_sec: u32) -> Self {
+    pub fn new(db_conn: &'a T, max_processing_attempts: u32, stuck_threshold_sec: u32) -> Self {
         Self {
             db_conn,
-            acl,
             max_processing_attempts,
             stuck_threshold_sec,
         }
@@ -67,7 +60,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn get_events_for_processing(&self, limit: u32) -> RepoResultV2<Vec<EventEntry>> {
-        debug!("Getting {} events for processing", limit);
+        debug!("Getting events for processing (limit: {})", limit);
 
         let command = sql_query(
             "
@@ -84,6 +77,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 LIMIT $4
                 FOR UPDATE SKIP LOCKED
             )
+            RETURNING *
         ",
         )
         .bind::<sql_types::VarChar, _>(EventStatus::InProgress.to_string())
@@ -128,9 +122,10 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             WHERE id IN (
                 SELECT id
                 FROM event_store
-                WHERE status = $5 AND status_updated_at + $6 > $7
+                WHERE status = $5 AND status_updated_at + $6 < $7
                 FOR UPDATE SKIP LOCKED
             )
+            RETURNING *
         ",
         )
         .bind::<sql_types::Integer, _>(self.max_processing_attempts as i32)
@@ -243,13 +238,5 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             RawEventEntry::try_into_event_entry(raw_event_entry.clone())
                 .map_err(ectx!(ErrorSource::SerdeJson, ErrorKind::Internal => raw_event_entry))
         })
-    }
-}
-
-impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, ()>
-    for EventStoreRepoImpl<'a, T>
-{
-    fn is_in_scope(&self, _user_id: stq_types::UserId, _scope: &Scope, _obj: Option<&()>) -> bool {
-        true
     }
 }

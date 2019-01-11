@@ -16,3 +16,4 @@ dns_worker_thread_count = 4
 [event_store]
 max_processing_attempts = 3
 stuck_threshold_sec = 300
+polling_rate_sec = 10
