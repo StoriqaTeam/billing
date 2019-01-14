@@ -201,7 +201,6 @@ pub mod tests {
     extern crate tokio_core;
     extern crate uuid;
 
-    use client::payments::{CreateAccount, GetRate, PaymentsClient, RateRefresh};
     use futures::Future;
     use hyper::Headers;
     use services::accounts::AccountService;
@@ -237,7 +236,7 @@ pub mod tests {
     use stq_types::UserId;
     use stq_types::*;
 
-    use client::payments;
+    use client::payments::{self, CreateAccount, CreateInternalTransaction, GetRate, PaymentsClient, RateRefresh};
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
@@ -911,6 +910,10 @@ pub mod tests {
         }
 
         fn refresh_rate(&self, _exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn create_internal_transaction(&self, _input: CreateInternalTransaction) -> Box<Future<Item = (), Error = payments::Error> + Send> {
             unimplemented!()
         }
     }

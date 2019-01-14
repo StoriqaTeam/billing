@@ -147,3 +147,43 @@ impl From<RefreshRateResponse> for RateRefresh {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateInternalTransaction {
+    pub id: Uuid,
+    pub from: Uuid,
+    pub to: Uuid,
+    pub amount: Amount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateInternalTransactionRequestBody {
+    pub id: Uuid,
+    pub user_id: u32,
+    pub from: Uuid,
+    pub to: Uuid,
+    pub to_type: String,
+    pub to_currency: Currency,
+    pub value: Amount,
+    pub value_currency: Currency,
+    pub fee: Amount,
+}
+
+impl CreateInternalTransactionRequestBody {
+    pub fn new(create_internal_tx: CreateInternalTransaction, currency: Currency, user_id: u32) -> Self {
+        let CreateInternalTransaction { id, from, to, amount } = create_internal_tx;
+
+        Self {
+            id,
+            user_id,
+            from,
+            to,
+            to_type: "account".into(),
+            to_currency: currency,
+            value: amount,
+            value_currency: currency,
+            fee: Amount::new(0u128),
+        }
+    }
+}
