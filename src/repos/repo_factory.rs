@@ -587,6 +587,10 @@ pub mod tests {
             unimplemented!()
         }
 
+        fn unlink_account(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<RawInvoiceV2> {
+            unimplemented!()
+        }
+
         fn increase_amount_captured(
             &self,
             _account_id: AccountId,
@@ -937,6 +941,18 @@ pub mod tests {
             _currency: BillingCurrency,
             _is_pooled: bool,
         ) -> ServiceFutureV2<Account> {
+            unimplemented!()
+        }
+
+        fn get_account(&self, _account_id: Uuid) -> ServiceFutureV2<AccountWithBalance> {
+            unimplemented!()
+        }
+
+        fn get_main_account(&self, _currency: BillingCurrency) -> ServiceFutureV2<AccountWithBalance> {
+            unimplemented!()
+        }
+
+        fn get_stq_cashback_account(&self) -> ServiceFutureV2<AccountWithBalance> {
             unimplemented!()
         }
 

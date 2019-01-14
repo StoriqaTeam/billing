@@ -11,47 +11,65 @@ use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool, PooledConnection};
 use sentry::integrations::failure::capture_error;
 use std::time::{Duration, Instant};
+use stq_http::client::HttpClient;
 use tokio_timer::Interval;
 
+use client::payments::PaymentsClient;
 use models::event_store::EventEntry;
 use repos::repo_factory::ReposFactory;
+use services::accounts::AccountService;
 
 use self::error::*;
 
 pub type EventHandlerResult<T> = Result<T, Error>;
 pub type EventHandlerFuture<T> = Box<Future<Item = T, Error = Error>>;
 
-pub struct EventHandler<T, M, F>
+pub struct EventHandler<T, M, F, HC, PC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
+    HC: HttpClient,
+    PC: PaymentsClient,
+    AS: AccountService + 'static,
 {
     pub cpu_pool: CpuPool,
     pub db_pool: Pool<M>,
     pub repo_factory: F,
+    pub http_client: HC,
+    pub payments_client: PC,
+    pub account_service: AS,
 }
 
-impl<T, M, F> Clone for EventHandler<T, M, F>
+impl<T, M, F, HC, PC, AS> Clone for EventHandler<T, M, F, HC, PC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
+    HC: HttpClient + Clone,
+    PC: PaymentsClient + Clone,
+    AS: AccountService + Clone + 'static,
 {
     fn clone(&self) -> Self {
         Self {
             cpu_pool: self.cpu_pool.clone(),
             db_pool: self.db_pool.clone(),
             repo_factory: self.repo_factory.clone(),
+            http_client: self.http_client.clone(),
+            payments_client: self.payments_client.clone(),
+            account_service: self.account_service.clone(),
         }
     }
 }
 
-impl<T, M, F> EventHandler<T, M, F>
+impl<T, M, F, HC, PC, AS> EventHandler<T, M, F, HC, PC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
+    HC: HttpClient + Clone,
+    PC: PaymentsClient + Clone,
+    AS: AccountService + Clone + 'static,
 {
     pub fn run(self, interval: Duration) -> impl Future<Item = (), Error = FailureError> {
         Interval::new(Instant::now(), interval)
@@ -81,6 +99,7 @@ where
             cpu_pool,
             db_pool,
             repo_factory,
+            ..
         } = self.clone();
 
         let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), {
@@ -134,7 +153,7 @@ where
     }
 }
 
-fn spawn_on_pool<T, M, Func, R>(db_pool: Pool<M>, cpu_pool: CpuPool, f: Func) -> EventHandlerFuture<R>
+pub fn spawn_on_pool<T, M, Func, R>(db_pool: Pool<M>, cpu_pool: CpuPool, f: Func) -> EventHandlerFuture<R>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,

@@ -1,8 +1,8 @@
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
-use failure::Fail;
-use futures::{future, Future, Stream};
+use failure::{err_msg, Fail};
+use futures::{future, Future, IntoFuture, Stream};
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool, PooledConnection};
 use uuid::Uuid;
@@ -17,6 +17,12 @@ pub trait AccountService {
     fn init_system_accounts(&self) -> ServiceFutureV2<()>;
 
     fn init_account_pools(&self) -> ServiceFutureV2<()>;
+
+    fn get_account(&self, account_id: Uuid) -> ServiceFutureV2<AccountWithBalance>;
+
+    fn get_main_account(&self, currency: Currency) -> ServiceFutureV2<AccountWithBalance>;
+
+    fn get_stq_cashback_account(&self) -> ServiceFutureV2<AccountWithBalance>;
 
     fn create_account(&self, account_id: Uuid, name: String, currency: Currency, is_pooled: bool) -> ServiceFutureV2<Account>;
 
@@ -142,6 +148,69 @@ impl<
                         })
                         .map(|_| ())
                 }
+            });
+
+        Box::new(fut)
+    }
+
+    fn get_account(&self, account_id: Uuid) -> ServiceFutureV2<AccountWithBalance> {
+        let fut = self
+            .spawn_on_pool({
+                let repo_factory = self.repo_factory.clone();
+                move |conn| {
+                    let account_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
+                    let account = account_repo
+                        .get(AccountId::new(account_id))
+                        .map_err(ectx!(try ErrorKind::Internal => account_id))?;
+
+                    account.ok_or({
+                        let e = format_err!("Account {} not found", account_id);
+                        ectx!(err e, ErrorKind::Internal)
+                    })
+                }
+            })
+            .and_then({
+                let payments_client = self.payments_client.clone();
+                move |account| {
+                    payments_client
+                        .get_account(account_id)
+                        .map(move |PaymentsAccount { balance, .. }| AccountWithBalance { account, balance })
+                        .map_err(ectx!(ErrorKind::Internal => account_id.hyphenated().to_string()))
+                }
+            });
+
+        Box::new(fut)
+    }
+
+    fn get_main_account(&self, currency: Currency) -> ServiceFutureV2<AccountWithBalance> {
+        let fut = self
+            .system_accounts
+            .get(currency, SystemAccountType::Main)
+            .ok_or({
+                let e = format_err!("Main system account for currency {} is missing", currency);
+                ectx!(err e, ErrorKind::Internal)
+            })
+            .into_future()
+            .and_then({
+                let self_ = self.clone();
+                move |account_id| self_.get_account(account_id.into_inner())
+            });
+
+        Box::new(fut)
+    }
+
+    fn get_stq_cashback_account(&self) -> ServiceFutureV2<AccountWithBalance> {
+        let fut = self
+            .system_accounts
+            .get(Currency::Stq, SystemAccountType::Cashback)
+            .ok_or({
+                let e = err_msg("STQ cashback system account is missing");
+                ectx!(err e, ErrorKind::Internal)
+            })
+            .into_future()
+            .and_then({
+                let self_ = self.clone();
+                move |account_id| self_.get_account(account_id.into_inner())
             });
 
         Box::new(fut)
