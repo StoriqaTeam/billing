@@ -50,6 +50,7 @@ extern crate stq_static_resources;
 extern crate stq_types;
 extern crate tokio_core;
 extern crate tokio_signal;
+extern crate tokio_timer;
 extern crate uuid;
 extern crate validator;
 #[macro_use]
@@ -62,6 +63,7 @@ pub mod client;
 pub mod config;
 pub mod controller;
 pub mod errors;
+pub mod event_handling;
 pub mod models;
 pub mod repos;
 pub mod schema;
@@ -87,9 +89,11 @@ use client::payments::{self, PaymentsClientImpl};
 use config::Config;
 use controller::context::StaticContext;
 use errors::Error;
+use event_handling::Context as EventHandlingContext;
 use repos::acl::RolesCacheImpl;
 use repos::repo_factory::ReposFactoryImpl;
 use services::accounts::{AccountService, AccountServiceImpl};
+use std::thread;
 
 /// Starts new web service from provided `Config`
 pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>, callback: F) {
@@ -142,7 +146,13 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         None => RolesCacheImpl::new(Box::new(NullCache::new()) as Box<_>),
     };
 
-    let repo_factory = ReposFactoryImpl::new(roles_cache);
+    let config::EventStore {
+        max_processing_attempts,
+        stuck_threshold_sec,
+        polling_rate_sec,
+    } = config.event_store.clone();
+
+    let repo_factory = ReposFactoryImpl::new(roles_cache, max_processing_attempts, stuck_threshold_sec);
 
     let context = StaticContext::new(
         db_pool.clone(),
@@ -159,9 +169,9 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
             .expect("Failed to create Payments client");
 
         let account_service = AccountServiceImpl::new(
-            db_pool,
-            cpu_pool,
-            repo_factory,
+            db_pool.clone(),
+            cpu_pool.clone(),
+            repo_factory.clone(),
             payments_config.min_pooled_accounts,
             payments_client,
             format!("{}{}", config.callback.url, controller::routes::PAYMENTS_CALLBACK_ENDPOINT),
@@ -178,6 +188,20 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
     } else {
         info!("Payments config not found - skipping account initialization");
     }
+
+    let event_handling_context = EventHandlingContext {
+        db_pool: db_pool.clone(),
+        cpu_pool: cpu_pool.clone(),
+        repo_factory: repo_factory.clone(),
+    };
+
+    thread::spawn(move || {
+        info!("Event processor is now running");
+        let mut core = Core::new().expect("Failed to create a Tokio core for the event processor");
+        let polling_rate = Duration::new(polling_rate_sec.into(), 0);
+        core.run(event_handling::run(event_handling_context, polling_rate))
+            .expect("Fatal error occurred in the event processor");
+    });
 
     let serve = Http::new()
         .serve_addr_handle(&address, &handle, move || {

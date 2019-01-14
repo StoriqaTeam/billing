@@ -103,6 +103,17 @@ table! {
     }
 }
 
+table! {
+    event_store (id) {
+        id -> Int8,
+        event -> Jsonb,
+        status -> VarChar,
+        attempt_count -> Int4,
+        created_at -> Timestamp,
+        status_updated_at -> Timestamp,
+    }
+}
+
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(orders -> invoices_v2 (invoice_id));
 joinable!(order_exchange_rates -> orders (order_id));
