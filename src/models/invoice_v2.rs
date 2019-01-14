@@ -8,7 +8,9 @@ use stq_static_resources::OrderState;
 use uuid::{self, Uuid};
 
 use models::order_v2::{OrderId, RawOrder};
-use models::{AccountId, Amount, Currency, ExchangeRateStatus, OrderExchangeRateId, RawOrderExchangeRate, TransactionId, UserId};
+use models::{
+    AccountId, Amount, Currency, ExchangeRateStatus, OrderExchangeRateId, RawOrderExchangeRate, TransactionId, UserId, WalletAddress,
+};
 use schema::amounts_received;
 use schema::invoices_v2;
 
@@ -209,6 +211,7 @@ pub struct InvoiceDump {
     pub has_missing_rates: bool,
     pub created_at: NaiveDateTime,
     pub paid_at: Option<NaiveDateTime>,
+    pub wallet_address: Option<WalletAddress>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,7 +220,11 @@ pub struct InvoiceDumpCalculationData {
     pub orders: (RawOrder, RawOrderExchangeRate),
 }
 
-pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Vec<RawOrderExchangeRate>)>) -> InvoiceDump {
+pub fn calculate_invoice_price(
+    invoice: RawInvoice,
+    orders: Vec<(RawOrder, Vec<RawOrderExchangeRate>)>,
+    wallet_address: Option<WalletAddress>,
+) -> InvoiceDump {
     let RawInvoice {
         id,
         buyer_currency,
@@ -302,6 +309,7 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Vec<R
             has_missing_rates,
             created_at,
             paid_at: Some(paid_at),
+            wallet_address,
         },
         _ => orders.clone().into_iter().fold(
             InvoiceDump {
@@ -314,6 +322,7 @@ pub fn calculate_invoice_price(invoice: RawInvoice, orders: Vec<(RawOrder, Vec<R
                 has_missing_rates,
                 created_at,
                 paid_at: None,
+                wallet_address,
             },
             |mut invoice, order_price| {
                 if let Some(BuyerAmounts { price, .. }) = order_price.buyer_amounts {

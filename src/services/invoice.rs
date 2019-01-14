@@ -27,7 +27,7 @@ use models::order_v2::{ExchangeId, NewOrder, RawOrder};
 use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
-use repos::{EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, RepoResult};
+use repos::{AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, RepoResult};
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::Service;
@@ -37,22 +37,29 @@ use super::types::{ServiceFuture, ServiceFutureV2};
 
 pub trait InvoiceService {
     /// Creates invoice in billing system
+    /// DEPRECATED (v1)
     fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice>;
     fn create_invoice_v2(&self, create_invoice: CreateInvoiceV2) -> ServiceFutureV2<InvoiceDump>;
     /// Get invoice by order id
+    /// DEPRECATED
     fn get_invoice_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>>;
     /// Get invoice by invoice id
+    /// DEPRECATED
     fn get_invoice_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>>;
     /// Recalc invoice by invoice id
+    /// DEPRECATED
     fn recalc_invoice(&self, id: InvoiceId) -> ServiceFuture<Invoice>;
     /// Refreshes all rates for the invoice and calculates the total price of the invoice.
     /// Either calculate the current total price of the invoice or get the final price if the invoice has been paid
     fn recalc_invoice_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Option<InvoiceDump>>;
     /// Get orders ids by invoice id
+    /// DEPRECATED
     fn get_invoice_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
     /// Delete invoice merchant
+    /// DEPRECATED
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// Creates orders in billing system, returning url for payment
+    /// DEPRECATED
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
     /// Handles the callback from Payments gateway which carries a new inbound transaction
     fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
@@ -219,9 +226,9 @@ impl<
                 account_service
                     .get_or_create_free_pooled_account(buyer_currency)
                     .map_err(ectx!(convert => buyer_currency))
-                    .map(|account| (account.id, orders))
+                    .map(|account| (account.id, account.wallet_address, orders))
             })
-            .and_then(move |(account_id, orders)| {
+            .and_then(move |(account_id, wallet_address, orders)| {
                 cpu_pool.spawn_fn(move || {
                     db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
                         let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
@@ -260,7 +267,7 @@ impl<
                                 })
                                 .collect::<Result<Vec<_>, ServiceError>>()?;
 
-                            Ok(calculate_invoice_price(invoice, orders_with_rates))
+                            Ok(calculate_invoice_price(invoice, orders_with_rates, wallet_address))
                         })
                     })
                 })
@@ -394,6 +401,7 @@ impl<
                 let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
                 let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                 let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
 
                 let id_clone = id.clone();
                 let invoice = invoices_repo.get(id_clone.clone()).map_err(ectx!(try convert => id_clone))?;
@@ -407,7 +415,23 @@ impl<
 
                 let current_order_rates = get_order_active_rates(&*orders_repo, &*rates_repo, id)?;
 
-                Ok(Some((invoice, current_order_rates)))
+                let wallet_address = if let Some(account_id) = invoice.account_id {
+                    accounts_repo
+                        .get(account_id.clone())
+                        .map_err({
+                            let account_id = account_id.clone();
+                            ectx!(try convert => account_id)
+                        })?
+                        .ok_or({
+                            let e = format_err!("Account {} not found", account_id);
+                            ectx!(try err e, ErrorKind::Internal)
+                        })?
+                        .wallet_address
+                } else {
+                    None
+                };
+
+                Ok(Some((invoice, current_order_rates, wallet_address)))
             }
         })
         .and_then({
@@ -418,14 +442,14 @@ impl<
 
             move |invoice_data| match invoice_data {
                 None => future::Either::A(future::ok(None)),
-                Some((invoice, current_order_rates)) => future::Either::B(Some(future::lazy(move || {
+                Some((invoice, current_order_rates, wallet_address)) => future::Either::B(Some(future::lazy(move || {
                     // Calculate invoice price without refreshing rates if the invoice has already been paid
                     if invoice.paid_at.is_some() {
                         let current_order_rates = current_order_rates
                             .into_iter()
                             .map(|(order, rate)| (order, rate.into_iter().collect::<Vec<_>>()))
                             .collect::<Vec<_>>();
-                        return future::Either::A(future::ok(calculate_invoice_price(invoice, current_order_rates)));
+                        return future::Either::A(future::ok(calculate_invoice_price(invoice, current_order_rates, wallet_address)));
                     }
 
                     // Get missing rates from Payments gateway and refresh existing rates
@@ -459,6 +483,7 @@ impl<
                                     let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
                                     let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                                     let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                    let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
                                     let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
                                     calculate_invoice_price_and_set_final_price_if_paid(
@@ -466,6 +491,7 @@ impl<
                                         &*invoices_repo,
                                         &*orders_repo,
                                         &*rates_repo,
+                                        &*accounts_repo,
                                         &*event_store_repo,
                                         invoice.id.clone(),
                                     )
@@ -658,6 +684,7 @@ impl<
                                     let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
                                     let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                                     let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                    let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
                                     let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
                                     calculate_invoice_price_and_set_final_price_if_paid(
@@ -665,6 +692,7 @@ impl<
                                         &*invoices_repo,
                                         &*orders_repo,
                                         &*rates_repo,
+                                        &*accounts_repo,
                                         &*event_store_repo,
                                         invoice.id.clone(),
                                     )?;
@@ -736,13 +764,14 @@ pub fn get_invoice_price_by_invoice_id(
     invoices_repo: &InvoicesV2Repo,
     orders_repo: &OrdersRepo,
     rates_repo: &OrderExchangeRatesRepo,
+    accounts_repo: &AccountsRepo,
     invoice_id: InvoiceV2Id,
 ) -> Result<Option<InvoiceDump>, ServiceError> {
     let invoice = invoices_repo.get(invoice_id.clone()).map_err(ectx!(try convert => invoice_id))?;
 
     match invoice {
         None => Ok(None),
-        Some(invoice) => get_invoice_price(orders_repo, rates_repo, invoice).map(Some),
+        Some(invoice) => get_invoice_price(orders_repo, rates_repo, accounts_repo, invoice).map(Some),
     }
 }
 
@@ -750,6 +779,7 @@ pub fn get_invoice_price_by_invoice_id(
 pub fn get_invoice_price(
     orders_repo: &OrdersRepo,
     rates_repo: &OrderExchangeRatesRepo,
+    accounts_repo: &AccountsRepo,
     invoice: RawInvoice,
 ) -> Result<InvoiceDump, ServiceError> {
     let invoice_id = invoice.id.clone();
@@ -765,7 +795,24 @@ pub fn get_invoice_price(
                 .map(|rates| (order, rates))
         })
         .collect::<Result<Vec<_>, ServiceError>>()?;
-    Ok(calculate_invoice_price(invoice, orders_with_rates))
+
+    let wallet_address = if let Some(account_id) = invoice.account_id {
+        accounts_repo
+            .get(account_id.clone())
+            .map_err({
+                let account_id = account_id.clone();
+                ectx!(try convert => account_id)
+            })?
+            .ok_or({
+                let e = format_err!("Account {} not found", account_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?
+            .wallet_address
+    } else {
+        None
+    };
+
+    Ok(calculate_invoice_price(invoice, orders_with_rates, wallet_address))
 }
 
 /// Returns new and updated active rates which then have to be saved in the database. Rates that remained the same get filetered out
@@ -845,6 +892,7 @@ pub fn calculate_invoice_price_and_set_final_price_if_paid<C>(
     invoices_repo: &InvoicesV2Repo,
     orders_repo: &OrdersRepo,
     rates_repo: &OrderExchangeRatesRepo,
+    accounts_repo: &AccountsRepo,
     event_store_repo: &EventStoreRepo,
     invoice_id: InvoiceV2Id,
 ) -> Result<InvoiceDump, ServiceError>
@@ -860,7 +908,7 @@ where
                 ectx!(try err e, ErrorKind::Internal => invoice_id)
             })?;
 
-        let invoice_dump = get_invoice_price(&*orders_repo, &*rates_repo, invoice.clone())?;
+        let invoice_dump = get_invoice_price(&*orders_repo, &*rates_repo, &*accounts_repo, invoice.clone())?;
 
         // Do not update anything in DB if the invoice is already marked as paid
         if invoice.paid_at.is_some() {
