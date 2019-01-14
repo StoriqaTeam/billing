@@ -3,7 +3,7 @@ mod types;
 
 use chrono::Utc;
 use failure::Fail;
-use futures::{prelude::*, Future};
+use futures::{future, prelude::*, Future};
 use hyper::{Headers, Method};
 use secp256k1::{key::SecretKey, Message, Secp256k1};
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,10 @@ use models::order_v2::ExchangeId;
 
 pub use self::error::*;
 use self::types::AccountResponse;
-pub use self::types::{Account, CreateAccount, GetRate, GetRateResponse, Rate, RateRefresh, RefreshRateResponse};
+pub use self::types::{
+    Account, CreateAccount, CreateInternalTransaction, CreateInternalTransactionRequestBody, GetRate, GetRateResponse, Rate, RateRefresh,
+    RefreshRateResponse,
+};
 
 pub trait PaymentsClient: Send + Sync + 'static {
     fn get_account(&self, account_id: Uuid) -> Box<Future<Item = Account, Error = Error> + Send>;
@@ -32,6 +35,8 @@ pub trait PaymentsClient: Send + Sync + 'static {
     fn get_rate(&self, input: GetRate) -> Box<Future<Item = Rate, Error = Error> + Send>;
 
     fn refresh_rate(&self, exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = Error> + Send>;
+
+    fn create_internal_transaction(&self, input: CreateInternalTransaction) -> Box<Future<Item = (), Error = Error> + Send>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,5 +232,35 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
                 .map_err(ectx!(ErrorKind::Internal => Method::Post, query, json!({ "rateId": exchange_id })))
                 .map(RateRefresh::from),
         )
+    }
+
+    fn create_internal_transaction(&self, input: CreateInternalTransaction) -> Box<Future<Item = (), Error = Error> + Send> {
+        let CreateInternalTransaction { from, to, .. } = input;
+
+        let fut = Future::join(self.get_account(from), self.get_account(to)).and_then({
+            let self_ = self.clone();
+            move |(from, to)| {
+                if from.currency != to.currency {
+                    let e = format_err!(
+                        "Currency mismatch between accounts {} - {} and {} - {}",
+                        from.currency,
+                        from.id,
+                        to.currency,
+                        to.id
+                    );
+                    future::Either::A(future::err(ectx!(err e, ErrorKind::Internal)))
+                } else {
+                    let body = CreateInternalTransactionRequestBody::new(input, from.currency, self_.user_id);
+                    let query = format!("/v1/transactions");
+                    future::Either::B(
+                        self_
+                            .request_with_auth::<_, ()>(Method::Post, query.clone(), body.clone())
+                            .map_err(ectx!(ErrorKind::Internal => Method::Post, query, body)),
+                    )
+                }
+            }
+        });
+
+        Box::new(fut)
     }
 }

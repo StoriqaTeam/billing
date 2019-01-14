@@ -38,6 +38,7 @@ pub trait InvoicesV2Repo {
         amount_received: Amount,
     ) -> RepoResultV2<RawInvoice>;
     fn set_amount_paid(&self, invoice_id: InvoiceId, input: InvoiceSetAmountPaid) -> RepoResultV2<RawInvoice>;
+    fn unlink_account(&self, invoice_id: InvoiceId) -> RepoResultV2<RawInvoice>;
     fn delete(&self, invoice_id: InvoiceId) -> RepoResultV2<Option<RawInvoice>>;
 }
 
@@ -210,6 +211,37 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let changeset = RawInvoiceSetAmountPaid::from(input);
 
         let command = diesel::update(InvoicesV2::invoices_v2.filter(InvoicesV2::id.eq(invoice_id))).set(&changeset);
+
+        command.get_result::<RawInvoice>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+
+    fn unlink_account(&self, invoice_id: InvoiceId) -> RepoResultV2<RawInvoice> {
+        debug!("Unlinking account for invoice with ID = {}", invoice_id);
+
+        let query = InvoicesV2::invoices_v2.filter(InvoicesV2::id.eq(invoice_id));
+
+        query
+            .get_result::<RawInvoice>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })
+            .and_then(|invoice| {
+                acl::check(
+                    &*self.acl,
+                    Resource::Invoice,
+                    Action::Write,
+                    self,
+                    Some(&InvoiceAccess::from(invoice.clone())),
+                )
+                .map_err(ectx!(try ErrorKind::Forbidden))
+            })?;
+
+        let command = diesel::update(InvoicesV2::invoices_v2.filter(InvoicesV2::id.eq(invoice_id)))
+            .set(InvoicesV2::account_id.eq(None as Option<AccountId>));
 
         command.get_result::<RawInvoice>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);

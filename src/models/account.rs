@@ -25,6 +25,10 @@ impl AccountId {
         &self.0
     }
 
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+
     pub fn generate() -> Self {
         AccountId(Uuid::new_v4())
     }
@@ -71,6 +75,19 @@ pub struct Account {
     pub is_pooled: bool,
     pub created_at: NaiveDateTime,
     pub wallet_address: Option<WalletAddress>,
+}
+
+impl Account {
+    pub fn is_fiat(&self) -> bool {
+        self.wallet_address.is_none()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountWithBalance {
+    #[serde(flatten)]
+    pub account: Account,
+    pub balance: Amount,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
@@ -123,7 +140,7 @@ pub struct PaymentsCallback {
     pub account_id: AccountId,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SystemAccountType {
     Main,
     Cashback,
@@ -153,6 +170,15 @@ impl Display for SystemAccount {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemAccounts(pub Vec<SystemAccount>);
+
+impl SystemAccounts {
+    pub fn get(&self, currency: Currency, account_type: SystemAccountType) -> Option<AccountId> {
+        self.0
+            .iter()
+            .find(|account| account.currency == currency && account.account_type == account_type)
+            .map(|account| account.id)
+    }
+}
 
 impl From<config::Accounts> for SystemAccounts {
     fn from(config: config::Accounts) -> SystemAccounts {

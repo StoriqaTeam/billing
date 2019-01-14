@@ -15,6 +15,14 @@ pub struct OrderInfo {
     pub total_amount: ProductPrice,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct OrderStatusUpdate {
+    pub order_id: OrderId,
+    pub store_id: StoreId,
+    pub customer_id: UserId,
+    pub status: OrderState,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
 #[table_name = "orders_info"]
 pub struct NewOrderInfo {

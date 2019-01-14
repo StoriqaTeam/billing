@@ -201,7 +201,6 @@ pub mod tests {
     extern crate tokio_core;
     extern crate uuid;
 
-    use client::payments::{CreateAccount, GetRate, PaymentsClient, RateRefresh};
     use futures::Future;
     use hyper::Headers;
     use services::accounts::AccountService;
@@ -237,7 +236,7 @@ pub mod tests {
     use stq_types::UserId;
     use stq_types::*;
 
-    use client::payments;
+    use client::payments::{self, CreateAccount, CreateInternalTransaction, GetRate, PaymentsClient, RateRefresh};
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
@@ -588,6 +587,10 @@ pub mod tests {
             unimplemented!()
         }
 
+        fn unlink_account(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<RawInvoiceV2> {
+            unimplemented!()
+        }
+
         fn increase_amount_captured(
             &self,
             _account_id: AccountId,
@@ -913,6 +916,10 @@ pub mod tests {
         fn refresh_rate(&self, _exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = payments::Error> + Send> {
             unimplemented!()
         }
+
+        fn create_internal_transaction(&self, _input: CreateInternalTransaction) -> Box<Future<Item = (), Error = payments::Error> + Send> {
+            unimplemented!()
+        }
     }
 
     #[derive(Default, Clone)]
@@ -934,6 +941,18 @@ pub mod tests {
             _currency: BillingCurrency,
             _is_pooled: bool,
         ) -> ServiceFutureV2<Account> {
+            unimplemented!()
+        }
+
+        fn get_account(&self, _account_id: Uuid) -> ServiceFutureV2<AccountWithBalance> {
+            unimplemented!()
+        }
+
+        fn get_main_account(&self, _currency: BillingCurrency) -> ServiceFutureV2<AccountWithBalance> {
+            unimplemented!()
+        }
+
+        fn get_stq_cashback_account(&self) -> ServiceFutureV2<AccountWithBalance> {
             unimplemented!()
         }
 
