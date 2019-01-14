@@ -1,4 +1,5 @@
 pub mod error;
+mod handlers;
 
 use diesel::{
     connection::{AnsiTransactionManager, Connection},
@@ -12,7 +13,6 @@ use sentry::integrations::failure::capture_error;
 use std::time::{Duration, Instant};
 use tokio_timer::Interval;
 
-use models::event::*;
 use models::event_store::EventEntry;
 use repos::repo_factory::ReposFactory;
 
@@ -21,7 +21,7 @@ use self::error::*;
 pub type EventHandlerResult<T> = Result<T, Error>;
 pub type EventHandlerFuture<T> = Box<Future<Item = T, Error = Error>>;
 
-pub struct Context<T, M, F>
+pub struct EventHandler<T, M, F>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
@@ -32,7 +32,7 @@ where
     pub repo_factory: F,
 }
 
-impl<T, M, F> Clone for Context<T, M, F>
+impl<T, M, F> Clone for EventHandler<T, M, F>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
@@ -47,106 +47,90 @@ where
     }
 }
 
-pub fn run<T, M, F>(ctx: Context<T, M, F>, interval: Duration) -> impl Future<Item = (), Error = FailureError>
+impl<T, M, F> EventHandler<T, M, F>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
 {
-    Interval::new(Instant::now(), interval)
-        .map_err(ectx!(ErrorSource::TokioTimer, ErrorKind::Internal))
-        .fold(ctx, |ctx, _| {
-            debug!("Started processing events");
-            process_events(ctx.clone()).then(|res| {
-                match res {
-                    Ok(_) => {
-                        debug!("Finished processing events");
-                    }
-                    Err(err) => {
-                        let err = FailureError::from(err.context("An error occurred while processing events"));
-                        error!("{:?}", &err);
-                        capture_error(&err);
-                    }
-                };
+    pub fn run(self, interval: Duration) -> impl Future<Item = (), Error = FailureError> {
+        Interval::new(Instant::now(), interval)
+            .map_err(ectx!(ErrorSource::TokioTimer, ErrorKind::Internal))
+            .fold(self, |event_handler, _| {
+                debug!("Started processing events");
+                event_handler.clone().process_events().then(|res| {
+                    match res {
+                        Ok(_) => {
+                            debug!("Finished processing events");
+                        }
+                        Err(err) => {
+                            let err = FailureError::from(err.context("An error occurred while processing events"));
+                            error!("{:?}", &err);
+                            capture_error(&err);
+                        }
+                    };
 
-                future::ok::<_, FailureError>(ctx)
+                    future::ok::<_, FailureError>(event_handler)
+                })
             })
+            .map(|_| ())
+    }
+
+    fn process_events(self) -> EventHandlerFuture<()> {
+        let EventHandler {
+            cpu_pool,
+            db_pool,
+            repo_factory,
+        } = self.clone();
+
+        let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), {
+            let repo_factory = repo_factory.clone();
+            move |conn| {
+                let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
+
+                debug!("Resetting stuck events...");
+                let reset_events = event_store_repo.reset_stuck_events().map_err(ectx!(try convert))?;
+                debug!("{} events have been reset", reset_events.len());
+
+                debug!("Getting events for processing...");
+                event_store_repo
+                    .get_events_for_processing(1)
+                    .map(|event_entries| {
+                        debug!("Got {} events to process", event_entries.len());
+                        event_entries
+                            .into_iter()
+                            .next()
+                            .map(|EventEntry { id: entry_id, event, .. }| (entry_id, event))
+                    })
+                    .map_err(ectx!(convert))
+            }
         })
-        .map(|_| ())
-}
+        .and_then(move |event| match event {
+            None => future::Either::A(future::ok(())),
+            Some((entry_id, event)) => future::Either::B(future::lazy(move || {
+                debug!("Started processing event #{} - {:?}", entry_id, event);
+                self.handle_event(event.clone()).then(move |result| {
+                    spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                        let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
-pub fn process_events<T, M, F>(ctx: Context<T, M, F>) -> EventHandlerFuture<()>
-where
-    T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-    M: ManageConnection<Connection = T>,
-    F: ReposFactory<T>,
-{
-    let Context {
-        cpu_pool,
-        db_pool,
-        repo_factory,
-    } = ctx.clone();
-
-    let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), {
-        let repo_factory = repo_factory.clone();
-        move |conn| {
-            let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
-
-            debug!("Resetting stuck events...");
-            let reset_events = event_store_repo.reset_stuck_events().map_err(ectx!(try convert))?;
-            debug!("{} events have been reset", reset_events.len());
-
-            debug!("Getting events for processing...");
-            event_store_repo
-                .get_events_for_processing(1)
-                .map(|event_entries| {
-                    debug!("Got {} events to process", event_entries.len());
-                    event_entries
-                        .into_iter()
-                        .next()
-                        .map(|EventEntry { id: entry_id, event, .. }| (entry_id, event))
-                })
-                .map_err(ectx!(convert))
-        }
-    })
-    .and_then(move |event| match event {
-        None => future::Either::A(future::ok(())),
-        Some((entry_id, event)) => future::Either::B(future::lazy(move || {
-            debug!("Started processing event #{} - {:?}", entry_id, event);
-            handle_event(ctx, event.clone()).then(move |result| {
-                spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                    let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
-
-                    match result {
-                        Ok(()) => {
-                            debug!("Finished processing event #{} - {:?}", entry_id, event);
-                            event_store_repo.complete_event(entry_id).map_err(ectx!(try convert => entry_id))?;
-                            Ok(())
+                        match result {
+                            Ok(()) => {
+                                debug!("Finished processing event #{} - {:?}", entry_id, event);
+                                event_store_repo.complete_event(entry_id).map_err(ectx!(try convert => entry_id))?;
+                                Ok(())
+                            }
+                            Err(e) => {
+                                debug!("Failed to process event #{} - {:?}", entry_id, event);
+                                event_store_repo.fail_event(entry_id).map_err(ectx!(try convert => entry_id))?;
+                                Err(e)
+                            }
                         }
-                        Err(e) => {
-                            debug!("Failed to process event #{} - {:?}", entry_id, event);
-                            event_store_repo.fail_event(entry_id).map_err(ectx!(try convert => entry_id))?;
-                            Err(e)
-                        }
-                    }
+                    })
                 })
-            })
-        })),
-    });
+            })),
+        });
 
-    Box::new(fut)
-}
-
-pub fn handle_event<T, M, F>(_ctx: Context<T, M, F>, event: Event) -> EventHandlerFuture<()>
-where
-    T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-    M: ManageConnection<Connection = T>,
-    F: ReposFactory<T>,
-{
-    let Event { id: _, payload } = event;
-
-    match payload {
-        EventPayload::NoOp => Box::new(future::ok(())),
+        Box::new(fut)
     }
 }
 
