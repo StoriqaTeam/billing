@@ -2,6 +2,8 @@ use diesel::sql_types::Uuid as SqlUuid;
 use std::fmt;
 use uuid::Uuid;
 
+use models::invoice_v2::InvoiceId;
+
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq, Eq, FromStr)]
 #[sql_type = "SqlUuid"]
 pub struct EventId(Uuid);
@@ -33,9 +35,19 @@ pub struct Event {
     pub payload: EventPayload,
 }
 
+impl Event {
+    pub fn new(payload: EventPayload) -> Self {
+        Self {
+            id: EventId::generate(),
+            payload,
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub enum EventPayload {
     NoOp,
+    InvoicePaid { invoice_id: InvoiceId },
 }
 
 impl fmt::Debug for EventPayload {
@@ -49,6 +61,7 @@ impl fmt::Display for EventPayload {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let s = match self {
             EventPayload::NoOp => "NoOp",
+            EventPayload::InvoicePaid { .. } => "InvoicePaid",
         };
 
         f.write_str(&s)

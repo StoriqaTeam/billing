@@ -1,4 +1,5 @@
 pub mod error;
+mod handlers;
 
 use diesel::{
     connection::{AnsiTransactionManager, Connection},
@@ -17,6 +18,7 @@ use models::event_store::EventEntry;
 use repos::repo_factory::ReposFactory;
 
 use self::error::*;
+use self::handlers::*;
 
 pub type EventHandlerResult<T> = Result<T, Error>;
 pub type EventHandlerFuture<T> = Box<Future<Item = T, Error = Error>>;
@@ -137,7 +139,7 @@ where
     Box::new(fut)
 }
 
-pub fn handle_event<T, M, F>(_ctx: Context<T, M, F>, event: Event) -> EventHandlerFuture<()>
+pub fn handle_event<T, M, F>(ctx: Context<T, M, F>, event: Event) -> EventHandlerFuture<()>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
@@ -147,6 +149,7 @@ where
 
     match payload {
         EventPayload::NoOp => Box::new(future::ok(())),
+        EventPayload::InvoicePaid { invoice_id } => handle_invoice_paid(ctx, invoice_id),
     }
 }
 

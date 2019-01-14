@@ -27,7 +27,7 @@ use models::order_v2::{ExchangeId, NewOrder, RawOrder};
 use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
-use repos::{InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, RepoResult};
+use repos::{EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, RepoResult};
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::Service;
@@ -459,12 +459,14 @@ impl<
                                     let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
                                     let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                                     let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                    let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
                                     calculate_invoice_price_and_set_final_price_if_paid(
                                         &*conn,
                                         &*invoices_repo,
                                         &*orders_repo,
                                         &*rates_repo,
+                                        &*event_store_repo,
                                         invoice.id.clone(),
                                     )
                                 })
@@ -656,20 +658,28 @@ impl<
                                     let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
                                     let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                                     let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                    let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
-                                    calculate_invoice_price_and_set_final_price_if_paid(&*conn, &*invoices_repo, &*orders_repo, &*rates_repo, invoice.id.clone())?;
-                                    Ok(invoice)
+                                    calculate_invoice_price_and_set_final_price_if_paid(
+                                        &*conn,
+                                        &*invoices_repo,
+                                        &*orders_repo,
+                                        &*rates_repo,
+                                        &*event_store_repo,
+                                        invoice.id.clone(),
+                                    )?;
+
+                                    Ok(())
                                 })
                             })
                         )),
                         // Skip recalc if the invoice is paid
-                        Some(_) => future::Either::B(future::ok(invoice)),
+                        Some(_) => future::Either::B(future::ok(())),
                     }
                 }
             });
 
-        // TODO: send status update to saga, drain account linked to invoice
-        Box::new(fut.map(|_| ()))
+        Box::new(fut)
     }
 }
 
@@ -835,6 +845,7 @@ pub fn calculate_invoice_price_and_set_final_price_if_paid<C>(
     invoices_repo: &InvoicesV2Repo,
     orders_repo: &OrdersRepo,
     rates_repo: &OrderExchangeRatesRepo,
+    event_store_repo: &EventStoreRepo,
     invoice_id: InvoiceV2Id,
 ) -> Result<InvoiceDump, ServiceError>
 where
@@ -869,10 +880,18 @@ where
                     ),
                     paid_at: chrono::Utc::now().naive_utc(),
                 };
-                invoices_repo
-                    .set_amount_paid(invoice.id.clone(), input.clone())
-                    .map_err(ectx!(convert => invoice.id, input))
-                    .map(|_| invoice_dump)
+
+                let invoice_id = invoice.id.clone();
+                let invoice_dump = invoices_repo
+                    .set_amount_paid(invoice_id.clone(), input.clone())
+                    .map_err(ectx!(try convert => invoice_id, input))
+                    .map(|_| invoice_dump)?;
+
+                // Publish "InvoicePaid" event
+                let event = Event::new(EventPayload::InvoicePaid { invoice_id: invoice.id });
+                event_store_repo.add_event(event.clone()).map_err(ectx!(try convert => event))?;
+
+                Ok(invoice_dump)
             }
         }
     })
