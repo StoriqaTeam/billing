@@ -1,5 +1,5 @@
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
-use failure::Fail;
+use failure::{err_msg, Fail};
 use futures::{future, Future, IntoFuture};
 use hyper::Method;
 use r2d2::ManageConnection;
@@ -33,18 +33,25 @@ where
         }
     }
 
-    // TODO: handle this event properly
     pub fn handle_invoice_paid(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
-        let fut = Future::join(
-            self.clone().drain_and_unlink_account(invoice_id),
-            self.mark_orders_as_paid_on_saga(invoice_id),
-        )
-        .map(|_| ());
+        match (self.payments_client.clone(), self.account_service.clone()) {
+            (Some(payments_client), Some(account_service)) => {
+                let fut = Future::join(
+                    self.clone().drain_and_unlink_account(payments_client, account_service, invoice_id),
+                    self.mark_orders_as_paid_on_saga(invoice_id),
+                )
+                .map(|_| ());
 
-        Box::new(fut)
+                Box::new(fut)
+            }
+            _ => {
+                let e = err_msg("Payments integration must be configured for the InvoicePaid event to be processed");
+                Box::new(future::err(ectx!(err e, ErrorKind::Internal)))
+            }
+        }
     }
 
-    fn drain_and_unlink_account(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
+    fn drain_and_unlink_account(self, payments_client: PC, account_service: AS, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
         let EventHandler { db_pool, cpu_pool, .. } = self.clone();
 
         let fut = spawn_on_pool(db_pool, cpu_pool, {
@@ -69,7 +76,7 @@ where
                 None => future::Either::A(future::ok(())),
                 // Drain and unlink the account
                 Some(account_id) => future::Either::B(future::lazy(move || {
-                    self_.clone().drain_account(account_id).and_then({
+                    self_.clone().drain_account(payments_client, account_service, account_id).and_then({
                         let db_pool = self_.db_pool.clone();
                         let cpu_pool = self_.cpu_pool.clone();
                         let repo_factory = self_.repo_factory.clone();
@@ -90,14 +97,13 @@ where
         Box::new(fut)
     }
 
-    fn drain_account(self, account_id: AccountId) -> EventHandlerFuture<()> {
-        let account_service = self.account_service.clone();
+    fn drain_account(self, payments_client: PC, account_service: AS, account_id: AccountId) -> EventHandlerFuture<()> {
         let account_id = account_id.into_inner();
         let fut = account_service
             .get_account(account_id)
             .map_err(ectx!(ErrorKind::Internal => account_id))
             .and_then({
-                let account_service = self.account_service.clone();
+                let account_service = account_service.clone();
                 move |AccountWithBalance { account, balance }| {
                     let currency = account.currency;
                     account_service
@@ -106,20 +112,17 @@ where
                         .map_err(ectx!(ErrorKind::Internal => currency))
                 }
             })
-            .and_then({
-                let payments_client = self.payments_client.clone();
-                move |(account_id, balance, main_account_id)| {
-                    let input = CreateInternalTransaction {
-                        id: Uuid::new_v4(),
-                        from: account_id,
-                        to: main_account_id,
-                        amount: balance,
-                    };
+            .and_then(move |(account_id, balance, main_account_id)| {
+                let input = CreateInternalTransaction {
+                    id: Uuid::new_v4(),
+                    from: account_id,
+                    to: main_account_id,
+                    amount: balance,
+                };
 
-                    payments_client
-                        .create_internal_transaction(input.clone())
-                        .map_err(ectx!(ErrorKind::Internal => input))
-                }
+                payments_client
+                    .create_internal_transaction(input.clone())
+                    .map_err(ectx!(ErrorKind::Internal => input))
             });
 
         Box::new(fut)

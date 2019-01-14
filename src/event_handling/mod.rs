@@ -37,8 +37,8 @@ where
     pub db_pool: Pool<M>,
     pub repo_factory: F,
     pub http_client: HC,
-    pub payments_client: PC,
-    pub account_service: AS,
+    pub payments_client: Option<PC>,
+    pub account_service: Option<AS>,
     pub saga_url: String,
 }
 
