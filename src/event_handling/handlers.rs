@@ -1,12 +1,14 @@
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use failure::Fail;
-use futures::{future, Future};
+use futures::{future, Future, IntoFuture};
+use hyper::Method;
 use r2d2::ManageConnection;
 use stq_http::client::HttpClient;
+use stq_static_resources::OrderState;
 use uuid::Uuid;
 
 use client::payments::{CreateInternalTransaction, PaymentsClient};
-use models::{invoice_v2::InvoiceId, AccountId, AccountWithBalance, Event, EventPayload};
+use models::{invoice_v2::InvoiceId, order_v2::OrderStateUpdate, AccountId, AccountWithBalance, Event, EventPayload};
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
 
@@ -33,7 +35,13 @@ where
 
     // TODO: handle this event properly
     pub fn handle_invoice_paid(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
-        self.drain_and_unlink_account(invoice_id)
+        let fut = Future::join(
+            self.clone().drain_and_unlink_account(invoice_id),
+            self.mark_orders_as_paid_on_saga(invoice_id),
+        )
+        .map(|_| ());
+
+        Box::new(fut)
     }
 
     fn drain_and_unlink_account(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
@@ -113,6 +121,58 @@ where
                         .map_err(ectx!(ErrorKind::Internal => input))
                 }
             });
+
+        Box::new(fut)
+    }
+
+    fn mark_orders_as_paid_on_saga(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
+        let EventHandler { db_pool, cpu_pool, .. } = self.clone();
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, {
+            let repo_factory = self.repo_factory.clone();
+            move |conn| {
+                let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
+                let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
+
+                let invoice_id_clone = invoice_id.clone();
+                let invoice = invoices_repo
+                    .get(invoice_id_clone)
+                    .map_err(ectx!(try convert => invoice_id_clone))?
+                    .ok_or({
+                        let e = format_err!("Invoice {} not found", invoice_id.clone());
+                        ectx!(try err e, ErrorKind::Internal)
+                    })?;
+
+                let orders = orders_repo
+                    .get_many_by_invoice_id(invoice_id)
+                    .map_err(ectx!(try convert => invoice_id))?;
+
+                Ok(orders
+                    .into_iter()
+                    .map(|order| OrderStateUpdate {
+                        order_id: order.id,
+                        store_id: order.store_id,
+                        customer_id: invoice.buyer_user_id.clone(),
+                        status: OrderState::Paid,
+                    })
+                    .collect::<Vec<_>>())
+            }
+        })
+        .and_then({
+            let http_client = self.http_client.clone();
+            let saga_url = self.saga_url.clone();
+            move |order_state_updates| {
+                serde_json::to_string(&order_state_updates)
+                    .map_err(ectx!(ErrorSource::SerdeJson, ErrorKind::Internal => order_state_updates))
+                    .into_future()
+                    .and_then(move |body| {
+                        let url = format!("{}/orders/update_state", saga_url);
+                        http_client
+                            .request_json::<()>(Method::Post, url.clone(), Some(body.clone()), None)
+                            .map_err(ectx!(ErrorKind::Internal => Method::Post, url, Some(body), None as Option<hyper::Headers>))
+                    })
+            }
+        });
 
         Box::new(fut)
     }

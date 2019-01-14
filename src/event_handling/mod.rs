@@ -39,6 +39,7 @@ where
     pub http_client: HC,
     pub payments_client: PC,
     pub account_service: AS,
+    pub saga_url: String,
 }
 
 impl<T, M, F, HC, PC, AS> Clone for EventHandler<T, M, F, HC, PC, AS>
@@ -58,6 +59,7 @@ where
             http_client: self.http_client.clone(),
             payments_client: self.payments_client.clone(),
             account_service: self.account_service.clone(),
+            saga_url: self.saga_url.clone(),
         }
     }
 }

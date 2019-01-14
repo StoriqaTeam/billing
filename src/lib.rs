@@ -202,6 +202,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
                 http_client: client_handle.clone(),
                 payments_client: payments_client.clone(),
                 account_service: account_service.clone(),
+                saga_url: config.saga_addr.url,
             };
 
             thread::spawn(move || {
