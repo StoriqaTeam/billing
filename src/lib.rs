@@ -85,7 +85,10 @@ use stq_cache::cache::{redis::RedisCache, Cache, NullCache, TypedCache};
 use stq_http::controller::Application;
 use tokio_core::reactor::Core;
 
-use client::payments::{self, PaymentsClientImpl};
+use client::{
+    payments::{self, PaymentsClientImpl},
+    saga::SagaClientImpl,
+};
 use config::Config;
 use controller::context::StaticContext;
 use errors::Error;
@@ -204,7 +207,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         http_client: client_handle.clone(),
         payments_client: payments_ctx.as_ref().map(|(payments_client, _)| payments_client.clone()),
         account_service: payments_ctx.as_ref().map(|(_, account_service)| account_service.clone()),
-        saga_url: config.saga_addr.url,
+        saga_client: SagaClientImpl::new(client_handle.clone(), config.saga_addr.url),
     };
 
     thread::spawn(move || {

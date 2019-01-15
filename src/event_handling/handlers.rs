@@ -1,27 +1,30 @@
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use failure::{err_msg, Fail};
-use futures::{future, Future, IntoFuture};
-use hyper::Method;
+use futures::{future, Future};
 use r2d2::ManageConnection;
 use stq_http::client::HttpClient;
 use stq_static_resources::OrderState;
 use uuid::Uuid;
 
-use client::payments::{CreateInternalTransaction, PaymentsClient};
-use models::{invoice_v2::InvoiceId, order_v2::OrderStateUpdate, AccountId, AccountWithBalance, Event, EventPayload};
+use client::{
+    payments::{CreateInternalTransaction, PaymentsClient},
+    saga::{OrderStateUpdate, SagaClient},
+};
+use models::{invoice_v2::InvoiceId, AccountId, AccountWithBalance, Event, EventPayload};
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
 
 use super::error::*;
 use super::{spawn_on_pool, EventHandler, EventHandlerFuture};
 
-impl<T, M, F, HC, PC, AS> EventHandler<T, M, F, HC, PC, AS>
+impl<T, M, F, HC, PC, SC, AS> EventHandler<T, M, F, HC, PC, SC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
     HC: HttpClient + Clone,
     PC: PaymentsClient + Clone,
+    SC: SagaClient + Clone,
     AS: AccountService + Clone + 'static,
 {
     pub fn handle_event(self, event: Event) -> EventHandlerFuture<()> {
@@ -162,18 +165,11 @@ where
             }
         })
         .and_then({
-            let http_client = self.http_client.clone();
-            let saga_url = self.saga_url.clone();
+            let saga_client = self.saga_client.clone();
             move |order_state_updates| {
-                serde_json::to_string(&order_state_updates)
-                    .map_err(ectx!(ErrorSource::SerdeJson, ErrorKind::Internal => order_state_updates))
-                    .into_future()
-                    .and_then(move |body| {
-                        let url = format!("{}/orders/update_state", saga_url);
-                        http_client
-                            .request_json::<()>(Method::Post, url.clone(), Some(body.clone()), None)
-                            .map_err(ectx!(ErrorKind::Internal => Method::Post, url, Some(body), None as Option<hyper::Headers>))
-                    })
+                saga_client
+                    .update_order_states(order_state_updates.clone())
+                    .map_err(ectx!(ErrorKind::Internal => order_state_updates))
             }
         });
 

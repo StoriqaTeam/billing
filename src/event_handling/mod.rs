@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use stq_http::client::HttpClient;
 use tokio_timer::Interval;
 
-use client::payments::PaymentsClient;
+use client::{payments::PaymentsClient, saga::SagaClient};
 use models::event_store::EventEntry;
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
@@ -24,31 +24,33 @@ use self::error::*;
 pub type EventHandlerResult<T> = Result<T, Error>;
 pub type EventHandlerFuture<T> = Box<Future<Item = T, Error = Error>>;
 
-pub struct EventHandler<T, M, F, HC, PC, AS>
+pub struct EventHandler<T, M, F, HC, PC, SC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
     HC: HttpClient,
     PC: PaymentsClient,
+    SC: SagaClient,
     AS: AccountService + 'static,
 {
     pub cpu_pool: CpuPool,
     pub db_pool: Pool<M>,
     pub repo_factory: F,
     pub http_client: HC,
+    pub saga_client: SC,
     pub payments_client: Option<PC>,
     pub account_service: Option<AS>,
-    pub saga_url: String,
 }
 
-impl<T, M, F, HC, PC, AS> Clone for EventHandler<T, M, F, HC, PC, AS>
+impl<T, M, F, HC, PC, SC, AS> Clone for EventHandler<T, M, F, HC, PC, SC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
     HC: HttpClient + Clone,
     PC: PaymentsClient + Clone,
+    SC: SagaClient + Clone,
     AS: AccountService + Clone + 'static,
 {
     fn clone(&self) -> Self {
@@ -57,20 +59,21 @@ where
             db_pool: self.db_pool.clone(),
             repo_factory: self.repo_factory.clone(),
             http_client: self.http_client.clone(),
+            saga_client: self.saga_client.clone(),
             payments_client: self.payments_client.clone(),
             account_service: self.account_service.clone(),
-            saga_url: self.saga_url.clone(),
         }
     }
 }
 
-impl<T, M, F, HC, PC, AS> EventHandler<T, M, F, HC, PC, AS>
+impl<T, M, F, HC, PC, SC, AS> EventHandler<T, M, F, HC, PC, SC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
     HC: HttpClient + Clone,
     PC: PaymentsClient + Clone,
+    SC: SagaClient + Clone,
     AS: AccountService + Clone + 'static,
 {
     pub fn run(self, interval: Duration) -> impl Future<Item = (), Error = FailureError> {

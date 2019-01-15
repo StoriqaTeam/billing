@@ -10,11 +10,10 @@ use diesel::{
     deserialize,
     serialize::{self, Output},
 };
-use stq_static_resources::OrderState;
 use uuid::{self, Uuid};
 
 use models::invoice_v2::InvoiceId;
-use models::{Amount, Currency, UserId};
+use models::{Amount, Currency};
 use schema::orders;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
@@ -93,14 +92,6 @@ pub struct NewOrder {
     pub cashback_amount: Amount,
     pub invoice_id: InvoiceId,
     pub store_id: StoreId,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct OrderStateUpdate {
-    pub order_id: OrderId,
-    pub store_id: StoreId,
-    pub customer_id: UserId,
-    pub status: OrderState,
 }
 
 #[derive(Debug, Clone)]
