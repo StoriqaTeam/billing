@@ -54,23 +54,3 @@ pub enum PaymentIntentStatus {
     #[serde(other)]
     Other,
 }
-
-impl From<NewPaymentIntent> for PaymentIntent {
-    fn from(new_payment_intent: NewPaymentIntent) -> PaymentIntent {
-        let now = chrono::offset::Utc::now().naive_utc();
-        PaymentIntent {
-            id: new_payment_intent.id,
-            invoice_id: new_payment_intent.invoice_id,
-            amount: new_payment_intent.amount,
-            amount_received: new_payment_intent.amount_received,
-            client_secret: new_payment_intent.client_secret,
-            currency: new_payment_intent.currency,
-            last_payment_error_message: new_payment_intent.last_payment_error_message,
-            receipt_email: new_payment_intent.receipt_email,
-            charge_id: new_payment_intent.charge_id,
-            status: new_payment_intent.status,
-            created_at: now,
-            updated_at: now,
-        }
-    }
-}

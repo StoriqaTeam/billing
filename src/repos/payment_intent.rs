@@ -37,25 +37,6 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     pub fn new(db_conn: &'a T, acl: PaymentIntentRepoAcl) -> Self {
         Self { db_conn, acl }
     }
-
-    fn check_write(&self, payment_intent_id: PaymentIntentId) -> RepoResultV2<()> {
-        let payment_intent = PaymentIntentDsl::payment_intent
-            .filter(PaymentIntentDsl::id.eq(payment_intent_id))
-            .get_result(self.db_conn)
-            .optional()?;
-
-        let payment_intent = match payment_intent {
-            None => {
-                return Ok(());
-            }
-            Some(payment_intent) => payment_intent,
-        };
-
-        acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, Some(&payment_intent))
-            .map_err(ectx!(try ErrorKind::Forbidden))?;
-
-        Ok(())
-    }
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> PaymentIntentRepo
@@ -83,14 +64,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     fn create(&self, new_payment_intent: NewPaymentIntent) -> RepoResultV2<PaymentIntent> {
         debug!("Getting a payment intent with ID: {}", new_payment_intent.id);
-        acl::check(
-            &*self.acl,
-            Resource::PaymentIntent,
-            Action::Write,
-            self,
-            Some(&new_payment_intent.clone().into()),
-        )
-        .map_err(ectx!(try ErrorKind::Forbidden))?;
+        acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::insert_into(PaymentIntentDsl::payment_intent).values(&new_payment_intent);
 
@@ -102,7 +76,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     fn update(&self, payment_intent_id: PaymentIntentId, update_payment_intent: UpdatePaymentIntent) -> RepoResultV2<PaymentIntent> {
         debug!("Updating a payment intent with ID: {}", payment_intent_id);
-        self.check_write(payment_intent_id.clone())?;
+        acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+
         let filter = PaymentIntentDsl::payment_intent.filter(PaymentIntentDsl::id.eq(&payment_intent_id));
 
         let query_payment_intent = diesel::update(filter).set(&update_payment_intent);
@@ -114,7 +89,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     fn delete(&self, payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>> {
         debug!("Deleting a payment intent with ID: {}", payment_intent_id);
-        self.check_write(payment_intent_id.clone())?;
+        acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::delete(PaymentIntentDsl::payment_intent.filter(PaymentIntentDsl::id.eq(payment_intent_id)));
 
