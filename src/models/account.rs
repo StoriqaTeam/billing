@@ -60,6 +60,10 @@ impl WalletAddress {
     pub fn inner(&self) -> &str {
         &self.0
     }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

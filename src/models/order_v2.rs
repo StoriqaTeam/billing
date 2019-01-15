@@ -30,6 +30,10 @@ impl OrderId {
         &self.0
     }
 
+    pub fn into_inner(self) -> Uuid {
+        self.0
+    }
+
     pub fn generate() -> Self {
         OrderId(Uuid::new_v4())
     }
@@ -69,6 +73,12 @@ impl ExchangeId {
 
 #[derive(Clone, Copy, Debug, Display, Default, PartialEq, Eq, PartialOrd, Ord, From, FromStr, Hash, Serialize, Deserialize, DieselTypes)]
 pub struct StoreId(i32);
+
+impl StoreId {
+    pub fn new(id: i32) -> Self {
+        StoreId(id)
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "orders"]
