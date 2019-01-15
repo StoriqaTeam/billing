@@ -24,7 +24,7 @@ use config::ExternalBilling;
 use controller::context::DynamicContext;
 use errors::Error;
 use models::invoice_v2::{calculate_invoice_price, InvoiceDump, InvoiceId as InvoiceV2Id, NewInvoice};
-use models::order_v2::{ExchangeId, NewOrder, RawOrder};
+use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
 use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
@@ -38,29 +38,31 @@ use super::types::{ServiceFuture, ServiceFutureV2};
 
 pub trait InvoiceService {
     /// Creates invoice in billing system
-    /// DEPRECATED (v1)
     fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice>;
+    fn create_invoice_v1(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice>;
     fn create_invoice_v2(&self, create_invoice: CreateInvoiceV2) -> ServiceFutureV2<InvoiceDump>;
     /// Get invoice by order id
-    /// DEPRECATED
     fn get_invoice_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>>;
+    fn get_invoice_by_order_id_v1(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>>;
+    fn get_invoice_by_order_id_v2(&self, order_id: OrderV2Id) -> ServiceFutureV2<Option<InvoiceDump>>;
     /// Get invoice by invoice id
-    /// DEPRECATED
     fn get_invoice_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>>;
+    fn get_invoice_by_id_v1(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>>;
     /// Recalc invoice by invoice id
-    /// DEPRECATED
-    fn recalc_invoice(&self, id: InvoiceId) -> ServiceFuture<Invoice>;
     /// Refreshes all rates for the invoice and calculates the total price of the invoice.
     /// Either calculate the current total price of the invoice or get the final price if the invoice has been paid
+    fn recalc_invoice(&self, id: InvoiceId) -> ServiceFuture<Invoice>;
+    fn recalc_invoice_v1(&self, id: InvoiceId) -> ServiceFuture<Invoice>;
     fn recalc_invoice_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Option<InvoiceDump>>;
     /// Get orders ids by invoice id
-    /// DEPRECATED
     fn get_invoice_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
+    fn get_invoice_orders_ids_v1(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
+    fn get_invoice_orders_ids_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Vec<OrderV2Id>>;
     /// Delete invoice merchant
     /// DEPRECATED
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId>;
-    /// Creates orders in billing system, returning url for payment
     /// DEPRECATED
+    /// Creates orders in billing system, returning url for payment
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
     /// Handles the callback from Payments gateway which carries a new inbound transaction
     fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
@@ -79,6 +81,29 @@ impl<
 {
     /// Creates orders in billing system, returning url for payment
     fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
+        if self.payments_v2_enabled() {
+            self.create_invoice_v1(create_invoice)
+        } else {
+            let fut = CreateInvoiceV2::try_from_v1(create_invoice.clone())
+                .map_err(ectx!(ErrorKind::Internal => create_invoice))
+                .into_future()
+                .and_then({
+                    let self_ = self.clone();
+                    move |create_invoice| self_.create_invoice_v2(create_invoice)
+                })
+                .and_then(|invoice_dump| {
+                    invoice_dump
+                        .clone()
+                        .try_into_v1()
+                        .map_err(ectx!(ErrorKind::Internal => invoice_dump))
+                })
+                .map_err(FailureError::from);
+
+            Box::new(fut)
+        }
+    }
+
+    fn create_invoice_v1(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
         let client = self.dynamic_context.http_client.clone();
@@ -280,7 +305,31 @@ impl<
     }
 
     /// Get invoice by order id
+
     fn get_invoice_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>> {
+        let v2_handler = if self.payments_v2_enabled() {
+            future::Either::A(
+                self.get_invoice_by_order_id_v2(OrderV2Id::new(order_id.0))
+                    .map_err(FailureError::from),
+            )
+        } else {
+            future::Either::B(future::ok(None))
+        };
+
+        let fut =
+            Future::join(self.get_invoice_by_order_id_v1(order_id), v2_handler).and_then(move |(invoice_v1, invoice_dump_v2)| {
+                match (invoice_v1, invoice_dump_v2) {
+                    (Some(_), Some(_)) => Err(format_err!("Order with ID: {} is stored both in v1 and v2 tables", order_id)),
+                    (Some(invoice_v1), None) => Ok(Some(invoice_v1)),
+                    (None, Some(invoice_dump_v2)) => invoice_dump_v2.clone().try_into_v1().map(Some).map_err(FailureError::from),
+                    (None, None) => Ok(None),
+                }
+            });
+
+        Box::new(fut)
+    }
+
+    fn get_invoice_by_order_id_v1(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
 
@@ -301,8 +350,59 @@ impl<
                 .map_err(|e: FailureError| e.context("Service invoice, get_by_order_id endpoint error occured.").into())
         })
     }
+
+    fn get_invoice_by_order_id_v2(&self, order_id: OrderV2Id) -> ServiceFutureV2<Option<InvoiceDump>> {
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id.clone();
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            orders_repo.get(order_id.clone()).map_err(ectx!(convert => order_id))
+        })
+        .and_then({
+            let self_ = self.clone();
+            move |order| match order {
+                None => future::Either::A(future::ok(None)),
+                Some(order) => future::Either::B(future::lazy(move || {
+                    self_.recalc_invoice_v2(order.invoice_id).and_then(move |invoice_dump| {
+                        let e = format_err!(
+                            "Invoice with ID: {} that is linked to order with ID: {} was not found",
+                            order.invoice_id,
+                            order.id,
+                        );
+                        invoice_dump.ok_or(ectx!(err e, ErrorKind::Internal)).map(Some)
+                    })
+                })),
+            }
+        });
+
+        Box::new(fut)
+    }
+
     /// Get invoice by invoice id
+
     fn get_invoice_by_id(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>> {
+        let v2_handler = if self.payments_v2_enabled() {
+            future::Either::A(self.recalc_invoice_v2(InvoiceV2Id::new(id.0)).map_err(FailureError::from))
+        } else {
+            future::Either::B(future::ok(None))
+        };
+
+        let fut = Future::join(self.get_invoice_by_id_v1(id), v2_handler).and_then(move |(invoice_v1, invoice_dump_v2)| {
+            match (invoice_v1, invoice_dump_v2) {
+                (Some(_), Some(_)) => Err(format_err!("Invoice with ID: {} is stored both in v1 and v2 tables", id)),
+                (Some(invoice_v1), None) => Ok(Some(invoice_v1)),
+                (None, Some(invoice_dump_v2)) => invoice_dump_v2.clone().try_into_v1().map(Some).map_err(FailureError::from),
+                (None, None) => Ok(None),
+            }
+        });
+
+        Box::new(fut)
+    }
+
+    fn get_invoice_by_id_v1(&self, id: InvoiceId) -> ServiceFuture<Option<Invoice>> {
         let repo_factory = self.static_context.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
         self.spawn_on_pool(move |conn| {
@@ -315,7 +415,26 @@ impl<
     }
 
     /// Recalc invoice by invoice id
+
     fn recalc_invoice(&self, id: InvoiceId) -> ServiceFuture<Invoice> {
+        let v2_handler = if self.payments_v2_enabled() {
+            future::Either::A(self.recalc_invoice_v2(InvoiceV2Id::new(id.0)).map_err(FailureError::from))
+        } else {
+            future::Either::B(future::ok(None))
+        };
+
+        let fut = v2_handler.and_then({
+            let self_ = self.clone();
+            move |invoice_dump| match invoice_dump {
+                None => future::Either::A(self_.recalc_invoice_v1(id)),
+                Some(invoice_dump) => future::Either::B(invoice_dump.try_into_v1().map_err(FailureError::from).into_future()),
+            }
+        });
+
+        Box::new(fut)
+    }
+
+    fn recalc_invoice_v1(&self, id: InvoiceId) -> ServiceFuture<Invoice> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
         let client = self.dynamic_context.http_client.clone();
@@ -511,7 +630,27 @@ impl<
     }
 
     /// Get orders ids by invoice id
+
     fn get_invoice_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>> {
+        let v2_handler = if self.payments_v2_enabled() {
+            future::Either::A(self.get_invoice_orders_ids_v2(InvoiceV2Id::new(id.0)).map_err(FailureError::from))
+        } else {
+            future::Either::B(future::ok(vec![]))
+        };
+
+        let fut = Future::join(self.get_invoice_orders_ids_v1(id), v2_handler).and_then(move |(order_ids_v1, order_ids_v2)| {
+            match (order_ids_v1.is_empty(), order_ids_v2.is_empty()) {
+                (false, false) => Err(format_err!("Invoice with ID: {} is stored both in v1 and v2 tables", id)),
+                (false, true) => Ok(order_ids_v1),
+                (true, false) => Ok(order_ids_v2.into_iter().map(|id| OrderId(id.into_inner())).collect()),
+                (true, true) => Ok(vec![]),
+            }
+        });
+
+        Box::new(fut)
+    }
+
+    fn get_invoice_orders_ids_v1(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
         self.spawn_on_pool(move |conn| {
@@ -534,6 +673,23 @@ impl<
         })
     }
 
+    fn get_invoice_orders_ids_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Vec<OrderV2Id>> {
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+
+            orders_repo
+                .get_many_by_invoice_id(id.clone())
+                .map(|orders| orders.into_iter().map(|order| order.id).collect())
+                .map_err(ectx!(convert => id))
+        })
+    }
+
+    /// DEPRECATED
     /// Delete invoice
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId> {
         let user_id = self.dynamic_context.user_id;
@@ -552,6 +708,7 @@ impl<
         })
     }
 
+    /// DEPRECATED
     /// Updates specific invoice and orders
     fn update_invoice(&self, external_invoice: ExternalBillingInvoice) -> ServiceFuture<()> {
         let current_user = self.dynamic_context.user_id;

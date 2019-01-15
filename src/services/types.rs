@@ -20,7 +20,6 @@ pub type ServiceFuture<T> = Box<Future<Item = T, Error = FailureError>>;
 pub type ServiceFutureV2<T> = Box<Future<Item = T, Error = ServiceError>>;
 
 /// Service
-#[derive(Clone)]
 pub struct Service<T, M, F, C, PC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
@@ -32,6 +31,23 @@ where
 {
     pub static_context: StaticContext<T, M, F>,
     pub dynamic_context: DynamicContext<C, PC, AS>,
+}
+
+impl<T, M, F, C, PC, AS> Clone for Service<T, M, F, C, PC, AS>
+where
+    T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
+    M: ManageConnection<Connection = T>,
+    F: ReposFactory<T>,
+    C: HttpClient + Clone,
+    PC: PaymentsClient + Clone,
+    AS: AccountService + Clone + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            static_context: self.static_context.clone(),
+            dynamic_context: self.dynamic_context.clone(),
+        }
+    }
 }
 
 impl<
@@ -49,6 +65,10 @@ impl<
             static_context,
             dynamic_context,
         }
+    }
+
+    pub fn payments_v2_enabled(&self) -> bool {
+        self.dynamic_context.payments_client.is_some() && self.dynamic_context.account_service.is_some()
     }
 
     pub fn spawn_on_pool<R, Func>(&self, f: Func) -> ServiceFuture<R>

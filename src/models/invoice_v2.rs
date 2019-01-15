@@ -1,15 +1,18 @@
 use std::fmt::{self, Display};
 use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, ToPrimitive};
 use chrono::NaiveDateTime;
 use diesel::sql_types::Uuid as SqlUuid;
 use stq_static_resources::OrderState;
+use stq_types::{InvoiceId as InvoiceV1Id, ProductPrice, SagaId};
 use uuid::{self, Uuid};
 
 use models::order_v2::{OrderId, RawOrder};
 use models::{
-    AccountId, Amount, Currency, ExchangeRateStatus, OrderExchangeRateId, RawOrderExchangeRate, TransactionId, UserId, WalletAddress,
+    AccountId, Amount, Currency, ExchangeRateStatus, Invoice as InvoiceV1, OrderExchangeRateId, RawOrderExchangeRate, TransactionId,
+    UserId, WalletAddress,
 };
 use schema::amounts_received;
 use schema::invoices_v2;
@@ -212,6 +215,54 @@ pub struct InvoiceDump {
     pub created_at: NaiveDateTime,
     pub paid_at: Option<NaiveDateTime>,
     pub wallet_address: Option<WalletAddress>,
+}
+
+#[derive(Debug, Clone, Fail)]
+pub enum InvoiceConversionError {
+    #[fail(display = "conversion of total price to f64 failed")]
+    TotalPriceConversionError(BigDecimal),
+    #[fail(display = "conversion of amount captured to f64 failed")]
+    AmountCapturedConversionError(BigDecimal),
+}
+
+impl InvoiceDump {
+    pub fn try_into_v1(self) -> Result<InvoiceV1, InvoiceConversionError> {
+        let InvoiceDump {
+            id,
+            buyer_currency,
+            wallet_address,
+            amount_captured,
+            total_price,
+            paid_at,
+            ..
+        } = self;
+
+        let amount = ProductPrice(
+            total_price
+                .to_f64()
+                .ok_or(InvoiceConversionError::TotalPriceConversionError(total_price))?,
+        );
+        let amount_captured = ProductPrice(
+            amount_captured
+                .to_f64()
+                .ok_or(InvoiceConversionError::AmountCapturedConversionError(amount_captured))?,
+        );
+
+        Ok(InvoiceV1 {
+            id: SagaId(id.0.clone()),
+            invoice_id: InvoiceV1Id(id.0.clone()),
+            transactions: json!([]),
+            amount,
+            currency: buyer_currency.into(),
+            price_reserved: SystemTime::now() + Duration::from_secs(300), // assume that the price is reserved for 5 mins
+            state: match paid_at {
+                None => OrderState::PaymentAwaited,
+                Some(_) => OrderState::Paid,
+            },
+            wallet: wallet_address.map(|address| address.into_inner()),
+            amount_captured,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
