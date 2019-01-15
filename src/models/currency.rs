@@ -8,6 +8,7 @@ use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::VarChar;
 use enum_iterator::IntoEnumIterator;
 use failure::Fail;
+use stq_static_resources::Currency as StqCurrency;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, Eq, PartialEq, Hash, IntoEnumIterator)]
 #[sql_type = "VarChar"]
@@ -69,6 +70,27 @@ impl Display for Currency {
             Currency::Eth => f.write_str("eth"),
             Currency::Stq => f.write_str("stq"),
             Currency::Btc => f.write_str("btc"),
+        }
+    }
+}
+
+impl Currency {
+    pub fn try_from_stq_currency(currency: StqCurrency) -> Result<Self, ()> {
+        match currency {
+            StqCurrency::ETH => Ok(Currency::Eth),
+            StqCurrency::STQ => Ok(Currency::Stq),
+            StqCurrency::BTC => Ok(Currency::Btc),
+            _ => Err(()),
+        }
+    }
+}
+
+impl Into<StqCurrency> for Currency {
+    fn into(self) -> StqCurrency {
+        match self {
+            Currency::Eth => StqCurrency::ETH,
+            Currency::Stq => StqCurrency::STQ,
+            Currency::Btc => StqCurrency::BTC,
         }
     }
 }
