@@ -11,5 +11,5 @@ CREATE TABLE payment_intent
     charge_id VARCHAR,
     status VARCHAR NOT NULL,
     created_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status_updated_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
