@@ -67,6 +67,10 @@ impl<
         }
     }
 
+    pub fn payments_v2_enabled(&self) -> bool {
+        self.dynamic_context.payments_client.is_some() && self.dynamic_context.account_service.is_some()
+    }
+
     pub fn spawn_on_pool<R, Func>(&self, f: Func) -> ServiceFuture<R>
     where
         Func: FnOnce(PooledConnection<M>) -> Result<R, FailureError> + Send + 'static,
