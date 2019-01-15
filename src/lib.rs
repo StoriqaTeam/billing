@@ -85,7 +85,10 @@ use stq_cache::cache::{redis::RedisCache, Cache, NullCache, TypedCache};
 use stq_http::controller::Application;
 use tokio_core::reactor::Core;
 
-use client::payments::{self, PaymentsClientImpl};
+use client::{
+    payments::{self, PaymentsClientImpl},
+    saga::SagaClientImpl,
+};
 use config::Config;
 use controller::context::StaticContext;
 use errors::Error;
@@ -180,12 +183,12 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         (payments_client, account_service)
     });
 
-    match payments_ctx {
+    match payments_ctx.as_ref() {
         None => {
-            info!("Payments config not found - skipping account initialization, the event processor will not run");
+            info!("Payments config not found - skipping account initialization");
         }
-        Some((payments_client, account_service)) => {
-            info!("Payments config found - initializing accounts, starting the event processor");
+        Some((_, ref account_service)) => {
+            info!("Payments config found - initializing accounts");
 
             core.run(account_service.init_system_accounts())
                 .expect("Failed to initialize system accounts");
@@ -194,25 +197,26 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
                 .expect("Failed to initialize account pools");
 
             info!("Finished initializing accounts");
-
-            let event_handler = EventHandler {
-                db_pool: db_pool.clone(),
-                cpu_pool: cpu_pool.clone(),
-                repo_factory: repo_factory.clone(),
-                http_client: client_handle.clone(),
-                payments_client: payments_client.clone(),
-                account_service: account_service.clone(),
-            };
-
-            thread::spawn(move || {
-                info!("Event processor is now running");
-                let mut core = Core::new().expect("Failed to create a Tokio core for the event processor");
-                let polling_rate = Duration::new(polling_rate_sec.into(), 0);
-                core.run(EventHandler::run(event_handler, polling_rate))
-                    .expect("Fatal error occurred in the event processor");
-            });
         }
     };
+
+    let event_handler = EventHandler {
+        db_pool: db_pool.clone(),
+        cpu_pool: cpu_pool.clone(),
+        repo_factory: repo_factory.clone(),
+        http_client: client_handle.clone(),
+        payments_client: payments_ctx.as_ref().map(|(payments_client, _)| payments_client.clone()),
+        account_service: payments_ctx.as_ref().map(|(_, account_service)| account_service.clone()),
+        saga_client: SagaClientImpl::new(client_handle.clone(), config.saga_addr.url),
+    };
+
+    thread::spawn(move || {
+        info!("Event processor is now running");
+        let mut core = Core::new().expect("Failed to create a Tokio core for the event processor");
+        let polling_rate = Duration::new(polling_rate_sec.into(), 0);
+        core.run(EventHandler::run(event_handler, polling_rate))
+            .expect("Fatal error occurred in the event processor");
+    });
 
     let serve = Http::new()
         .serve_addr_handle(&address, &handle, move || {

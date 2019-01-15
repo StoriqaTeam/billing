@@ -17,6 +17,8 @@ pub enum ErrorKind {
 
 #[derive(Debug, Clone, Fail, PartialEq, Eq)]
 pub enum ErrorSource {
+    #[fail(display = "event handler source - serde_json")]
+    SerdeJson,
     #[fail(display = "event handler source - tokio_timer")]
     TokioTimer,
     #[fail(display = "event handler source - r2d2")]
