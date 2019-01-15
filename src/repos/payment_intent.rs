@@ -11,8 +11,8 @@ use stq_types::stripe::PaymentIntentId;
 use repos::legacy_acl::*;
 
 use models::authorization::*;
-use models::{NewPaymentIntent, PaymentIntent, PaymentIntentAccess, UpdatePaymentIntent};
 use models::UserId;
+use models::{NewPaymentIntent, PaymentIntent, PaymentIntentAccess, UpdatePaymentIntent};
 
 use schema::invoices_v2::dsl as InvoicesDsl;
 use schema::payment_intent::dsl as PaymentIntentDsl;
@@ -58,8 +58,14 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             })
             .and_then(|payment_intent: Option<PaymentIntent>| {
                 if let Some(ref payment_intent) = payment_intent {
-                    acl::check(&*self.acl, Resource::PaymentIntent, Action::Read, self, Some(&payment_intent.into()))
-                        .map_err(ectx!(try ErrorKind::Forbidden))?;
+                    acl::check(
+                        &*self.acl,
+                        Resource::PaymentIntent,
+                        Action::Read,
+                        self,
+                        Some(&payment_intent.into()),
+                    )
+                    .map_err(ectx!(try ErrorKind::Forbidden))?;
                 };
                 Ok(payment_intent)
             })
