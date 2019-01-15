@@ -114,6 +114,24 @@ table! {
     }
 }
 
+table! {
+    payment_intent (id) {
+        id -> VarChar,
+        invoice_id -> Uuid,
+        amount -> Numeric,
+        amount_received -> Numeric,
+        client_secret -> Nullable<VarChar>,
+        currency -> VarChar,
+        last_payment_error_message -> Nullable<VarChar>,
+        receipt_email -> Nullable<VarChar>,
+        charge_id -> Nullable<VarChar>,
+        status -> VarChar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+joinable!(payment_intent -> invoices_v2 (invoice_id));
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(orders -> invoices_v2 (invoice_id));
 joinable!(order_exchange_rates -> orders (order_id));

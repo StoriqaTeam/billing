@@ -112,10 +112,10 @@ impl StripeClient for StripeClientImpl {
                 .into_future(),
         )
     }
-    fn refund(&self, input: NewRefund) -> Box<Future<Item = Refund, Error = Error> + Send> {
+    fn refund(&self, _input: NewRefund) -> Box<Future<Item = Refund, Error = Error> + Send> {
         unimplemented!()
     }
-    fn create_payout(&self, input: NewPayOut) -> Box<Future<Item = PayOut, Error = Error> + Send> {
+    fn create_payout(&self, _input: NewPayOut) -> Box<Future<Item = PayOut, Error = Error> + Send> {
         unimplemented!()
     }
 }

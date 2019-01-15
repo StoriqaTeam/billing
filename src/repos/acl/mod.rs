@@ -60,6 +60,7 @@ impl ApplicationAcl {
                 permission!(Resource::Invoice),
                 permission!(Resource::Account),
                 permission!(Resource::OrderExchangeRate),
+                permission!(Resource::PaymentIntent),
             ],
         );
         hash.insert(
@@ -73,6 +74,7 @@ impl ApplicationAcl {
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
+                permission!(Resource::PaymentIntent, Action::Read, Scope::Owned),
             ],
         );
         hash.insert(

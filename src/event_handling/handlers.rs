@@ -4,7 +4,7 @@ use futures::{future, Future};
 use r2d2::ManageConnection;
 use stq_http::client::HttpClient;
 use stq_static_resources::OrderState;
-use stripe::PaymentIntent;
+use stripe::PaymentIntent as StripePaymentIntent;
 use uuid::Uuid;
 
 use client::{
@@ -40,12 +40,12 @@ where
     }
 
     // TODO: handle this event properly
-    pub fn handle_payment_intent_payment_failed(self, _payment_intent: PaymentIntent) -> EventHandlerFuture<()> {
+    pub fn handle_payment_intent_payment_failed(self, _payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
         Box::new(future::ok(()))
     }
 
     // TODO: handle this event properly
-    pub fn handle_payment_intent_succeeded(self, _payment_intent: PaymentIntent) -> EventHandlerFuture<()> {
+    pub fn handle_payment_intent_succeeded(self, _payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
         Box::new(future::ok(()))
     }
 
