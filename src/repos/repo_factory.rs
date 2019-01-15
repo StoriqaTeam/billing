@@ -331,6 +331,10 @@ pub mod tests {
         fn create_payment_intent_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a> {
             Box::new(PaymentIntentRepoMock::default())
         }
+
+        fn create_payment_intent_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PaymentIntentRepo + 'a> {
+            Box::new(PaymentIntentRepoMock::default())
+        }
     }
 
     #[derive(Clone, Default)]
