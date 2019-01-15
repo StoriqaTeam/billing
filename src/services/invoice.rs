@@ -17,18 +17,19 @@ use stripe::Webhook;
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
+use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
 use client::payments::{GetRate, PaymentsClient, Rate, RateRefresh};
 use config::ExternalBilling;
 use controller::context::DynamicContext;
 use errors::Error;
-use models::invoice_v2::{calculate_invoice_price, InvoiceDump, InvoiceId as InvoiceV2Id, NewInvoice};
+use models::invoice_v2::{calculate_invoice_price, InvoiceDump, InvoiceId as InvoiceV2Id, NewInvoice, RawInvoice as InvoiceV2};
 use models::order_v2::{ExchangeId, NewOrder, RawOrder};
 use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
-use repos::{AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, RepoResult};
+use repos::{AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentRepo, RepoResult};
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::Service;
@@ -755,6 +756,41 @@ impl<
 
         Box::new(fut)
     }
+}
+
+pub fn payment_intent_successs<C>(
+    conn: &C,
+    orders_repo: &OrdersRepo,
+    invoice_repo: &InvoicesV2Repo,
+    payment_intent_repo: &PaymentIntentRepo,
+    payment_intent_id: PaymentIntentId,
+) -> Result<(InvoiceV2, Vec<RawOrder>), ServiceError>
+where
+    C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
+{
+    conn.transaction::<_, ServiceError, _>(move || {
+        let payment_intent_id_cloned = payment_intent_id.clone();
+        let payment_intent = payment_intent_repo
+            .get(payment_intent_id.clone())
+            .map_err(ectx!(try convert => payment_intent_id_cloned))?
+            .ok_or({
+                let e = format_err!("Payment intent {} not found", payment_intent_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+        let invoice_id = payment_intent.invoice_id;
+        let invoice = invoice_repo
+            .get(invoice_id.clone())
+            .map_err(ectx!(try convert => invoice_id.clone()))?
+            .ok_or({
+                let e = format_err!("Invoice {} not found", invoice_id.clone());
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+        let orders = orders_repo
+            .get_many_by_invoice_id(invoice.id)
+            .map_err(ectx!(try convert => invoice_id))?;
+
+        Ok((invoice, orders))
+    })
 }
 
 pub fn get_rate<PC: PaymentsClient + Send + Clone + 'static>(

@@ -4,6 +4,7 @@ use futures::{future, Future};
 use r2d2::ManageConnection;
 use stq_http::client::HttpClient;
 use stq_static_resources::OrderState;
+use stq_types::stripe::PaymentIntentId;
 use stripe::PaymentIntent as StripePaymentIntent;
 use uuid::Uuid;
 
@@ -44,9 +45,49 @@ where
         Box::new(future::ok(()))
     }
 
-    // TODO: handle this event properly
-    pub fn handle_payment_intent_succeeded(self, _payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
-        Box::new(future::ok(()))
+    pub fn handle_payment_intent_succeeded(self, payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
+        let saga_client = self.saga_client.clone();
+
+        let payment_intent_id = PaymentIntentId(payment_intent.id);
+        let payment_intent_id_cloned = payment_intent_id.clone();
+        let new_status = OrderState::Paid;
+
+        let EventHandler { db_pool, cpu_pool, .. } = self;
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, {
+            let repo_factory = self.repo_factory.clone();
+            move |conn| {
+                let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
+                let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
+                let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
+                crate::services::invoice::payment_intent_successs(
+                    &*conn,
+                    &*orders_repo,
+                    &*invoices_repo,
+                    &*payment_intent_repo,
+                    payment_intent_id.clone(),
+                )
+                .map_err(ectx!(ErrorKind::Internal => payment_intent_id))
+            }
+        })
+        .map(move |(invoice, orders)| {
+            orders
+                .into_iter()
+                .map(|order| OrderStateUpdate {
+                    order_id: order.id,
+                    store_id: order.store_id,
+                    customer_id: invoice.buyer_user_id,
+                    status: new_status,
+                })
+                .collect()
+        })
+        .and_then(move |order_state_updates| {
+            saga_client
+                .update_order_states(order_state_updates)
+                .map_err(ectx!(ErrorKind::Internal => payment_intent_id_cloned))
+        });
+
+        Box::new(fut)
     }
 
     // TODO: handle this event properly

@@ -31,6 +31,7 @@ where
     fn create_order_exchange_rates_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a>;
     fn create_event_store_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<EventStoreRepo + 'a>;
     fn create_payment_intent_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a>;
+    fn create_payment_intent_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -191,6 +192,11 @@ where
 
     fn create_payment_intent_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a> {
         let acl = self.get_acl(db_conn, user_id);
+        Box::new(PaymentIntentRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_payment_intent_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
         Box::new(PaymentIntentRepoImpl::new(db_conn, acl))
     }
 }
