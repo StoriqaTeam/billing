@@ -11,15 +11,17 @@ use stq_types::stripe::PaymentIntentId;
 use repos::legacy_acl::*;
 
 use models::authorization::*;
-use models::{NewPaymentIntent, PaymentIntent, UpdatePaymentIntent};
+use models::{NewPaymentIntent, PaymentIntent, PaymentIntentAccess, UpdatePaymentIntent};
+use models::UserId;
 
+use schema::invoices_v2::dsl as InvoicesDsl;
 use schema::payment_intent::dsl as PaymentIntentDsl;
 
 use super::acl;
 use super::error::*;
 use super::types::RepoResultV2;
 
-type PaymentIntentRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, PaymentIntent>>;
+type PaymentIntentRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, PaymentIntentAccess>>;
 
 pub struct PaymentIntentRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
     pub db_conn: &'a T,
@@ -55,8 +57,9 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 ectx!(err e, ErrorSource::Diesel, error_kind)
             })
             .and_then(|payment_intent: Option<PaymentIntent>| {
-                if payment_intent.is_some() {
-                    acl::check(&*self.acl, Resource::PaymentIntent, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+                if let Some(ref payment_intent) = payment_intent {
+                    acl::check(&*self.acl, Resource::PaymentIntent, Action::Read, self, Some(&payment_intent.into()))
+                        .map_err(ectx!(try ErrorKind::Forbidden))?;
                 };
                 Ok(payment_intent)
             })
@@ -100,10 +103,27 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 }
 
-impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, PaymentIntent>
+impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, PaymentIntentAccess>
     for PaymentIntentRepoImpl<'a, T>
 {
-    fn is_in_scope(&self, _user_id: stq_types::UserId, _scope: &Scope, _obj: Option<&PaymentIntent>) -> bool {
-        true
+    fn is_in_scope(&self, user_id: stq_types::UserId, scope: &Scope, obj: Option<&PaymentIntentAccess>) -> bool {
+        match *scope {
+            Scope::All => true,
+            Scope::Owned => {
+                if let Some(PaymentIntentAccess { invoice_id }) = obj {
+                    let query = InvoicesDsl::invoices_v2
+                        .filter(InvoicesDsl::id.eq(invoice_id))
+                        .select(InvoicesDsl::buyer_user_id);
+
+                    match query.get_result::<UserId>(self.db_conn).optional() {
+                        Ok(None) => true,
+                        Ok(Some(invoice_user_id)) => invoice_user_id.inner() == &user_id.0,
+                        Err(_) => false,
+                    }
+                } else {
+                    false
+                }
+            }
+        }
     }
 }

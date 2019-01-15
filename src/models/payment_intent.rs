@@ -54,3 +54,15 @@ pub enum PaymentIntentStatus {
     #[serde(other)]
     Other,
 }
+
+pub struct PaymentIntentAccess {
+    pub invoice_id: InvoiceId,
+}
+
+impl<'r> From<&'r PaymentIntent> for PaymentIntentAccess {
+    fn from(payment_intent: &PaymentIntent) -> PaymentIntentAccess {
+        PaymentIntentAccess {
+            invoice_id: payment_intent.invoice_id.clone(),
+        }
+    }
+}
