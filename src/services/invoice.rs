@@ -13,6 +13,7 @@ use models::invoice_v2::InvoiceSetAmountPaid;
 use models::invoice_v2::RawInvoice;
 use r2d2::ManageConnection;
 use serde_json;
+use stripe::Webhook;
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
@@ -63,6 +64,8 @@ pub trait InvoiceService {
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
     /// Handles the callback from Payments gateway which carries a new inbound transaction
     fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
+    /// Handles the callback from Stripe
+    fn handle_stripe_event(&self, event_payload: String) -> ServiceFutureV2<()>;
 }
 
 impl<
@@ -706,6 +709,49 @@ impl<
                     }
                 }
             });
+
+        Box::new(fut)
+    }
+
+    fn handle_stripe_event(&self, event_payload: String) -> ServiceFutureV2<()> {
+        use stripe::EventObject::*;
+        use stripe::EventType::*;
+
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+        let repo_factory = self.static_context.repo_factory.clone();
+
+        //todo use actual values from config
+        let sig = "".to_string();
+        let secret = "".to_string();
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
+            conn.transaction(move || {
+                let event = Webhook::construct_event(event_payload, sig, secret)?;
+                match (event.event_type, event.data.object) {
+                    (PaymentIntentSucceeded, PaymentIntent(payment_intent)) => {
+                        let payment_intent_id = payment_intent.id.clone();
+                        event_store_repo
+                            .add_event(Event::new(EventPayload::PaymentIntentSucceeded { payment_intent }))
+                            .map_err(ectx!(try convert => payment_intent_id))?;
+                    }
+                    (PaymentIntentPaymentFailed, PaymentIntent(payment_intent)) => {
+                        let payment_intent_id = payment_intent.id.clone();
+                        event_store_repo
+                            .add_event(Event::new(EventPayload::PaymentIntentPaymentFailed { payment_intent }))
+                            .map_err(ectx!(try convert => payment_intent_id))?;
+                    }
+                    (event_type, event_object) => {
+                        warn!(
+                            "stripe handle_stripe_event unprocessable event - type: {:?}, object: {:?}",
+                            event_type, event_object
+                        );
+                    }
+                };
+                Ok(())
+            })
+        });
 
         Box::new(fut)
     }

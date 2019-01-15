@@ -2,6 +2,7 @@ use diesel::result::Error as DieselError;
 use failure::{Backtrace, Context, Fail};
 use serde_json;
 use std::fmt;
+use stripe::WebhookError;
 
 use client::payments::ErrorKind as PaymentsClientErrorKind;
 use repos::ErrorKind as RepoErrorKind;
@@ -54,6 +55,20 @@ impl From<DieselError> for Error {
 
 impl<'a> From<&'a DieselError> for ErrorKind {
     fn from(_e: &DieselError) -> Self {
+        ErrorKind::Internal
+    }
+}
+
+impl From<WebhookError> for Error {
+    fn from(e: WebhookError) -> Error {
+        Error {
+            inner: ErrorKind::from(&e).into(),
+        }
+    }
+}
+
+impl<'a> From<&'a WebhookError> for ErrorKind {
+    fn from(_e: &WebhookError) -> Self {
         ErrorKind::Internal
     }
 }

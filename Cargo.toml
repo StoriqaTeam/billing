@@ -45,3 +45,4 @@ uuid = { version = "0.6", features = ["use_std", "v4", "serde"] }
 validator = "0.8"
 validator_derive = "0.8"
 sentry = "0.12"
+stripe-rust = { git = "https://github.com/StoriqaTeam/stripe-rs", branch="master"}
