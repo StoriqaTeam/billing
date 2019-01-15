@@ -34,6 +34,10 @@ amount_recalculate_timeout_sec = 600
 [graylog]
 addr = "udplog.stq.cloud:32303"
 
+[stripe]
+public_key = "pk_test_hH0fg7QCeCIE7ZmVN19h6l9C"
+secret_key = "sk_test_NZtkQf1xKGjkreVbKddipafS"
+
 [event_store]
 max_processing_attempts = 3
 stuck_threshold_sec = 300
