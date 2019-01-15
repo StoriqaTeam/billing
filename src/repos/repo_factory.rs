@@ -30,6 +30,7 @@ where
     fn create_order_exchange_rates_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<OrderExchangeRatesRepo + 'a>;
     fn create_order_exchange_rates_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<OrderExchangeRatesRepo + 'a>;
     fn create_event_store_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<EventStoreRepo + 'a>;
+    fn create_payment_intent_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -187,6 +188,11 @@ where
             self.stuck_threshold_sec,
         )) as Box<EventStoreRepo>
     }
+
+    fn create_payment_intent_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(PaymentIntentRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -233,6 +239,7 @@ pub mod tests {
 
     use std::collections::HashMap;
     use stq_static_resources::{Currency, OrderState};
+    use stq_types::stripe::PaymentIntentId;
     use stq_types::UserId;
     use stq_types::*;
 
@@ -243,6 +250,7 @@ pub mod tests {
     use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
     use models::*;
     use models::{Currency as BillingCurrency, TransactionId};
+    use models::{NewPaymentIntent, PaymentIntent, UpdatePaymentIntent};
     use repos::*;
     use services::*;
 
@@ -312,6 +320,31 @@ pub mod tests {
 
         fn create_event_store_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<EventStoreRepo + 'a> {
             Box::new(EventStoreRepoMock::default())
+        }
+
+        fn create_payment_intent_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a> {
+            Box::new(PaymentIntentRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct PaymentIntentRepoMock;
+
+    impl PaymentIntentRepo for PaymentIntentRepoMock {
+        fn get(&self, _payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>> {
+            Ok(Some(create_payment_intent()))
+        }
+
+        fn create(&self, _new_payment_intent: NewPaymentIntent) -> RepoResultV2<PaymentIntent> {
+            Ok(create_payment_intent())
+        }
+
+        fn update(&self, _payment_intent_id: PaymentIntentId, _update_payment_intent: UpdatePaymentIntent) -> RepoResultV2<PaymentIntent> {
+            Ok(create_payment_intent())
+        }
+
+        fn delete(&self, _payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>> {
+            Ok(Some(create_payment_intent()))
         }
     }
 
@@ -773,6 +806,24 @@ pub mod tests {
         let dynamic_context = DynamicContext::new(user_id, String::default(), MockHttpClient::default(), None, None);
 
         Service::new(static_context, dynamic_context)
+    }
+
+    fn create_payment_intent() -> PaymentIntent {
+        let now = chrono::offset::Utc::now().naive_utc();
+        PaymentIntent {
+            id: PaymentIntentId("PaymentIntentId".to_string()),
+            invoice_id: InvoiceV2Id::generate(),
+            amount: Amount::new(200),
+            amount_received: Amount::new(100),
+            client_secret: None,
+            currency: BillingCurrency::Eth,
+            last_payment_error_message: None,
+            receipt_email: None,
+            charge_id: None,
+            status: PaymentIntentStatus::Other,
+            created_at: now,
+            updated_at: now,
+        }
     }
 
     pub fn create_order_info() -> OrderInfo {

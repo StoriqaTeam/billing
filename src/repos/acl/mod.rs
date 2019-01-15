@@ -60,6 +60,7 @@ impl ApplicationAcl {
                 permission!(Resource::Invoice),
                 permission!(Resource::Account),
                 permission!(Resource::OrderExchangeRate),
+                permission!(Resource::PaymentIntent),
             ],
         );
         hash.insert(
