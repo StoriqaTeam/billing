@@ -25,6 +25,8 @@ pub enum ErrorSource {
     Diesel,
     #[fail(display = "repo source - R2D2")]
     R2d2,
+    #[fail(display = "repo source - serde_json")]
+    SerdeJson,
 }
 
 #[allow(dead_code)]
@@ -49,5 +51,11 @@ impl<'a> From<&'a DieselError> for ErrorKind {
             }
             _ => ErrorKind::Internal,
         }
+    }
+}
+
+impl From<DieselError> for Error {
+    fn from(e: DieselError) -> Self {
+        ectx!(err ErrorSource::Diesel, ErrorKind::from(&e))
     }
 }

@@ -7,6 +7,8 @@ use uuid::{self, Uuid};
 
 use config;
 use models::currency::Currency;
+use models::Amount;
+use models::TransactionId;
 use schema::accounts;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, AsExpression, FromSqlRow)]
@@ -21,6 +23,10 @@ impl AccountId {
 
     pub fn inner(&self) -> &Uuid {
         &self.0
+    }
+
+    pub fn into_inner(self) -> Uuid {
+        self.0
     }
 
     pub fn generate() -> Self {
@@ -71,6 +77,19 @@ pub struct Account {
     pub wallet_address: Option<WalletAddress>,
 }
 
+impl Account {
+    pub fn is_fiat(&self) -> bool {
+        self.wallet_address.is_none()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AccountWithBalance {
+    #[serde(flatten)]
+    pub account: Account,
+    pub balance: Amount,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "accounts"]
 pub struct RawAccount {
@@ -110,7 +129,18 @@ pub struct NewAccount {
     pub wallet_address: Option<WalletAddress>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentsCallback {
+    pub url: String,
+    pub transaction_id: TransactionId,
+    pub amount_captured: Amount,
+    pub currency: Currency,
+    pub address: WalletAddress,
+    pub account_id: AccountId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SystemAccountType {
     Main,
     Cashback,
@@ -140,6 +170,15 @@ impl Display for SystemAccount {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemAccounts(pub Vec<SystemAccount>);
+
+impl SystemAccounts {
+    pub fn get(&self, currency: Currency, account_type: SystemAccountType) -> Option<AccountId> {
+        self.0
+            .iter()
+            .find(|account| account.currency == currency && account.account_type == account_type)
+            .map(|account| account.id)
+    }
+}
 
 impl From<config::Accounts> for SystemAccounts {
     fn from(config: config::Accounts) -> SystemAccounts {

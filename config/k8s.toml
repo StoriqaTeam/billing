@@ -16,7 +16,6 @@ url = "http://billing:8000"
 # # user public key = 02b27f95a9f892a8e9460347ba19be421403da5d05e68281a980be865ad86dd02b
 # user_private_key = "a7190fcbbb97a08e0a0f39be542186efc3e59790b61b6338f83960f2519acb4d"
 # min_pooled_accounts = 10
-# callback_endpoint = "/callback/payments/new_tx"
 # 
 # [payments.accounts]
 # main_stq = "a46cd01b-6409-4399-8eb1-2435656d0b40"
@@ -38,3 +37,8 @@ addr = "udplog.stq.cloud:32303"
 [stripe]
 public_key = "pk_test_hH0fg7QCeCIE7ZmVN19h6l9C"
 secret_key = "sk_test_NZtkQf1xKGjkreVbKddipafS"
+
+[event_store]
+max_processing_attempts = 3
+stuck_threshold_sec = 300
+polling_rate_sec = 10

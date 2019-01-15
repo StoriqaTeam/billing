@@ -21,6 +21,7 @@ pub struct Config {
     pub graylog: Option<GrayLogConfig>,
     pub sentry: Option<SentryConfig>,
     pub stripe: Stripe,
+    pub event_store: EventStore,
 }
 
 /// Common server settings
@@ -73,7 +74,6 @@ pub struct Payments {
     pub user_jwt: String,
     pub user_private_key: String,
     pub min_pooled_accounts: u32,
-    pub callback_endpoint: String,
     pub accounts: Accounts,
 }
 
@@ -91,6 +91,14 @@ pub struct Stripe {
     pub secret_key: String,
 }
 
+/// Event store processing settings
+#[derive(Debug, Deserialize, Clone)]
+pub struct EventStore {
+    pub max_processing_attempts: u32,
+    pub stuck_threshold_sec: u32,
+    pub polling_rate_sec: u32,
+}
+
 /// Creates new app config struct
 /// #Examples
 /// ```
@@ -103,6 +111,9 @@ impl Config {
         let mut s = RawConfig::new();
 
         s.set_default("server.processing_timeout_ms", 1000 as i64).unwrap();
+        s.set_default("event_store.max_processing_attempts", 3 as i64).unwrap();
+        s.set_default("event_store.stuck_threshold_sec", 300 as i64).unwrap();
+        s.set_default("event_store.polling_rate_sec", 10 as i64).unwrap();
 
         s.merge(File::with_name("config/base"))?;
 

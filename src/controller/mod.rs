@@ -81,21 +81,27 @@ impl<
 
         let (payments_client, account_service) = match self.static_context.config.payments.clone() {
             None => (None, None),
-            Some(config) => PaymentsClientImpl::create_from_config(time_limited_http_client.clone(), config.clone().into())
-                .ok()
-                .map(|payments_client| {
-                    let account_service = AccountServiceImpl::new(
-                        self.static_context.db_pool.clone(),
-                        self.static_context.cpu_pool.clone(),
-                        self.static_context.repo_factory.clone(),
-                        config.min_pooled_accounts,
-                        payments_client.clone(),
-                        "".to_string(),
-                        config.accounts.into(),
-                    );
-                    (Some(payments_client), Some(account_service))
-                })
-                .unwrap_or((None, None)),
+            Some(payments_config) => {
+                PaymentsClientImpl::create_from_config(time_limited_http_client.clone(), payments_config.clone().into())
+                    .ok()
+                    .map(|payments_client| {
+                        let account_service = AccountServiceImpl::new(
+                            self.static_context.db_pool.clone(),
+                            self.static_context.cpu_pool.clone(),
+                            self.static_context.repo_factory.clone(),
+                            payments_config.min_pooled_accounts,
+                            payments_client.clone(),
+                            format!(
+                                "{}{}",
+                                self.static_context.config.callback.url.clone(),
+                                routes::PAYMENTS_CALLBACK_ENDPOINT
+                            ),
+                            payments_config.accounts.into(),
+                        );
+                        (Some(payments_client), Some(account_service))
+                    })
+                    .unwrap_or((None, None))
+            }
         };
 
         let dynamic_context = DynamicContext::new(
@@ -114,6 +120,10 @@ impl<
             (&Post, Some(Route::ExternalBillingCallback)) => {
                 serialize_future({ parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| service.update_invoice(data)) })
             }
+            (&Post, Some(Route::PaymentsInboundTx)) => serialize_future(
+                parse_body::<PaymentsCallback>(req.body())
+                    .and_then(move |data| service.handle_inbound_tx(data).map_err(Error::from).map_err(failure::Error::from)),
+            ),
             (&Post, Some(Route::UserMerchants)) => {
                 serialize_future({ parse_body::<CreateUserMerchantPayload>(req.body()).and_then(move |data| service.create_user(data)) })
             }

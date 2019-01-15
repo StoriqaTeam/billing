@@ -50,6 +50,7 @@ extern crate stq_static_resources;
 extern crate stq_types;
 extern crate tokio_core;
 extern crate tokio_signal;
+extern crate tokio_timer;
 extern crate uuid;
 extern crate validator;
 #[macro_use]
@@ -63,6 +64,7 @@ pub mod client;
 pub mod config;
 pub mod controller;
 pub mod errors;
+pub mod event_handling;
 pub mod models;
 pub mod repos;
 pub mod schema;
@@ -84,13 +86,18 @@ use stq_cache::cache::{redis::RedisCache, Cache, NullCache, TypedCache};
 use stq_http::controller::Application;
 use tokio_core::reactor::Core;
 
-use client::payments::{self, PaymentsClientImpl};
+use client::{
+    payments::{self, PaymentsClientImpl},
+    saga::SagaClientImpl,
+};
 use config::Config;
 use controller::context::StaticContext;
 use errors::Error;
+use event_handling::EventHandler;
 use repos::acl::RolesCacheImpl;
 use repos::repo_factory::ReposFactoryImpl;
 use services::accounts::{AccountService, AccountServiceImpl};
+use std::thread;
 
 /// Starts new web service from provided `Config`
 pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>, callback: F) {
@@ -143,7 +150,13 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         None => RolesCacheImpl::new(Box::new(NullCache::new()) as Box<_>),
     };
 
-    let repo_factory = ReposFactoryImpl::new(roles_cache);
+    let config::EventStore {
+        max_processing_attempts,
+        stuck_threshold_sec,
+        polling_rate_sec,
+    } = config.event_store.clone();
+
+    let repo_factory = ReposFactoryImpl::new(roles_cache, max_processing_attempts, stuck_threshold_sec);
 
     let context = StaticContext::new(
         db_pool.clone(),
@@ -153,32 +166,58 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         repo_factory.clone(),
     );
 
-    if let Some(config) = config.payments {
-        info!("Payments config found - initializing accounts");
-
-        let payments_client = PaymentsClientImpl::create_from_config(client_handle, payments::Config::from(config.clone()))
-            .expect("Failed to create Payments client");
+    let payments_ctx = config.payments.clone().map(|payments_config| {
+        let payments_client =
+            PaymentsClientImpl::create_from_config(client_handle.clone(), payments::Config::from(payments_config.clone()))
+                .expect("Failed to create Payments client");
 
         let account_service = AccountServiceImpl::new(
-            db_pool,
-            cpu_pool,
-            repo_factory,
-            config.min_pooled_accounts,
-            payments_client,
-            "".to_string(),
-            config.accounts.into(),
+            db_pool.clone(),
+            cpu_pool.clone(),
+            repo_factory.clone(),
+            payments_config.min_pooled_accounts,
+            payments_client.clone(),
+            format!("{}{}", config.callback.url, controller::routes::PAYMENTS_CALLBACK_ENDPOINT),
+            payments_config.accounts.into(),
         );
 
-        core.run(account_service.init_system_accounts())
-            .expect("Failed to initialize system accounts");
+        (payments_client, account_service)
+    });
 
-        core.run(account_service.init_account_pools())
-            .expect("Failed to initialize account pools");
+    match payments_ctx.as_ref() {
+        None => {
+            info!("Payments config not found - skipping account initialization");
+        }
+        Some((_, ref account_service)) => {
+            info!("Payments config found - initializing accounts");
 
-        info!("Finished initializing accounts");
-    } else {
-        info!("Payments config not found - skipping account initialization");
-    }
+            core.run(account_service.init_system_accounts())
+                .expect("Failed to initialize system accounts");
+
+            core.run(account_service.init_account_pools())
+                .expect("Failed to initialize account pools");
+
+            info!("Finished initializing accounts");
+        }
+    };
+
+    let event_handler = EventHandler {
+        db_pool: db_pool.clone(),
+        cpu_pool: cpu_pool.clone(),
+        repo_factory: repo_factory.clone(),
+        http_client: client_handle.clone(),
+        payments_client: payments_ctx.as_ref().map(|(payments_client, _)| payments_client.clone()),
+        account_service: payments_ctx.as_ref().map(|(_, account_service)| account_service.clone()),
+        saga_client: SagaClientImpl::new(client_handle.clone(), config.saga_addr.url),
+    };
+
+    thread::spawn(move || {
+        info!("Event processor is now running");
+        let mut core = Core::new().expect("Failed to create a Tokio core for the event processor");
+        let polling_rate = Duration::new(polling_rate_sec.into(), 0);
+        core.run(EventHandler::run(event_handler, polling_rate))
+            .expect("Fatal error occurred in the event processor");
+    });
 
     let serve = Http::new()
         .serve_addr_handle(&address, &handle, move || {

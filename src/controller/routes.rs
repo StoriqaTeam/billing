@@ -3,10 +3,13 @@ use stq_types::{InvoiceId, OrderId, RoleId, SagaId, StoreId, UserId};
 
 use models::invoice_v2;
 
+pub const PAYMENTS_CALLBACK_ENDPOINT: &'static str = "/v2/callback/payments/inbound_tx";
+
 /// List of all routes with params for the app
 #[derive(Clone, Debug, PartialEq)]
 pub enum Route {
     ExternalBillingCallback,
+    PaymentsInboundTx,
     Invoices,
     InvoicesV2,
     InvoiceBySagaId { id: SagaId },
@@ -29,6 +32,7 @@ pub enum Route {
 pub fn create_route_parser() -> RouteParser<Route> {
     let mut route_parser = RouteParser::default();
     route_parser.add_route(r"^/external_billing_callback$", || Route::ExternalBillingCallback);
+    route_parser.add_route(&format!(r"^{}$", PAYMENTS_CALLBACK_ENDPOINT), || Route::PaymentsInboundTx);
     route_parser.add_route(r"^/invoices$", || Route::Invoices);
     route_parser.add_route(r"^/v2/invoices$", || Route::InvoicesV2);
     route_parser.add_route_with_params(r"^/invoices/by-saga-id/([a-zA-Z0-9-]+)$", |params| {
