@@ -17,6 +17,7 @@ use stripe::Webhook;
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
+use stq_http::request_util::StripeSignature;
 use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
@@ -68,7 +69,7 @@ pub trait InvoiceService {
     /// Handles the callback from Payments gateway which carries a new inbound transaction
     fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
     /// Handles the callback from Stripe
-    fn handle_stripe_event(&self, event_payload: String) -> ServiceFutureV2<()>;
+    fn handle_stripe_event(&self, signature_header: StripeSignature, event_payload: String) -> ServiceFutureV2<()>;
 }
 
 impl<
@@ -871,7 +872,7 @@ impl<
         Box::new(fut)
     }
 
-    fn handle_stripe_event(&self, event_payload: String) -> ServiceFutureV2<()> {
+    fn handle_stripe_event(&self, signature_header: StripeSignature, event_payload: String) -> ServiceFutureV2<()> {
         use stripe::EventObject::*;
         use stripe::EventType::*;
 
@@ -880,8 +881,8 @@ impl<
         let repo_factory = self.static_context.repo_factory.clone();
 
         //todo use actual values from config
-        let signature_header = "".to_string();
-        let secret = "".to_string();
+        let signature_header = format!("{}", signature_header);
+        let secret = self.static_context.config.stripe.secret_key.clone();
 
         let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
