@@ -8,6 +8,7 @@ pub const PAYMENTS_CALLBACK_ENDPOINT: &'static str = "/v2/callback/payments/inbo
 /// List of all routes with params for the app
 #[derive(Clone, Debug, PartialEq)]
 pub enum Route {
+    StripeWebhook,
     ExternalBillingCallback,
     PaymentsInboundTx,
     Invoices,
@@ -31,6 +32,7 @@ pub enum Route {
 
 pub fn create_route_parser() -> RouteParser<Route> {
     let mut route_parser = RouteParser::default();
+    route_parser.add_route(r"^/stripe_webhook$", || Route::StripeWebhook);
     route_parser.add_route(r"^/external_billing_callback$", || Route::ExternalBillingCallback);
     route_parser.add_route(&format!(r"^{}$", PAYMENTS_CALLBACK_ENDPOINT), || Route::PaymentsInboundTx);
     route_parser.add_route(r"^/invoices$", || Route::Invoices);

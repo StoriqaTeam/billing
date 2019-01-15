@@ -18,7 +18,7 @@ use stq_http::{
     client::TimeLimitedHttpClient,
     controller::{Controller, ControllerFuture},
     errors::ErrorMessageWrapper,
-    request_util::{self, parse_body, serialize_future, RequestTimeout as RequestTimeoutHeader},
+    request_util::{self, parse_body, read_body, serialize_future, RequestTimeout as RequestTimeoutHeader},
 };
 use stq_types::UserId;
 
@@ -117,6 +117,11 @@ impl<
         let path = req.path().to_string();
 
         let fut = match (&req.method().clone(), self.static_context.route_parser.test(req.path())) {
+            (&Post, Some(Route::StripeWebhook)) => serialize_future(
+                read_body(req.body())
+                    .map_err(failure::Error::from)
+                    .and_then(move |data| service.handle_stripe_event(data).map_err(Error::from).map_err(failure::Error::from)),
+            ),
             (&Post, Some(Route::ExternalBillingCallback)) => {
                 serialize_future({ parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| service.update_invoice(data)) })
             }

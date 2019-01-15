@@ -1,5 +1,6 @@
 use diesel::sql_types::Uuid as SqlUuid;
 use std::fmt;
+use stripe::PaymentIntent;
 use uuid::Uuid;
 
 use models::invoice_v2::InvoiceId;
@@ -48,6 +49,8 @@ impl Event {
 pub enum EventPayload {
     NoOp,
     InvoicePaid { invoice_id: InvoiceId },
+    PaymentIntentPaymentFailed { payment_intent: PaymentIntent },
+    PaymentIntentSucceeded { payment_intent: PaymentIntent },
 }
 
 impl fmt::Debug for EventPayload {
@@ -62,6 +65,8 @@ impl fmt::Display for EventPayload {
         let s = match self {
             EventPayload::NoOp => "NoOp",
             EventPayload::InvoicePaid { .. } => "InvoicePaid",
+            EventPayload::PaymentIntentPaymentFailed { .. } => "PaymentIntentPaymentFailed",
+            EventPayload::PaymentIntentSucceeded { .. } => "PaymentIntentSucceeded",
         };
 
         f.write_str(&s)

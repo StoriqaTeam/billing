@@ -4,6 +4,7 @@ use futures::{future, Future};
 use r2d2::ManageConnection;
 use stq_http::client::HttpClient;
 use stq_static_resources::OrderState;
+use stripe::PaymentIntent;
 use uuid::Uuid;
 
 use client::{
@@ -33,9 +34,22 @@ where
         match payload {
             EventPayload::NoOp => Box::new(future::ok(())),
             EventPayload::InvoicePaid { invoice_id } => self.handle_invoice_paid(invoice_id),
+            EventPayload::PaymentIntentPaymentFailed { payment_intent } => self.handle_payment_intent_payment_failed(payment_intent),
+            EventPayload::PaymentIntentSucceeded { payment_intent } => self.handle_payment_intent_succeeded(payment_intent),
         }
     }
 
+    // TODO: handle this event properly
+    pub fn handle_payment_intent_payment_failed(self, _payment_intent: PaymentIntent) -> EventHandlerFuture<()> {
+        Box::new(future::ok(()))
+    }
+
+    // TODO: handle this event properly
+    pub fn handle_payment_intent_succeeded(self, _payment_intent: PaymentIntent) -> EventHandlerFuture<()> {
+        Box::new(future::ok(()))
+    }
+
+    // TODO: handle this event properly
     pub fn handle_invoice_paid(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
         match (self.payments_client.clone(), self.account_service.clone()) {
             (Some(payments_client), Some(account_service)) => {

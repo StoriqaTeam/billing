@@ -55,6 +55,7 @@ extern crate uuid;
 extern crate validator;
 #[macro_use]
 extern crate sentry;
+extern crate stripe;
 
 #[macro_use]
 pub mod macros;
