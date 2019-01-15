@@ -1,4 +1,4 @@
-//! Permission is a tuple for describing permisssions
+//! Permission is a tuple for describing permissions
 
 use models::{Action, Resource, Scope};
 

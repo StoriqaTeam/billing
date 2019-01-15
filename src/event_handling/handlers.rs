@@ -60,7 +60,7 @@ where
                 let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
                 let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
                 let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
-                crate::services::invoice::payment_intent_successs(
+                crate::services::invoice::payment_intent_success(
                     &*conn,
                     &*orders_repo,
                     &*invoices_repo,

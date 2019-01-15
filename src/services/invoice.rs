@@ -723,13 +723,13 @@ impl<
         let repo_factory = self.static_context.repo_factory.clone();
 
         //todo use actual values from config
-        let sig = "".to_string();
+        let signature_header = "".to_string();
         let secret = "".to_string();
 
         let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
             conn.transaction(move || {
-                let event = Webhook::construct_event(event_payload, sig, secret)?;
+                let event = Webhook::construct_event(event_payload, signature_header, secret)?;
                 match (event.event_type, event.data.object) {
                     (PaymentIntentSucceeded, PaymentIntent(payment_intent)) => {
                         let payment_intent_id = payment_intent.id.clone();
@@ -758,7 +758,7 @@ impl<
     }
 }
 
-pub fn payment_intent_successs<C>(
+pub fn payment_intent_success<C>(
     conn: &C,
     orders_repo: &OrdersRepo,
     invoice_repo: &InvoicesV2Repo,
