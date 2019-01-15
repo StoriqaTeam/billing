@@ -95,7 +95,9 @@ impl Currency {
             StqCurrency::ETH => Ok(Currency::Eth),
             StqCurrency::STQ => Ok(Currency::Stq),
             StqCurrency::BTC => Ok(Currency::Btc),
-            _ => Err(()),
+            StqCurrency::EUR => Ok(Currency::Eur),
+            StqCurrency::USD => Ok(Currency::Usd),
+            StqCurrency::RUB => Ok(Currency::Rub),
         }
     }
 }
@@ -106,6 +108,9 @@ impl Into<StqCurrency> for Currency {
             Currency::Eth => StqCurrency::ETH,
             Currency::Stq => StqCurrency::STQ,
             Currency::Btc => StqCurrency::BTC,
+            Currency::Eur => StqCurrency::EUR,
+            Currency::Usd => StqCurrency::USD,
+            Currency::Rub => StqCurrency::RUB,
         }
     }
 }
