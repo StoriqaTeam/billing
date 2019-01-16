@@ -61,6 +61,7 @@ impl ApplicationAcl {
                 permission!(Resource::Account),
                 permission!(Resource::OrderExchangeRate),
                 permission!(Resource::PaymentIntent),
+                permission!(Resource::Customer),
             ],
         );
         hash.insert(
@@ -75,6 +76,8 @@ impl ApplicationAcl {
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
                 permission!(Resource::PaymentIntent, Action::Read, Scope::Owned),
+                permission!(Resource::Customer, Action::Read, Scope::Owned),
+                permission!(Resource::Customer, Action::Write, Scope::Owned),
             ],
         );
         hash.insert(
@@ -119,7 +122,9 @@ impl<T> Acl<Resource, Action, Scope, FailureError, T> for ApplicationAcl {
 
 #[cfg(test)]
 mod tests {
+
     use repos::legacy_acl::{Acl, CheckScope};
+    use std::time::SystemTime;
     use stq_static_resources::OrderState;
     use stq_types::UserId;
     use stq_types::*;
@@ -136,6 +141,8 @@ mod tests {
             saga_id: SagaId::new(),
             status: OrderState::New,
             total_amount: ProductPrice(100.0),
+            created_at: SystemTime::now(),
+            updated_at: SystemTime::now(),
         }
     }
 

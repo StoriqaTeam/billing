@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use stq_static_resources::OrderState;
 use stq_types::{OrderId, OrderInfoId, ProductPrice, SagaId, StoreId, UserId};
 
@@ -8,10 +10,12 @@ use schema::orders_info;
 pub struct OrderInfo {
     pub id: OrderInfoId,
     pub order_id: OrderId,
-    pub store_id: StoreId,
-    pub customer_id: UserId,
-    pub saga_id: SagaId,
     pub status: OrderState,
+    pub created_at: SystemTime,
+    pub updated_at: SystemTime,
+    pub customer_id: UserId,
+    pub store_id: StoreId,
+    pub saga_id: SagaId,
     pub total_amount: ProductPrice,
 }
 

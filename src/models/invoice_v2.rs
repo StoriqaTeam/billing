@@ -261,6 +261,8 @@ impl InvoiceDump {
             },
             wallet: wallet_address.map(|address| address.into_inner()),
             amount_captured,
+            created_at: SystemTime::now(),
+            updated_at: SystemTime::now(),
         })
     }
 }
