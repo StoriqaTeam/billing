@@ -66,3 +66,19 @@ impl<'r> From<&'r PaymentIntent> for PaymentIntentAccess {
         }
     }
 }
+
+impl From<stripe::PaymentIntentStatus> for PaymentIntentStatus {
+    fn from(status: stripe::PaymentIntentStatus) -> PaymentIntentStatus {
+        use stripe::PaymentIntentStatus::*;
+        match status {
+            RequiresSource => PaymentIntentStatus::RequiresSource,
+            RequiresConfirmation => PaymentIntentStatus::RequiresConfirmation,
+            RequiresSourceAction => PaymentIntentStatus::RequiresSourceAction,
+            Processing => PaymentIntentStatus::Processing,
+            RequiresCapture => PaymentIntentStatus::RequiresCapture,
+            Canceled => PaymentIntentStatus::Canceled,
+            Succeeded => PaymentIntentStatus::Succeeded,
+            Other => PaymentIntentStatus::Other,
+        }
+    }
+}

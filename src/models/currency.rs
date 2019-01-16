@@ -100,6 +100,21 @@ impl Currency {
             StqCurrency::RUB => Ok(Currency::Rub),
         }
     }
+
+    pub fn try_from_stripe_currency(currency: stripe::Currency) -> Result<Self, ()> {
+        use stripe::Currency::*;
+        match currency {
+            EUR => Ok(Currency::Eur),
+            USD => Ok(Currency::Usd),
+            RUB => Ok(Currency::Rub),
+            _ => Err(()),
+        }
+    }
+
+    pub fn try_into_stripe_currency(self) -> Result<stripe::Currency, ()> {
+        let currency_str = format!("{}", self);
+        stripe::Currency::from_str(&currency_str).map_err(|_| ())
+    }
 }
 
 impl Into<StqCurrency> for Currency {

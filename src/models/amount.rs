@@ -95,6 +95,12 @@ impl Amount {
     }
 }
 
+impl From<u64> for Amount {
+    fn from(val: u64) -> Self {
+        Amount(val as u128)
+    }
+}
+
 impl FromStr for Amount {
     type Err = ParseAmountError;
 
