@@ -1,4 +1,4 @@
-//! `Context` is a top level module containg static context and dynamic context for each request
+//! `Context` is a top level module contains static context and dynamic context for each request
 use std::sync::Arc;
 
 use diesel::connection::AnsiTransactionManager;

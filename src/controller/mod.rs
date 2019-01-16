@@ -32,6 +32,7 @@ use sentry_integration::log_and_capture_error;
 use services::accounts::AccountServiceImpl;
 use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
+use services::payment_intent::PaymentIntentService;
 use services::user_roles::UserRolesService;
 use services::Service;
 
@@ -160,6 +161,8 @@ impl<
             }
             (Delete, Some(Route::RolesByUserId { user_id })) => serialize_future({ service.delete_user_role_by_user_id(user_id) }),
             (Delete, Some(Route::RoleById { id })) => serialize_future({ service.delete_user_role_by_id(id) }),
+
+            (Get, Some(Route::PaymentIntentByInvoice { invoice_id })) => serialize_future({ service.get_by_invoice(invoice_id) }),
 
             // Fallback
             (m, _) => not_found(m, path),
