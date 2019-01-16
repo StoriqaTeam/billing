@@ -102,13 +102,8 @@ impl Currency {
     }
 
     pub fn try_from_stripe_currency(currency: stripe::Currency) -> Result<Self, ()> {
-        use stripe::Currency::*;
-        match currency {
-            EUR => Ok(Currency::Eur),
-            USD => Ok(Currency::Usd),
-            RUB => Ok(Currency::Rub),
-            _ => Err(()),
-        }
+        let currency_str = format!("{}", currency);
+        Currency::from_str(&currency_str).map_err(|_| ())
     }
 
     pub fn try_into_stripe_currency(self) -> Result<stripe::Currency, ()> {
