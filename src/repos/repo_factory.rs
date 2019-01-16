@@ -32,6 +32,8 @@ where
     fn create_event_store_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<EventStoreRepo + 'a>;
     fn create_payment_intent_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a>;
     fn create_payment_intent_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentRepo + 'a>;
+    fn create_customers_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a>;
+    fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -199,6 +201,16 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(PaymentIntentRepoImpl::new(db_conn, acl))
     }
+
+    fn create_customers_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(CustomersRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(CustomersRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -255,8 +267,7 @@ pub mod tests {
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
     use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
     use models::*;
-    use models::{Currency as BillingCurrency, TransactionId};
-    use models::{NewPaymentIntent, PaymentIntent, UpdatePaymentIntent};
+    use models::{Currency as BillingCurrency, NewPaymentIntent, PaymentIntent, TransactionId, TureCurrency, UpdatePaymentIntent};
     use repos::*;
     use services::*;
 
@@ -334,6 +345,57 @@ pub mod tests {
 
         fn create_payment_intent_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PaymentIntentRepo + 'a> {
             Box::new(PaymentIntentRepoMock::default())
+        }
+
+        fn create_customers_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<CustomersRepo + 'a> {
+            Box::new(CustomersRepoMock::default())
+        }
+
+        fn create_customers_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<CustomersRepo + 'a> {
+            Box::new(CustomersRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct CustomersRepoMock;
+
+    impl CustomersRepo for CustomersRepoMock {
+        fn get(&self, search: SearchCustomer) -> RepoResultV2<Option<DbCustomer>> {
+            let customer = create_db_customer();
+
+            let res = match search {
+                SearchCustomer::Id(id) => DbCustomer { id, ..customer },
+                SearchCustomer::UserId(user_id) => DbCustomer { user_id, ..customer },
+            };
+
+            Ok(Some(res))
+        }
+
+        fn create(&self, payload: NewDbCustomer) -> RepoResultV2<DbCustomer> {
+            let customer = create_db_customer();
+
+            Ok(DbCustomer {
+                id: payload.id,
+                user_id: payload.user_id,
+                email: payload.email,
+                ..customer
+            })
+        }
+
+        fn update(&self, id: CustomerId, payload: UpdateDbCustomer) -> RepoResultV2<DbCustomer> {
+            let customer = create_db_customer();
+
+            Ok(DbCustomer {
+                id,
+                email: payload.email,
+                ..customer
+            })
+        }
+
+        fn delete(&self, id: CustomerId) -> RepoResultV2<Option<DbCustomer>> {
+            let customer = create_db_customer();
+
+            Ok(Some(DbCustomer { id, ..customer }))
         }
     }
 
@@ -592,14 +654,14 @@ pub mod tests {
         fn delete(&self, _account_id: AccountId) -> RepoResultV2<Option<Account>> {
             Ok(Some(Account {
                 id: AccountId::new(Uuid::nil()),
-                currency: BillingCurrency::Stq,
+                currency: TureCurrency::Stq,
                 is_pooled: false,
                 created_at: NaiveDateTime::from_timestamp(0, 0),
                 wallet_address: None,
             }))
         }
 
-        fn get_free_account(&self, _currency: BillingCurrency) -> RepoResultV2<Option<Account>> {
+        fn get_free_account(&self, _currency: TureCurrency) -> RepoResultV2<Option<Account>> {
             Ok(None)
         }
     }
@@ -832,6 +894,17 @@ pub mod tests {
         Service::new(static_context, dynamic_context)
     }
 
+    fn create_db_customer() -> DbCustomer {
+        let now = chrono::offset::Utc::now().naive_utc();
+        DbCustomer {
+            id: CustomerId::new("cus_ELDLXPOc4SVNP4".to_string()),
+            user_id: UserId(1),
+            email: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
     fn create_payment_intent() -> PaymentIntent {
         let now = chrono::offset::Utc::now().naive_utc();
         PaymentIntent {
@@ -1013,13 +1086,7 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn create_account(
-            &self,
-            _account_id: Uuid,
-            _name: String,
-            _currency: BillingCurrency,
-            _is_pooled: bool,
-        ) -> ServiceFutureV2<Account> {
+        fn create_account(&self, _account_id: Uuid, _name: String, _currency: TureCurrency, _is_pooled: bool) -> ServiceFutureV2<Account> {
             unimplemented!()
         }
 
@@ -1027,7 +1094,7 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn get_main_account(&self, _currency: BillingCurrency) -> ServiceFutureV2<AccountWithBalance> {
+        fn get_main_account(&self, _currency: TureCurrency) -> ServiceFutureV2<AccountWithBalance> {
             unimplemented!()
         }
 
@@ -1035,7 +1102,7 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn get_or_create_free_pooled_account(&self, _currency: BillingCurrency) -> ServiceFutureV2<Account> {
+        fn get_or_create_free_pooled_account(&self, _currency: TureCurrency) -> ServiceFutureV2<Account> {
             unimplemented!()
         }
     }

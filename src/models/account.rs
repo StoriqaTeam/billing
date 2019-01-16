@@ -6,7 +6,7 @@ use std::str::FromStr;
 use uuid::{self, Uuid};
 
 use config;
-use models::currency::Currency;
+use models::currency::TureCurrency;
 use models::Amount;
 use models::TransactionId;
 use schema::accounts;
@@ -68,23 +68,17 @@ impl WalletAddress {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountCount {
-    pub pooled: HashMap<Currency, u64>,
-    pub unpooled: HashMap<Currency, u64>,
+    pub pooled: HashMap<TureCurrency, u64>,
+    pub unpooled: HashMap<TureCurrency, u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
     pub id: AccountId,
-    pub currency: Currency,
+    pub currency: TureCurrency,
     pub is_pooled: bool,
     pub created_at: NaiveDateTime,
     pub wallet_address: Option<WalletAddress>,
-}
-
-impl Account {
-    pub fn is_fiat(&self) -> bool {
-        self.wallet_address.is_none()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -98,7 +92,7 @@ pub struct AccountWithBalance {
 #[table_name = "accounts"]
 pub struct RawAccount {
     pub id: AccountId,
-    pub currency: Currency,
+    pub currency: TureCurrency,
     pub is_pooled: bool,
     pub created_at: NaiveDateTime,
     pub wallet_address: Option<WalletAddress>,
@@ -128,7 +122,7 @@ impl From<RawAccount> for Account {
 #[table_name = "accounts"]
 pub struct NewAccount {
     pub id: AccountId,
-    pub currency: Currency,
+    pub currency: TureCurrency,
     pub is_pooled: bool,
     pub wallet_address: Option<WalletAddress>,
 }
@@ -139,7 +133,7 @@ pub struct PaymentsCallback {
     pub url: String,
     pub transaction_id: TransactionId,
     pub amount_captured: Amount,
-    pub currency: Currency,
+    pub currency: TureCurrency,
     pub address: WalletAddress,
     pub account_id: AccountId,
 }
@@ -162,7 +156,7 @@ impl Display for SystemAccountType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemAccount {
     pub id: AccountId,
-    pub currency: Currency,
+    pub currency: TureCurrency,
     pub account_type: SystemAccountType,
 }
 
@@ -176,7 +170,7 @@ impl Display for SystemAccount {
 pub struct SystemAccounts(pub Vec<SystemAccount>);
 
 impl SystemAccounts {
-    pub fn get(&self, currency: Currency, account_type: SystemAccountType) -> Option<AccountId> {
+    pub fn get(&self, currency: TureCurrency, account_type: SystemAccountType) -> Option<AccountId> {
         self.0
             .iter()
             .find(|account| account.currency == currency && account.account_type == account_type)
@@ -196,22 +190,22 @@ impl From<config::Accounts> for SystemAccounts {
         SystemAccounts(vec![
             SystemAccount {
                 id: AccountId::new(main_stq),
-                currency: Currency::Stq,
+                currency: TureCurrency::Stq,
                 account_type: SystemAccountType::Main,
             },
             SystemAccount {
                 id: AccountId::new(main_eth),
-                currency: Currency::Eth,
+                currency: TureCurrency::Eth,
                 account_type: SystemAccountType::Main,
             },
             SystemAccount {
                 id: AccountId::new(main_btc),
-                currency: Currency::Btc,
+                currency: TureCurrency::Btc,
                 account_type: SystemAccountType::Main,
             },
             SystemAccount {
                 id: AccountId::new(cashback_stq),
-                currency: Currency::Stq,
+                currency: TureCurrency::Stq,
                 account_type: SystemAccountType::Cashback,
             },
         ])
