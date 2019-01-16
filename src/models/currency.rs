@@ -100,6 +100,16 @@ impl Currency {
             StqCurrency::RUB => Ok(Currency::Rub),
         }
     }
+
+    pub fn try_from_stripe_currency(currency: stripe::Currency) -> Result<Self, ()> {
+        let currency_str = format!("{}", currency);
+        Currency::from_str(&currency_str).map_err(|_| ())
+    }
+
+    pub fn try_into_stripe_currency(self) -> Result<stripe::Currency, ()> {
+        let currency_str = format!("{}", self);
+        stripe::Currency::from_str(&currency_str).map_err(|_| ())
+    }
 }
 
 impl Into<StqCurrency> for Currency {
@@ -197,5 +207,169 @@ impl TureCurrency {
             Currency::Btc => Ok(TureCurrency::Btc),
             Currency::Usd | Currency::Eur | Currency::Rub => Err(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_try_into_stripe_currency() {
+        use self::Currency::*;
+        for currency in Currency::into_enum_iter() {
+            match currency {
+                Eth => assert_eq!(currency.try_into_stripe_currency(), Err(())),
+                Stq => assert_eq!(currency.try_into_stripe_currency(), Err(())),
+                Btc => assert_eq!(currency.try_into_stripe_currency(), Err(())),
+                Eur => assert_eq!(currency.try_into_stripe_currency(), Ok(stripe::Currency::EUR)),
+                Usd => assert_eq!(currency.try_into_stripe_currency(), Ok(stripe::Currency::USD)),
+                Rub => assert_eq!(currency.try_into_stripe_currency(), Ok(stripe::Currency::RUB)),
+            }
+        }
+    }
+
+    #[test]
+    fn test_try_from_stripe_currency() {
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::EUR), Ok(Currency::Eur));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::USD), Ok(Currency::Usd));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::RUB), Ok(Currency::Rub));
+
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::AED), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::AFN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ALL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::AMD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ANG), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::AOA), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ARS), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::AUD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::AWG), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::AZN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BAM), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BBD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BDT), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BGN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BIF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BMD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BND), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BOB), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BRL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BSD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BWP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::BZD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CAD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CDF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CHF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CLP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CNY), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::COP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CRC), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CVE), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::CZK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::DJF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::DKK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::DOP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::DZD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::EEK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::EGP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ETB), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::FJD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::FKP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::GBP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::GEL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::GIP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::GMD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::GNF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::GTQ), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::GYD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::HKD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::HNL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::HRK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::HTG), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::HUF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::IDR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ILS), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::INR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ISK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::JMD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::JPY), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::KES), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::KGS), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::KHR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::KMF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::KRW), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::KYD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::KZT), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::LAK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::LBP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::LKR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::LRD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::LSL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::LTL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::LVL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MAD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MDL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MGA), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MKD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MNT), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MOP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MRO), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MUR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MVR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MWK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MXN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MYR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::MZN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::NAD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::NGN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::NIO), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::NOK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::NPR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::NZD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::PAB), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::PEN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::PGK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::PHP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::PKR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::PLN), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::PYG), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::QAR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::RON), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::RSD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::RWF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SAR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SBD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SCR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SEK), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SGD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SHP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SLL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SOS), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SRD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::STD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SVC), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::SZL), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::THB), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::TJS), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::TOP), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::TRY), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::TTD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::TWD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::TZS), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::UAH), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::UGX), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::UYU), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::UZS), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::VEF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::VND), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::VUV), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::WST), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::XAF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::XCD), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::XOF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::XPF), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::YER), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ZAR), Err(()));
+        assert_eq!(Currency::try_from_stripe_currency(stripe::Currency::ZMW), Err(()));
     }
 }

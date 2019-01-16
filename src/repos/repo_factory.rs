@@ -347,7 +347,7 @@ pub mod tests {
             Box::new(PaymentIntentRepoMock::default())
         }
 
-        fn create_customers_repo<'a>(&self, _db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a> {
+        fn create_customers_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<CustomersRepo + 'a> {
             Box::new(CustomersRepoMock::default())
         }
 

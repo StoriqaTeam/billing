@@ -13,7 +13,7 @@ use models::invoice_v2::InvoiceSetAmountPaid;
 use models::invoice_v2::RawInvoice;
 use r2d2::ManageConnection;
 use serde_json;
-use stripe::Webhook;
+use stripe::{PaymentIntentCreateParams, Webhook};
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
@@ -222,6 +222,9 @@ impl<
         let db_pool = self.static_context.db_pool.clone();
         let cpu_pool = self.static_context.cpu_pool.clone();
 
+        let stripe_client = self.static_context.stripe_client.clone();
+        let pools_cloned = (cpu_pool.clone(), db_pool.clone(), repo_factory.clone());
+
         let fut = stream::iter_ok::<_, ServiceError>(orders.into_iter().map(move |order| (payments_client.clone(), order)))
             .and_then(move |(payments_client, create_order)| {
                 let CreateOrderV2 {
@@ -308,6 +311,35 @@ impl<
                         })
                     })
                 })
+            })
+            .and_then(|invoice_dump| {
+                payment_intent_create_params(&invoice_dump).map(move |payment_intent_creation| (invoice_dump, payment_intent_creation))
+            })
+            .and_then(move |(invoice_dump, payment_intent_creation)| {
+                stripe_client
+                    .create_payment_intent(payment_intent_creation)
+                    .map(move |payment_intent| (invoice_dump, payment_intent))
+                    .map_err(ectx!(convert => buyer_currency))
+            })
+            .and_then(move |(invoice_dump, stripe_payment_intent)| {
+                new_payment_intent(&invoice_dump, stripe_payment_intent).map(move |new_payment_intent| (invoice_dump, new_payment_intent))
+            })
+            .and_then({
+                let (cpu_pool, db_pool, repo_factory) = pools_cloned;
+                move |(invoice_dump, new_payment_intent)| {
+                    cpu_pool.spawn_fn(move || {
+                        db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
+                            let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
+
+                            conn.transaction::<InvoiceDump, ServiceError, _>(move || {
+                                payment_intent_repo
+                                    .create(new_payment_intent.clone())
+                                    .map_err(ectx!(try convert => new_payment_intent))?;
+                                Ok(invoice_dump)
+                            })
+                        })
+                    })
+                }
             });
 
         Box::new(fut)
@@ -1193,6 +1225,53 @@ where
                 Ok(invoice_dump)
             }
         }
+    })
+}
+
+fn payment_intent_create_params(invoice_dump: &InvoiceDump) -> Result<PaymentIntentCreateParams, ServiceError> {
+    use bigdecimal::ToPrimitive;
+    Ok(PaymentIntentCreateParams {
+        allowed_source_types: vec!["card".to_string()],
+        amount: invoice_dump.total_price.to_u64().ok_or_else(|| {
+            let e = format_err!(
+                "Invoice with ID: {} can not convert total_price: {}",
+                invoice_dump.id,
+                invoice_dump.total_price,
+            );
+            ectx!(try err e, ErrorKind::Internal)
+        })?,
+        currency: invoice_dump.buyer_currency.try_into_stripe_currency().map_err(|_| {
+            let e = format_err!(
+                "Invoice with ID: {} can not convert total_price: {}",
+                invoice_dump.id,
+                invoice_dump.buyer_currency,
+            );
+            ectx!(try err e, ErrorKind::Internal)
+        })?,
+        capture_method: Some(stripe::CaptureMethod::Manual),
+        ..Default::default()
+    })
+}
+
+fn new_payment_intent(invoice_dump: &InvoiceDump, stripe_payment_intent: stripe::PaymentIntent) -> Result<NewPaymentIntent, ServiceError> {
+    Ok(NewPaymentIntent {
+        id: PaymentIntentId(stripe_payment_intent.id),
+        invoice_id: invoice_dump.id,
+        amount: stripe_payment_intent.amount.into(),
+        amount_received: stripe_payment_intent.amount_received.into(),
+        client_secret: stripe_payment_intent.client_secret,
+        currency: Currency::try_from_stripe_currency(stripe_payment_intent.currency).map_err({
+            let e = format_err!(
+                "Payment intent for invoice with ID: {} can not convert currency: {}",
+                invoice_dump.id,
+                stripe_payment_intent.currency,
+            );
+            move |_| ectx!(try err e, ErrorKind::Internal)
+        })?,
+        last_payment_error_message: stripe_payment_intent.last_payment_error.map(|err| format!("{:?}", err)),
+        receipt_email: stripe_payment_intent.receipt_email,
+        charge_id: None,
+        status: stripe_payment_intent.status.into(),
     })
 }
 
