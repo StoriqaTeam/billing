@@ -10,6 +10,7 @@ pub enum Resource {
     Invoice,
     OrderExchangeRate,
     PaymentIntent,
+    Customer,
 }
 
 impl fmt::Display for Resource {
@@ -22,6 +23,7 @@ impl fmt::Display for Resource {
             Resource::Invoice => write!(f, "invoice"),
             Resource::OrderExchangeRate => write!(f, "order exchange rate"),
             Resource::PaymentIntent => write!(f, "payment intent"),
+            Resource::Customer => write!(f, "customer"),
         }
     }
 }

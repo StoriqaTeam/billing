@@ -29,7 +29,9 @@ use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
 use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
-use repos::{AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentRepo, RepoResult};
+use repos::{
+    AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentRepo, RepoResult, SearchPaymentIntent,
+};
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::Service;
@@ -928,7 +930,7 @@ where
     conn.transaction::<_, ServiceError, _>(move || {
         let payment_intent_id_cloned = payment_intent_id.clone();
         let payment_intent = payment_intent_repo
-            .get(payment_intent_id.clone())
+            .get(SearchPaymentIntent::Id(payment_intent_id.clone()))
             .map_err(ectx!(try convert => payment_intent_id_cloned))?
             .ok_or({
                 let e = format_err!("Payment intent {} not found", payment_intent_id);

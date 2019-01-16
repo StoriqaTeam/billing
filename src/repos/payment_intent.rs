@@ -84,7 +84,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn create(&self, new_payment_intent: NewPaymentIntent) -> RepoResultV2<PaymentIntent> {
-        debug!("Getting a payment intent with ID: {}", new_payment_intent.id);
+        debug!("Create a payment intent with ID: {}", new_payment_intent.id);
         acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::insert_into(PaymentIntentDsl::payment_intent).values(&new_payment_intent);

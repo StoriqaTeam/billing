@@ -1,5 +1,7 @@
 use std::fmt;
 
+use std::time::SystemTime;
+
 use stq_types::{MerchantId, MerchantType, StoreId, UserId};
 
 use schema::merchants;
@@ -16,6 +18,8 @@ pub struct Merchant {
     pub merchant_id: MerchantId,
     pub user_id: Option<UserId>,
     pub store_id: Option<StoreId>,
+    pub created_at: SystemTime,
+    pub updated_at: SystemTime,
     pub merchant_type: MerchantType,
 }
 

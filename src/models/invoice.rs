@@ -16,13 +16,15 @@ use schema::invoices;
 pub struct Invoice {
     pub id: SagaId,
     pub invoice_id: InvoiceId,
-    pub transactions: serde_json::Value,
     pub amount: ProductPrice,
-    pub currency: Currency,
     pub price_reserved: SystemTime,
     pub state: OrderState,
     pub wallet: Option<String>,
+    pub created_at: SystemTime,
+    pub updated_at: SystemTime,
+    pub transactions: serde_json::Value,
     pub amount_captured: ProductPrice,
+    pub currency: Currency,
 }
 
 impl Invoice {
@@ -49,6 +51,8 @@ impl Invoice {
             price_reserved,
             state,
             wallet: external_invoice.wallet,
+            created_at: SystemTime::now(),
+            updated_at: SystemTime::now(),
         }
     }
 }

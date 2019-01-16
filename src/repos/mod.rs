@@ -3,6 +3,7 @@
 pub mod accounts;
 #[macro_use]
 pub mod acl;
+pub mod customer;
 pub mod error;
 pub mod event_store;
 pub mod invoice;
@@ -18,6 +19,7 @@ pub mod user_roles;
 
 pub use self::accounts::*;
 pub use self::acl::*;
+pub use self::customer::*;
 pub use self::error::*;
 pub use self::event_store::*;
 pub use self::invoice::*;
