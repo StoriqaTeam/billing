@@ -28,6 +28,7 @@ pub enum Route {
     Roles,
     RoleById { id: RoleId },
     RolesByUserId { user_id: UserId },
+    PaymentIntentByInvoice { invoice_id: InvoiceId },
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -112,6 +113,13 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::RoleById { id })
+    });
+
+    route_parser.add_route_with_params(r"^/payment_intents/invoices/([a-zA-Z0-9-]+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|invoice_id| Route::PaymentIntentByInvoice { invoice_id })
     });
 
     route_parser

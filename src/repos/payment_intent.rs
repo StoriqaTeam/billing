@@ -3,10 +3,11 @@ use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::query_dsl::RunQueryDsl;
+use diesel::sql_types::Bool;
 use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
-use stq_types::stripe::PaymentIntentId;
+use stq_types::{stripe::PaymentIntentId, InvoiceId};
 
 use repos::legacy_acl::*;
 
@@ -23,13 +24,19 @@ use super::types::RepoResultV2;
 
 type PaymentIntentRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, PaymentIntentAccess>>;
 
+#[derive(Debug)]
+pub enum SearchPaymentIntent {
+    Id(PaymentIntentId),
+    InvoiceId(InvoiceId),
+}
+
 pub struct PaymentIntentRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
     pub db_conn: &'a T,
     pub acl: PaymentIntentRepoAcl,
 }
 
 pub trait PaymentIntentRepo {
-    fn get(&self, payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>>;
+    fn get(&self, search: SearchPaymentIntent) -> RepoResultV2<Option<PaymentIntent>>;
     fn create(&self, new_payment_intent: NewPaymentIntent) -> RepoResultV2<PaymentIntent>;
     fn update(&self, payment_intent_id: PaymentIntentId, update_payment_intent: UpdatePaymentIntent) -> RepoResultV2<PaymentIntent>;
     fn delete(&self, payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>>;
@@ -44,10 +51,15 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> PaymentIntentRepo
     for PaymentIntentRepoImpl<'a, T>
 {
-    fn get(&self, payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>> {
-        debug!("Getting a payment intent with ID: {}", payment_intent_id);
+    fn get(&self, search: SearchPaymentIntent) -> RepoResultV2<Option<PaymentIntent>> {
+        debug!("Getting a payment intent by search term: {:?}", search);
 
-        let query = PaymentIntentDsl::payment_intent.filter(PaymentIntentDsl::id.eq(payment_intent_id));
+        let search_exp: Box<BoxableExpression<PaymentIntentDsl::payment_intent, _, SqlType = Bool>> = match search {
+            SearchPaymentIntent::Id(payment_intent_id) => Box::new(PaymentIntentDsl::id.eq(payment_intent_id)),
+            SearchPaymentIntent::InvoiceId(invoice_id) => Box::new(PaymentIntentDsl::invoice_id.eq(invoice_id)),
+        };
+
+        let query = PaymentIntentDsl::payment_intent.filter(search_exp);
 
         query
             .get_result(self.db_conn)

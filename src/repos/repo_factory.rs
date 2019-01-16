@@ -331,7 +331,7 @@ pub mod tests {
     pub struct PaymentIntentRepoMock;
 
     impl PaymentIntentRepo for PaymentIntentRepoMock {
-        fn get(&self, _payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>> {
+        fn get(&self, _search: SearchPaymentIntent) -> RepoResultV2<Option<PaymentIntent>> {
             Ok(Some(create_payment_intent()))
         }
 
