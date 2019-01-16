@@ -47,8 +47,10 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             ectx!(try err e, ErrorSource::Diesel, error_kind)
         })?;
 
-        // add initial zero counts for every currency to simplify account pool initialization logic
-        let empty_hashmap = Currency::into_enum_iter().map(|currency| (currency, 0)).collect::<HashMap<_, _>>();
+        // add initial zero counts for every cryptocurrency to simplify account pool initialization logic
+        let empty_hashmap = Currency::into_enum_iter()
+            .filter_map(|currency| if currency.is_fiat() { None } else { Some((currency, 0)) })
+            .collect::<HashMap<_, _>>();
 
         let account_count = accounts.into_iter().fold(
             AccountCount {

@@ -22,6 +22,19 @@ pub enum Currency {
     Rub,
 }
 
+impl Currency {
+    pub fn is_fiat(&self) -> bool {
+        match self {
+            Currency::Eth => false,
+            Currency::Stq => false,
+            Currency::Btc => false,
+            Currency::Eur => true,
+            Currency::Usd => true,
+            Currency::Rub => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Fail)]
 #[fail(display = "failed to parse currency")]
 pub struct ParseCurrencyError;
