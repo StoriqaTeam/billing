@@ -1,4 +1,4 @@
-//! UserRoles Services, presents CRUD operations with payment_intent
+//! PaymentIntentService Services, presents CRUD operations with payment_intent
 
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
