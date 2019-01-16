@@ -5,11 +5,13 @@ use futures::Future;
 use futures_cpupool::CpuPool;
 use stripe::{
     CaptureParams, Charge, ChargeParams, Customer, CustomerParams, PaymentIntent, PaymentIntentCreateParams, PaymentSourceParams,
+    Refund, RefundParams, Metadata,
 };
 
 use self::types::*;
 use config;
 use models::*;
+use models::order_v2::OrderId;
 
 pub use self::error::*;
 
@@ -24,9 +26,9 @@ pub trait StripeClient: Send + Sync + 'static {
 
     fn get_charge(&self, charge_id: ChargeId) -> Box<Future<Item = Charge, Error = Error> + Send>;
 
-    fn capture_charge(&self, charge_id: ChargeId) -> Box<Future<Item = Charge, Error = Error> + Send>;
+    fn capture_charge(&self, charge_id: ChargeId, amount: Amount) -> Box<Future<Item = Charge, Error = Error> + Send>;
 
-    fn refund(&self, input: NewRefund) -> Box<Future<Item = Refund, Error = Error> + Send>;
+    fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send>;
 
     fn create_payout(&self, input: NewPayOut) -> Box<Future<Item = PayOut, Error = Error> + Send>;
 
@@ -120,14 +122,42 @@ impl StripeClient for StripeClientImpl {
             move || Charge::retrieve(&client, &charge_id.inner()).map_err(From::from)
         }))
     }
-    fn capture_charge(&self, charge_id: ChargeId) -> Box<Future<Item = Charge, Error = Error> + Send> {
+    fn capture_charge(&self, charge_id: ChargeId, amount: Amount) -> Box<Future<Item = Charge, Error = Error> + Send> {
         Box::new(self.cpu_pool.spawn_fn({
             let client = self.client.clone();
-            move || Charge::capture(&client, &charge_id.inner(), CaptureParams { ..Default::default() }).map_err(From::from)
+            move || {
+                Charge::capture(
+                    &client,
+                    &charge_id.inner(),
+                    CaptureParams {
+                        amount: Some(amount.inner() as u64),
+                        ..Default::default()
+                    },
+                )
+                .map_err(From::from)
+            }
         }))
     }
-    fn refund(&self, _input: NewRefund) -> Box<Future<Item = Refund, Error = Error> + Send> {
-        unimplemented!()
+    fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send> {
+        Box::new(self.cpu_pool.spawn_fn({
+            let client = self.client.clone();
+            move || {
+                let mut metadata = Metadata::new();
+                metadata.insert("order_id".to_string(), format!("{}",order_id));
+                Refund::create(
+                    &client,
+                    RefundParams {
+                        charge: charge_id.inner(),
+                        amount: Some(amount.inner() as u64),
+                        metadata,
+                        reason: None,
+                        refund_application_fee: None,
+                        reverse_transfer: None,
+                    },
+                )
+                .map_err(From::from)
+            }
+        }))
     }
     fn create_payout(&self, _input: NewPayOut) -> Box<Future<Item = PayOut, Error = Error> + Send> {
         unimplemented!()

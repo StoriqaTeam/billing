@@ -1,6 +1,7 @@
 use chrono::NaiveDateTime;
-use stq_types::stripe::{ChargeId, PaymentIntentId};
+use stq_types::stripe::PaymentIntentId;
 
+use models::ChargeId;
 use models::{invoice_v2::InvoiceId, Amount, Currency};
 use schema::payment_intent;
 

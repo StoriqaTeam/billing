@@ -8,9 +8,9 @@ use r2d2::ManageConnection;
 use failure::Fail;
 
 use stq_http::client::HttpClient;
-use stq_types::InvoiceId;
 
 use client::payments::PaymentsClient;
+use models::invoice_v2::InvoiceId;
 use models::PaymentIntent;
 use services::accounts::AccountService;
 

@@ -7,11 +7,12 @@ use diesel::sql_types::Bool;
 use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
-use stq_types::{stripe::PaymentIntentId, InvoiceId};
+use stq_types::stripe::PaymentIntentId;
 
 use repos::legacy_acl::*;
 
 use models::authorization::*;
+use models::invoice_v2::InvoiceId;
 use models::UserId;
 use models::{NewPaymentIntent, PaymentIntent, PaymentIntentAccess, UpdatePaymentIntent};
 
@@ -24,7 +25,7 @@ use super::types::RepoResultV2;
 
 type PaymentIntentRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, PaymentIntentAccess>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SearchPaymentIntent {
     Id(PaymentIntentId),
     InvoiceId(InvoiceId),

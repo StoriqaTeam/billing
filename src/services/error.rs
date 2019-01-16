@@ -5,6 +5,7 @@ use std::fmt;
 use stripe::WebhookError;
 
 use client::payments::ErrorKind as PaymentsClientErrorKind;
+use client::stripe::ErrorKind as StripeClientErrorKind;
 use repos::ErrorKind as RepoErrorKind;
 
 #[derive(Debug)]
@@ -70,5 +71,16 @@ impl From<WebhookError> for Error {
 impl<'a> From<&'a WebhookError> for ErrorKind {
     fn from(_e: &WebhookError) -> Self {
         ErrorKind::Internal
+    }
+}
+
+impl From<StripeClientErrorKind> for ErrorKind {
+    fn from(e: StripeClientErrorKind) -> Self {
+        match e {
+            StripeClientErrorKind::Internal => ErrorKind::Internal,
+            StripeClientErrorKind::MalformedInput => ErrorKind::Internal,
+            StripeClientErrorKind::Unauthorized => ErrorKind::Internal,
+            StripeClientErrorKind::Validation(value) => ErrorKind::Validation(value),
+        }
     }
 }

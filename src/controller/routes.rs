@@ -2,6 +2,7 @@ use stq_router::RouteParser;
 use stq_types::{InvoiceId, OrderId, RoleId, SagaId, StoreId, UserId};
 
 use models::invoice_v2;
+use models::order_v2::OrderId as Orderv2Id;
 
 pub const PAYMENTS_CALLBACK_ENDPOINT: &'static str = "/v2/callback/payments/inbound_tx";
 
@@ -19,6 +20,8 @@ pub enum Route {
     InvoiceByOrderId { id: OrderId },
     InvoiceOrdersIds { id: InvoiceId },
     InvoiceByIdRecalc { id: InvoiceId },
+    OrdersByIdCapture { id: Orderv2Id },
+    OrdersByIdRefund { id: Orderv2Id },
     UserMerchants,
     StoreMerchants,
     UserMerchant { user_id: UserId },
@@ -28,7 +31,7 @@ pub enum Route {
     Roles,
     RoleById { id: RoleId },
     RolesByUserId { user_id: UserId },
-    PaymentIntentByInvoice { invoice_id: InvoiceId },
+    PaymentIntentByInvoice { invoice_id: invoice_v2::InvoiceId },
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -120,6 +123,20 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|invoice_id| Route::PaymentIntentByInvoice { invoice_id })
+    });
+
+    route_parser.add_route_with_params(r"^/orders/([a-zA-Z0-9-]+)/capture$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::OrdersByIdCapture { id })
+    });
+
+    route_parser.add_route_with_params(r"^/orders/([a-zA-Z0-9-]+)/refund$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::OrdersByIdRefund { id })
     });
 
     route_parser
