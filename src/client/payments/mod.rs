@@ -45,6 +45,7 @@ pub struct Config {
     pub jwt_public_key_base64: String,
     pub user_jwt: String,
     pub user_private_key: String,
+    pub device_id: String,
 }
 
 impl From<config::Payments> for Config {
@@ -54,6 +55,7 @@ impl From<config::Payments> for Config {
             jwt_public_key_base64,
             user_jwt,
             user_private_key,
+            device_id,
             ..
         } = config;
         Config {
@@ -61,6 +63,7 @@ impl From<config::Payments> for Config {
             jwt_public_key_base64,
             user_jwt,
             user_private_key,
+            device_id,
         }
     }
 }
@@ -79,6 +82,7 @@ pub struct PaymentsClientImpl<C: HttpClient + Clone> {
     user_id: u32,
     user_jwt: String,
     user_private_key: SecretKey,
+    device_id: String,
 }
 
 impl<C: HttpClient + Clone + Send> PaymentsClientImpl<C> {
@@ -90,6 +94,7 @@ impl<C: HttpClient + Clone + Send> PaymentsClientImpl<C> {
             jwt_public_key_base64,
             user_jwt,
             user_private_key,
+            device_id,
         } = config;
 
         let jwt_public_key = base64::decode(jwt_public_key_base64.as_str()).map_err({
@@ -123,6 +128,7 @@ impl<C: HttpClient + Clone + Send> PaymentsClientImpl<C> {
             user_id,
             user_jwt,
             user_private_key,
+            device_id,
         })
     }
 
@@ -135,18 +141,20 @@ impl<C: HttpClient + Clone + Send> PaymentsClientImpl<C> {
         serde_json::to_string(&body)
             .into_future()
             .map_err(ectx!(ErrorSource::SerdeJson, ErrorKind::Internal => body))
-            .and_then(|body| {
-                let timestamp = Utc::now().timestamp().to_string();
-                let device_id = "";
+            .and_then({
+                let device_id = self.device_id.clone();
+                move |body| {
+                    let timestamp = Utc::now().timestamp().to_string();
 
-                let mut hasher = Sha256::new();
-                hasher.input(&timestamp);
-                hasher.input(&device_id);
-                let hash = hasher.result();
+                    let mut hasher = Sha256::new();
+                    hasher.input(&timestamp);
+                    hasher.input(&device_id);
+                    let hash = hasher.result();
 
-                Message::from_slice(&hash)
-                    .map_err(ectx!(ErrorSource::Secp256k1, ErrorKind::Internal => hash))
-                    .map(|message| (body, timestamp, device_id, message))
+                    Message::from_slice(&hash)
+                        .map_err(ectx!(ErrorSource::Secp256k1, ErrorKind::Internal => hash))
+                        .map(|message| (body, timestamp, device_id, message))
+                }
             })
             .and_then(move |(body, timestamp, device_id, message)| {
                 let signature = hex::encode(

@@ -4,14 +4,14 @@ mod types;
 use futures::Future;
 use futures_cpupool::CpuPool;
 use stripe::{
-    CaptureParams, Charge, ChargeParams, Customer, CustomerParams, PaymentIntent, PaymentIntentCreateParams, PaymentSourceParams,
-    Refund, RefundParams, Metadata,
+    CaptureParams, Charge, ChargeParams, Customer, CustomerParams, Metadata, PaymentIntent, PaymentIntentCreateParams, PaymentSourceParams,
+    Refund, RefundParams,
 };
 
 use self::types::*;
 use config;
-use models::*;
 use models::order_v2::OrderId;
+use models::*;
 
 pub use self::error::*;
 
@@ -143,7 +143,7 @@ impl StripeClient for StripeClientImpl {
             let client = self.client.clone();
             move || {
                 let mut metadata = Metadata::new();
-                metadata.insert("order_id".to_string(), format!("{}",order_id));
+                metadata.insert("order_id".to_string(), format!("{}", order_id));
                 Refund::create(
                     &client,
                     RefundParams {

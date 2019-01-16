@@ -73,6 +73,7 @@ pub struct Payments {
     pub jwt_public_key_base64: String,
     pub user_jwt: String,
     pub user_private_key: String,
+    pub device_id: String,
     pub min_pooled_accounts: u32,
     pub accounts: Accounts,
 }
