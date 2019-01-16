@@ -11,8 +11,8 @@ use failure::Fail;
 use repos::legacy_acl::*;
 
 use models::authorization::*;
-use models::UserId;
 use models::{CustomerId, CustomersAccess, DbCustomer, NewDbCustomer, UpdateDbCustomer};
+use stq_types::UserId;
 
 use schema::customers::dsl as CustomersDsl;
 

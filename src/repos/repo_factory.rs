@@ -32,6 +32,8 @@ where
     fn create_event_store_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<EventStoreRepo + 'a>;
     fn create_payment_intent_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentRepo + 'a>;
     fn create_payment_intent_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentRepo + 'a>;
+    fn create_customers_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a>;
+    fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -199,6 +201,16 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(PaymentIntentRepoImpl::new(db_conn, acl))
     }
+
+    fn create_customers_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(CustomersRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(CustomersRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -334,6 +346,57 @@ pub mod tests {
 
         fn create_payment_intent_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PaymentIntentRepo + 'a> {
             Box::new(PaymentIntentRepoMock::default())
+        }
+
+        fn create_customers_repo<'a>(&self, _db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a> {
+            Box::new(CustomersRepoMock::default())
+        }
+
+        fn create_customers_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<CustomersRepo + 'a> {
+            Box::new(CustomersRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct CustomersRepoMock;
+
+    impl CustomersRepo for CustomersRepoMock {
+        fn get(&self, search: SearchCustomer) -> RepoResultV2<Option<DbCustomer>> {
+            let customer = create_db_customer();
+
+            let res = match search {
+                SearchCustomer::Id(id) => DbCustomer { id, ..customer },
+                SearchCustomer::UserId(user_id) => DbCustomer { user_id, ..customer },
+            };
+
+            Ok(Some(res))
+        }
+
+        fn create(&self, payload: NewDbCustomer) -> RepoResultV2<DbCustomer> {
+            let customer = create_db_customer();
+
+            Ok(DbCustomer {
+                id: payload.id,
+                user_id: payload.user_id,
+                email: payload.email,
+                ..customer
+            })
+        }
+
+        fn update(&self, id: CustomerId, payload: UpdateDbCustomer) -> RepoResultV2<DbCustomer> {
+            let customer = create_db_customer();
+
+            Ok(DbCustomer {
+                id,
+                email: payload.email,
+                ..customer
+            })
+        }
+
+        fn delete(&self, id: CustomerId) -> RepoResultV2<Option<DbCustomer>> {
+            let customer = create_db_customer();
+
+            Ok(Some(DbCustomer { id, ..customer }))
         }
     }
 
@@ -830,6 +893,17 @@ pub mod tests {
         let dynamic_context = DynamicContext::new(user_id, String::default(), MockHttpClient::default(), None, None);
 
         Service::new(static_context, dynamic_context)
+    }
+
+    fn create_db_customer() -> DbCustomer {
+        let now = chrono::offset::Utc::now().naive_utc();
+        DbCustomer {
+            id: CustomerId::new("cus_ELDLXPOc4SVNP4".to_string()),
+            user_id: UserId(1),
+            email: None,
+            created_at: now,
+            updated_at: now,
+        }
     }
 
     fn create_payment_intent() -> PaymentIntent {

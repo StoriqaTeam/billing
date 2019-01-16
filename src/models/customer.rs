@@ -1,6 +1,6 @@
 use chrono::NaiveDateTime;
 
-use models::CustomerId;
+use models::{CustomerId};
 use stq_types::UserId;
 
 use schema::customers;
