@@ -85,7 +85,7 @@ impl<
 {
     /// Creates orders in billing system, returning url for payment
     fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
-        if self.payments_v2_enabled() {
+        if !self.payments_v2_enabled() {
             self.create_invoice_v1(create_invoice)
         } else {
             let fut = CreateInvoiceV2::try_from_v1(create_invoice.clone())
@@ -250,15 +250,20 @@ impl<
                     store_id,
                 };
 
-                get_rate(&payments_client, buyer_currency, seller_currency, total_amount)
+                Future::join(to_ture_currency(buyer_currency), to_ture_currency(seller_currency))
+                    .and_then(move |(buyer_currency, seller_currency)| {
+                        get_rate(&payments_client, buyer_currency, seller_currency, total_amount)
+                    })
                     .map(|(exchange_id, exchange_rate)| (new_order, exchange_id, exchange_rate))
             })
             .collect()
             .and_then(move |orders| {
-                account_service
-                    .get_or_create_free_pooled_account(buyer_currency)
-                    .map_err(ectx!(convert => buyer_currency))
-                    .map(|account| (account.id, account.wallet_address, orders))
+                to_ture_currency(buyer_currency).and_then(move |buyer_currency| {
+                    account_service
+                        .get_or_create_free_pooled_account(buyer_currency)
+                        .map_err(ectx!(convert => buyer_currency))
+                        .map(|account| (account.id, account.wallet_address, orders))
+                })
             })
             .and_then(move |(account_id, wallet_address, orders)| {
                 cpu_pool.spawn_fn(move || {
@@ -579,7 +584,8 @@ impl<
                     }
 
                     // Get missing rates from Payments gateway and refresh existing rates
-                    let fut = refresh_rates(payments_client, invoice.buyer_currency.clone(), current_order_rates)
+                    let fut = to_ture_currency(invoice.buyer_currency.clone())
+                        .and_then(move |buyer_currency| refresh_rates(payments_client, buyer_currency, current_order_rates))
                         // Save new and updated rates to database
                         .and_then({
                             let db_pool = db_pool.clone();
@@ -816,7 +822,10 @@ impl<
                             // Get missing rates from Payments gateway and refresh existing rates
                             .and_then({
                                 let buyer_currency = invoice.buyer_currency.clone();
-                                move |current_order_rates| refresh_rates(payments_client, buyer_currency, current_order_rates)
+                                move |current_order_rates| {
+                                    to_ture_currency(buyer_currency.clone())
+                                        .and_then(move |buyer_currency| refresh_rates(payments_client, buyer_currency, current_order_rates))
+                                }
                             })
                             // Save new and updated rates to database
                             .and_then({
@@ -955,8 +964,8 @@ where
 
 pub fn get_rate<PC: PaymentsClient + Send + Clone + 'static>(
     payments_client: &PC,
-    buyer_currency: Currency,
-    seller_currency: Currency,
+    buyer_currency: TureCurrency,
+    seller_currency: TureCurrency,
     total_amount: Amount,
 ) -> Box<Future<Item = (Option<ExchangeId>, BigDecimal), Error = ServiceError>> {
     Box::new(if buyer_currency == seller_currency {
@@ -1060,7 +1069,7 @@ pub fn get_invoice_price(
 /// Returns new and updated active rates which then have to be saved in the database. Rates that remained the same get filetered out
 pub fn refresh_rates<PC: PaymentsClient + Send + Clone + 'static>(
     payments_client: PC,
-    buyer_currency: Currency,
+    buyer_currency: TureCurrency,
     current_order_rates: Vec<(RawOrder, Option<RawOrderExchangeRate>)>,
 ) -> Box<Future<Item = Vec<NewOrderExchangeRate>, Error = ServiceError>> {
     Box::new(
@@ -1078,7 +1087,7 @@ pub fn refresh_rates<PC: PaymentsClient + Send + Clone + 'static>(
 /// Gets or refreshes an exchange rate. If the rate remains the same the function will return `None`
 pub fn reserve_or_refresh_rate<PC: PaymentsClient + Send + Clone + 'static>(
     payments_client: PC,
-    buyer_currency: Currency,
+    buyer_currency: TureCurrency,
     order: RawOrder,
     current_rate: Option<RawOrderExchangeRate>,
 ) -> Box<Future<Item = Option<NewOrderExchangeRate>, Error = ServiceError>> {
@@ -1090,15 +1099,15 @@ pub fn reserve_or_refresh_rate<PC: PaymentsClient + Send + Clone + 'static>(
     } = order;
     let fut = match current_rate {
         // If the current rate wasn't provided, reserve a new rate though Payments API
-        None => future::Either::A(get_rate(&payments_client, buyer_currency, seller_currency, total_amount).map(
-            move |(exchange_id, exchange_rate)| {
+        None => future::Either::A(to_ture_currency(seller_currency.clone()).and_then(move |seller_currency| {
+            get_rate(&payments_client, buyer_currency, seller_currency, total_amount).map(move |(exchange_id, exchange_rate)| {
                 Some(NewOrderExchangeRate {
                     order_id,
                     exchange_id,
                     exchange_rate,
                 })
-            },
-        )),
+            })
+        })),
         Some(RawOrderExchangeRate { exchange_id, .. }) => future::Either::B(match exchange_id {
             // If the current rate didn't have an exchange ID, which means that it's a dummy rate (1.0), then leave it be
             None => future::Either::A(future::ok(None)),
@@ -1185,6 +1194,17 @@ where
             }
         }
     })
+}
+
+pub fn to_ture_currency(currency: Currency) -> Box<Future<Item = TureCurrency, Error = ServiceError>> {
+    Box::new(
+        TureCurrency::try_from_currency(currency.clone())
+            .map_err({
+                let e = format_err!("Unsupported currency: {}", currency);
+                |_| ectx!(err e, ErrorKind::Internal)
+            })
+            .into_future(),
+    )
 }
 
 #[cfg(test)]

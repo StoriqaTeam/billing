@@ -20,13 +20,13 @@ pub trait AccountService {
 
     fn get_account(&self, account_id: Uuid) -> ServiceFutureV2<AccountWithBalance>;
 
-    fn get_main_account(&self, currency: Currency) -> ServiceFutureV2<AccountWithBalance>;
+    fn get_main_account(&self, currency: TureCurrency) -> ServiceFutureV2<AccountWithBalance>;
 
     fn get_stq_cashback_account(&self) -> ServiceFutureV2<AccountWithBalance>;
 
-    fn create_account(&self, account_id: Uuid, name: String, currency: Currency, is_pooled: bool) -> ServiceFutureV2<Account>;
+    fn create_account(&self, account_id: Uuid, name: String, currency: TureCurrency, is_pooled: bool) -> ServiceFutureV2<Account>;
 
-    fn get_or_create_free_pooled_account(&self, currency: Currency) -> ServiceFutureV2<Account>;
+    fn get_or_create_free_pooled_account(&self, currency: TureCurrency) -> ServiceFutureV2<Account>;
 }
 
 pub struct AccountServiceImpl<T, M, F, PC>
@@ -182,7 +182,7 @@ impl<
         Box::new(fut)
     }
 
-    fn get_main_account(&self, currency: Currency) -> ServiceFutureV2<AccountWithBalance> {
+    fn get_main_account(&self, currency: TureCurrency) -> ServiceFutureV2<AccountWithBalance> {
         let fut = self
             .system_accounts
             .get(currency, SystemAccountType::Main)
@@ -202,7 +202,7 @@ impl<
     fn get_stq_cashback_account(&self) -> ServiceFutureV2<AccountWithBalance> {
         let fut = self
             .system_accounts
-            .get(Currency::Stq, SystemAccountType::Cashback)
+            .get(TureCurrency::Stq, SystemAccountType::Cashback)
             .ok_or({
                 let e = err_msg("STQ cashback system account is missing");
                 ectx!(err e, ErrorKind::Internal)
@@ -216,14 +216,14 @@ impl<
         Box::new(fut)
     }
 
-    fn create_account(&self, account_id: Uuid, name: String, currency: Currency, is_pooled: bool) -> ServiceFutureV2<Account> {
+    fn create_account(&self, account_id: Uuid, name: String, currency: TureCurrency, is_pooled: bool) -> ServiceFutureV2<Account> {
         Box::new(self.create_account_happy(account_id, name, currency, is_pooled).or_else({
             let self_clone = self.clone();
             move |(account_id, error)| self_clone.create_account_revert(account_id).then(|_| Err(error))
         }))
     }
 
-    fn get_or_create_free_pooled_account(&self, currency: Currency) -> ServiceFutureV2<Account> {
+    fn get_or_create_free_pooled_account(&self, currency: TureCurrency) -> ServiceFutureV2<Account> {
         let fut = self
             .spawn_on_pool({
                 let repo_factory = self.repo_factory.clone();
@@ -285,7 +285,7 @@ impl<
         &self,
         account_id: Uuid,
         name: String,
-        currency: Currency,
+        currency: TureCurrency,
         is_pooled: bool,
     ) -> Box<Future<Item = Account, Error = (Uuid, Error)>> {
         let input = CreateAccount {

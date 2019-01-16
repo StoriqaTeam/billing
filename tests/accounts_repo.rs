@@ -8,7 +8,7 @@ use diesel::pg::PgConnection;
 use diesel::Connection;
 use uuid::Uuid;
 
-use billing_lib::models::{AccountId, Currency, NewAccount};
+use billing_lib::models::{AccountId, NewAccount, TureCurrency};
 use billing_lib::repos::{legacy_acl::SystemACL, AccountsRepo, AccountsRepoImpl};
 
 fn with_test_db_conn<F, T>(f: F) -> T
@@ -28,7 +28,7 @@ fn accounts_repo_crud_happy() {
 
     let new_account = NewAccount {
         id: AccountId::new(Uuid::new_v4()),
-        currency: Currency::Stq,
+        currency: TureCurrency::Stq,
         is_pooled: false,
         wallet_address: Some("0x0".to_string().into()),
     };

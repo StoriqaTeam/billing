@@ -4,7 +4,7 @@ use failure::Fail;
 use std::str::FromStr;
 use uuid::Uuid;
 
-use models::{Amount, Currency, WalletAddress};
+use models::{Amount, TureCurrency, WalletAddress};
 
 use super::error::*;
 
@@ -12,7 +12,7 @@ use super::error::*;
 #[serde(rename_all = "camelCase")]
 pub struct CreateAccount {
     pub id: Uuid,
-    pub currency: Currency,
+    pub currency: TureCurrency,
     pub name: String,
     pub callback_url: String,
 }
@@ -21,7 +21,7 @@ pub struct CreateAccount {
 pub struct Account {
     pub id: Uuid,
     pub balance: Amount,
-    pub currency: Currency,
+    pub currency: TureCurrency,
     pub name: String,
     pub account_address: WalletAddress,
 }
@@ -50,7 +50,7 @@ impl AccountResponse {
         } = self;
 
         let balance = Amount::from_str(&balance).map_err(ectx!(try ErrorKind::Internal => balance))?;
-        let currency = Currency::from_str(&currency).map_err(ectx!(try ErrorKind::Internal => currency))?;
+        let currency = TureCurrency::from_str(&currency).map_err(ectx!(try ErrorKind::Internal => currency))?;
         let account_address = WalletAddress::from(account_address);
 
         Ok(Account {
@@ -67,9 +67,9 @@ impl AccountResponse {
 #[serde(rename_all = "camelCase")]
 pub struct GetRate {
     pub id: Uuid,
-    pub from: Currency,
-    pub to: Currency,
-    pub amount_currency: Currency,
+    pub from: TureCurrency,
+    pub to: TureCurrency,
+    pub amount_currency: TureCurrency,
     pub amount: Amount,
 }
 
@@ -77,8 +77,8 @@ pub struct GetRate {
 #[serde(rename_all = "camelCase")]
 pub struct GetRateResponse {
     pub id: Uuid,
-    pub from: Currency,
-    pub to: Currency,
+    pub from: TureCurrency,
+    pub to: TureCurrency,
     pub amount: Amount,
     pub rate: f64,
     pub expiration: NaiveDateTime,
@@ -96,8 +96,8 @@ pub struct RefreshRateResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Rate {
     pub id: Uuid,
-    pub from: Currency,
-    pub to: Currency,
+    pub from: TureCurrency,
+    pub to: TureCurrency,
     pub amount: Amount,
     pub rate: BigDecimal,
     pub expiration: NaiveDateTime,
@@ -164,14 +164,14 @@ pub struct CreateInternalTransactionRequestBody {
     pub from: Uuid,
     pub to: Uuid,
     pub to_type: String,
-    pub to_currency: Currency,
+    pub to_currency: TureCurrency,
     pub value: Amount,
-    pub value_currency: Currency,
+    pub value_currency: TureCurrency,
     pub fee: Amount,
 }
 
 impl CreateInternalTransactionRequestBody {
-    pub fn new(create_internal_tx: CreateInternalTransaction, currency: Currency, user_id: u32) -> Self {
+    pub fn new(create_internal_tx: CreateInternalTransaction, currency: TureCurrency, user_id: u32) -> Self {
         let CreateInternalTransaction { id, from, to, amount } = create_internal_tx;
 
         Self {

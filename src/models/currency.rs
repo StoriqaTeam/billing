@@ -114,3 +114,88 @@ impl Into<StqCurrency> for Currency {
         }
     }
 }
+
+#[derive(Debug, Clone, Fail)]
+#[fail(display = "failed to parse Ture currency")]
+pub struct ParseTureCurrencyError;
+
+#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, Eq, PartialEq, Hash, IntoEnumIterator)]
+#[sql_type = "VarChar"]
+#[serde(rename_all = "lowercase")]
+pub enum TureCurrency {
+    Eth,
+    Stq,
+    Btc,
+}
+
+impl FromStr for TureCurrency {
+    type Err = ParseTureCurrencyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "eth" => Ok(TureCurrency::Eth),
+            "stq" => Ok(TureCurrency::Stq),
+            "btc" => Ok(TureCurrency::Btc),
+            _ => Err(ParseTureCurrencyError),
+        }
+    }
+}
+
+impl Display for TureCurrency {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TureCurrency::Eth => f.write_str("eth"),
+            TureCurrency::Stq => f.write_str("stq"),
+            TureCurrency::Btc => f.write_str("btc"),
+        }
+    }
+}
+
+impl FromSql<VarChar, Pg> for TureCurrency {
+    fn from_sql(data: Option<&[u8]>) -> deserialize::Result<Self> {
+        match data {
+            Some(b"eth") => Ok(TureCurrency::Eth),
+            Some(b"stq") => Ok(TureCurrency::Stq),
+            Some(b"btc") => Ok(TureCurrency::Btc),
+            Some(v) => Err(format!(
+                "Unrecognized enum variant: {:?}",
+                String::from_utf8(v.to_vec()).unwrap_or_else(|_| "Non - UTF8 value".to_string()),
+            )
+            .to_string()
+            .into()),
+            None => Err("Unexpected null for non-null column".into()),
+        }
+    }
+}
+
+impl ToSql<VarChar, Pg> for TureCurrency {
+    fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> serialize::Result {
+        match self {
+            TureCurrency::Eth => out.write_all(b"eth")?,
+            TureCurrency::Stq => out.write_all(b"stq")?,
+            TureCurrency::Btc => out.write_all(b"btc")?,
+        };
+        Ok(IsNull::No)
+    }
+}
+
+impl From<TureCurrency> for Currency {
+    fn from(ture_currency: TureCurrency) -> Self {
+        match ture_currency {
+            TureCurrency::Eth => Currency::Eth,
+            TureCurrency::Stq => Currency::Stq,
+            TureCurrency::Btc => Currency::Btc,
+        }
+    }
+}
+
+impl TureCurrency {
+    pub fn try_from_currency(currency: Currency) -> Result<Self, ()> {
+        match currency {
+            Currency::Eth => Ok(TureCurrency::Eth),
+            Currency::Stq => Ok(TureCurrency::Stq),
+            Currency::Btc => Ok(TureCurrency::Btc),
+            Currency::Usd | Currency::Eur | Currency::Rub => Err(()),
+        }
+    }
+}
