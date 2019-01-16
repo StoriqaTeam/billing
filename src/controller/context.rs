@@ -13,6 +13,7 @@ use stq_types::UserId;
 
 use super::routes::*;
 use client::payments::PaymentsClient;
+use client::stripe::{StripeClient, StripeClientImpl};
 use config::Config;
 use repos::repo_factory::*;
 use services::accounts::AccountService;
@@ -30,6 +31,7 @@ where
     pub route_parser: Arc<RouteParser<Route>>,
     pub client_handle: ClientHandle,
     pub repo_factory: F,
+    pub stripe_client: Arc<dyn StripeClient>,
 }
 
 impl<
@@ -41,6 +43,7 @@ impl<
     /// Create a new static context
     pub fn new(db_pool: Pool<M>, cpu_pool: CpuPool, client_handle: ClientHandle, config: Arc<Config>, repo_factory: F) -> Self {
         let route_parser = Arc::new(create_route_parser());
+        let stripe_client = Arc::new(StripeClientImpl::create_from_config(&config, cpu_pool.clone()));
         Self {
             route_parser,
             db_pool,
@@ -48,6 +51,7 @@ impl<
             client_handle,
             config,
             repo_factory,
+            stripe_client,
         }
     }
 }
@@ -66,6 +70,7 @@ impl<
             client_handle: self.client_handle.clone(),
             config: self.config.clone(),
             repo_factory: self.repo_factory.clone(),
+            stripe_client: self.stripe_client.clone(),
         }
     }
 }

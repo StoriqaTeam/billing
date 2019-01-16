@@ -42,7 +42,7 @@ pub struct StripeClientImpl {
 }
 
 impl StripeClientImpl {
-    pub fn create_from_config(config: config::Config, cpu_pool: CpuPool) -> Self {
+    pub fn create_from_config(config: &config::Config, cpu_pool: CpuPool) -> Self {
         let secret_key = config.stripe.secret_key.clone();
         let client = stripe::Client::new(secret_key.clone());
         Self {
