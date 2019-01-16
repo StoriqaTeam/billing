@@ -440,12 +440,16 @@ pub mod tests {
                     user_id: None,
                     store_id: Some(store_ident),
                     merchant_type: MerchantType::Store,
+                    created_at: SystemTime::now(),
+                    updated_at: SystemTime::now(),
                 },
                 SubjectIdentifier::User(user_ident) => Merchant {
                     merchant_id: MerchantId(Uuid::new_v4()),
                     user_id: Some(user_ident),
                     store_id: None,
                     merchant_type: MerchantType::User,
+                    created_at: SystemTime::now(),
+                    updated_at: SystemTime::now(),
                 },
             })
         }
@@ -457,6 +461,8 @@ pub mod tests {
                 user_id: Some(UserId(1)),
                 store_id: None,
                 merchant_type: MerchantType::User,
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
             })
         }
 
@@ -467,6 +473,8 @@ pub mod tests {
                 user_id: payload.user_id().clone(),
                 store_id: payload.store_id().clone(),
                 merchant_type: payload.merchant_type().clone(),
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
             })
         }
 
@@ -477,6 +485,8 @@ pub mod tests {
                 user_id: payload.user_id().clone(),
                 store_id: payload.store_id().clone(),
                 merchant_type: payload.merchant_type().clone(),
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
             })
         }
 
@@ -487,6 +497,8 @@ pub mod tests {
                 user_id: None,
                 store_id: Some(store_id),
                 merchant_type: MerchantType::Store,
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
             })
         }
 
@@ -497,6 +509,8 @@ pub mod tests {
                 user_id: Some(user_id),
                 store_id: None,
                 merchant_type: MerchantType::User,
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
             })
         }
     }
@@ -845,6 +859,8 @@ pub mod tests {
             saga_id: SagaId::new(),
             status: OrderState::New,
             total_amount: ProductPrice(100.0),
+            created_at: SystemTime::now(),
+            updated_at: SystemTime::now(),
         }
     }
 
@@ -859,6 +875,8 @@ pub mod tests {
             price_reserved: SystemTime::now(),
             state: OrderState::New,
             wallet: Some(Uuid::new_v4().to_string()),
+            created_at: SystemTime::now(),
+            updated_at: SystemTime::now(),
         }
     }
 
