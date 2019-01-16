@@ -267,8 +267,7 @@ pub mod tests {
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
     use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
     use models::*;
-    use models::{Currency as BillingCurrency, TransactionId};
-    use models::{NewPaymentIntent, PaymentIntent, UpdatePaymentIntent};
+    use models::{Currency as BillingCurrency, NewPaymentIntent, PaymentIntent, TransactionId, TureCurrency, UpdatePaymentIntent};
     use repos::*;
     use services::*;
 
@@ -655,14 +654,14 @@ pub mod tests {
         fn delete(&self, _account_id: AccountId) -> RepoResultV2<Option<Account>> {
             Ok(Some(Account {
                 id: AccountId::new(Uuid::nil()),
-                currency: BillingCurrency::Stq,
+                currency: TureCurrency::Stq,
                 is_pooled: false,
                 created_at: NaiveDateTime::from_timestamp(0, 0),
                 wallet_address: None,
             }))
         }
 
-        fn get_free_account(&self, _currency: BillingCurrency) -> RepoResultV2<Option<Account>> {
+        fn get_free_account(&self, _currency: TureCurrency) -> RepoResultV2<Option<Account>> {
             Ok(None)
         }
     }
@@ -1087,13 +1086,7 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn create_account(
-            &self,
-            _account_id: Uuid,
-            _name: String,
-            _currency: BillingCurrency,
-            _is_pooled: bool,
-        ) -> ServiceFutureV2<Account> {
+        fn create_account(&self, _account_id: Uuid, _name: String, _currency: TureCurrency, _is_pooled: bool) -> ServiceFutureV2<Account> {
             unimplemented!()
         }
 
@@ -1101,7 +1094,7 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn get_main_account(&self, _currency: BillingCurrency) -> ServiceFutureV2<AccountWithBalance> {
+        fn get_main_account(&self, _currency: TureCurrency) -> ServiceFutureV2<AccountWithBalance> {
             unimplemented!()
         }
 
@@ -1109,7 +1102,7 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn get_or_create_free_pooled_account(&self, _currency: BillingCurrency) -> ServiceFutureV2<Account> {
+        fn get_or_create_free_pooled_account(&self, _currency: TureCurrency) -> ServiceFutureV2<Account> {
             unimplemented!()
         }
     }

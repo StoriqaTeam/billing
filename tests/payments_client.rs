@@ -9,7 +9,7 @@ extern crate tokio_core;
 extern crate uuid;
 
 use billing_lib::client::payments::{self, CreateAccount, GetRate, PaymentsClient, PaymentsClientImpl};
-use billing_lib::models::{Amount, Currency};
+use billing_lib::models::{Amount, TureCurrency};
 use failure::Error as FailureError;
 use futures::{Future, Stream};
 use std::sync::Arc;
@@ -76,9 +76,9 @@ fn payments_client_rate_works() {
         let id = Uuid::new_v4();
         let input = GetRate {
             id,
-            from: Currency::Btc,
-            to: Currency::Stq,
-            amount_currency: Currency::Btc,
+            from: TureCurrency::Btc,
+            to: TureCurrency::Stq,
+            amount_currency: TureCurrency::Btc,
             amount: Amount::new(100_000_000), // 1 BTC
         };
 
@@ -98,7 +98,7 @@ fn payments_client_account_crud_happy() {
 
         let input = CreateAccount {
             id: Uuid::new_v4(),
-            currency: Currency::Stq,
+            currency: TureCurrency::Stq,
             name: "Autotest account".to_string(),
             callback_url: String::default(),
         };

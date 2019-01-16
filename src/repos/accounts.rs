@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use stq_types::UserId;
 
 use models::invoice_v2::RawInvoice;
-use models::{authorization::*, Account, AccountCount, AccountId, Currency, NewAccount, RawAccount};
+use models::{authorization::*, Account, AccountCount, AccountId, NewAccount, RawAccount, TureCurrency};
 use repos::{
     acl,
     error::{ErrorKind, ErrorSource},
@@ -24,7 +24,7 @@ pub trait AccountsRepo {
     fn count(&self) -> RepoResultV2<AccountCount>;
     fn get(&self, account_id: AccountId) -> RepoResultV2<Option<Account>>;
     fn get_many(&self, account_ids: &[AccountId]) -> RepoResultV2<Vec<Account>>;
-    fn get_free_account(&self, currency: Currency) -> RepoResultV2<Option<Account>>;
+    fn get_free_account(&self, currency: TureCurrency) -> RepoResultV2<Option<Account>>;
     fn create(&self, payload: NewAccount) -> RepoResultV2<Account>;
     fn delete(&self, account_id: AccountId) -> RepoResultV2<Option<Account>>;
 }
@@ -42,14 +42,14 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let query = Accounts::accounts.select((Accounts::currency, Accounts::is_pooled));
-        let accounts = query.get_results::<(Currency, bool)>(self.db_conn).map_err(|e| {
+        let accounts = query.get_results::<(TureCurrency, bool)>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(try err e, ErrorSource::Diesel, error_kind)
         })?;
 
         // add initial zero counts for every cryptocurrency to simplify account pool initialization logic
-        let empty_hashmap = Currency::into_enum_iter()
-            .filter_map(|currency| if currency.is_fiat() { None } else { Some((currency, 0)) })
+        let empty_hashmap = TureCurrency::into_enum_iter()
+            .map(|currency| (currency, 0))
             .collect::<HashMap<_, _>>();
 
         let account_count = accounts.into_iter().fold(
@@ -103,7 +103,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             })
     }
 
-    fn get_free_account(&self, currency: Currency) -> RepoResultV2<Option<Account>> {
+    fn get_free_account(&self, currency: TureCurrency) -> RepoResultV2<Option<Account>> {
         debug!("Getting a free account for currency: {:?}", currency);
 
         acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
