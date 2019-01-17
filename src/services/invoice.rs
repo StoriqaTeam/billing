@@ -1378,7 +1378,12 @@ fn new_payment_intent(invoice_id: InvoiceV2Id, stripe_payment_intent: stripe::Pa
         })?,
         last_payment_error_message: stripe_payment_intent.last_payment_error.map(|err| format!("{:?}", err)),
         receipt_email: stripe_payment_intent.receipt_email,
-        charge_id: None,
+        charge_id: stripe_payment_intent
+            .charges
+            .data
+            .into_iter()
+            .next()
+            .map(|charge| ChargeId::new(charge.id)),
         status: stripe_payment_intent.status.into(),
     })
 }
