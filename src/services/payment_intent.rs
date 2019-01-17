@@ -11,11 +11,12 @@ use stq_http::client::HttpClient;
 
 use client::payments::PaymentsClient;
 use models::invoice_v2::InvoiceId;
-use models::PaymentIntent;
 use services::accounts::AccountService;
 
 use repos::{ReposFactory, SearchPaymentIntent};
 use services::Service;
+
+use controller::responses::PaymentIntentResponse;
 
 use super::types::ServiceFutureV2;
 
@@ -23,7 +24,7 @@ use services::types::spawn_on_pool;
 
 pub trait PaymentIntentService {
     /// Returns payment intent object by invoice ID
-    fn get_by_invoice(&self, invoice_id: InvoiceId) -> ServiceFutureV2<Option<PaymentIntent>>;
+    fn get_by_invoice(&self, invoice_id: InvoiceId) -> ServiceFutureV2<Option<PaymentIntentResponse>>;
 }
 
 impl<
@@ -35,7 +36,7 @@ impl<
         AS: AccountService + Clone,
     > PaymentIntentService for Service<T, M, F, C, PC, AS>
 {
-    fn get_by_invoice(&self, invoice_id: InvoiceId) -> ServiceFutureV2<Option<PaymentIntent>> {
+    fn get_by_invoice(&self, invoice_id: InvoiceId) -> ServiceFutureV2<Option<PaymentIntentResponse>> {
         let repo_factory = self.static_context.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
 
@@ -46,8 +47,16 @@ impl<
             let payment_intent_repo = repo_factory.create_payment_intent_repo(&conn, user_id);
             debug!("Requesting payment intent by invoice id: {}", invoice_id);
 
-            let search = SearchPaymentIntent::InvoiceId(invoice_id);
-            payment_intent_repo.get(search).map_err(ectx!(convert => invoice_id))
+            payment_intent_repo
+                .get(SearchPaymentIntent::InvoiceId(invoice_id))
+                .map_err(ectx!(convert => invoice_id))
+                .and_then(|payment_intent| {
+                    if let Some(value) = payment_intent {
+                        PaymentIntentResponse::try_from_payment_intent(value).map(|res| Some(res))
+                    } else {
+                        Ok(None)
+                    }
+                })
         })
     }
 }

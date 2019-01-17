@@ -23,6 +23,13 @@ pub enum ErrorKind {
     Validation(serde_json::Value),
 }
 
+#[allow(dead_code)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
+pub enum ErrorContext {
+    #[fail(display = "service context - error amount conversion")]
+    AmountConversion,
+}
+
 derive_error_impls!();
 
 impl From<RepoErrorKind> for ErrorKind {
