@@ -12,6 +12,7 @@ use repos::legacy_acl::*;
 use models::authorization::*;
 use models::invoice_v2::InvoiceId;
 use models::order_v2::{NewOrder, OrderAccess, OrderId, RawOrder};
+use models::PaymentState;
 use models::UserId;
 use schema::{invoices_v2::dsl as InvoicesV2, orders::dsl as Orders};
 
@@ -32,6 +33,7 @@ pub trait OrdersRepo {
     fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder>;
     fn delete(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrder>>;
     fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>>;
+    fn update_state(&self, order_id: OrderId, state: PaymentState) -> RepoResultV2<RawOrder>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> OrdersRepoImpl<'a, T> {
@@ -154,6 +156,20 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let command = diesel::delete(Orders::orders.filter(Orders::invoice_id.eq(invoice_id)));
 
         command.get_results::<RawOrder>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+    
+    fn update_state(&self, order_id: OrderId, state: PaymentState) -> RepoResultV2<RawOrder> {
+        debug!("Updating state of order with ID: {} - {}", order_id, state);
+
+        acl::check(&*self.acl, Resource::OrderInfo, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        let filter = Orders::orders.filter(Orders::id.eq(order_id));
+
+        let query = diesel::update(filter).set(Orders::state.eq(state));
+        query.get_result::<RawOrder>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(err e, ErrorSource::Diesel, error_kind)
         })

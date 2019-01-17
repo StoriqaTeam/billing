@@ -21,7 +21,7 @@ pub enum Route {
     InvoiceOrdersIds { id: InvoiceId },
     InvoiceByIdRecalc { id: InvoiceId },
     OrdersByIdCapture { id: Orderv2Id },
-    OrdersByIdRefund { id: Orderv2Id },
+    OrdersByIdDecline { id: Orderv2Id },
     UserMerchants,
     StoreMerchants,
     UserMerchant { user_id: UserId },
@@ -132,11 +132,11 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .map(|id| Route::OrdersByIdCapture { id })
     });
 
-    route_parser.add_route_with_params(r"^/orders/([a-zA-Z0-9-]+)/refund$", |params| {
+    route_parser.add_route_with_params(r"^/orders/([a-zA-Z0-9-]+)/decline$", |params| {
         params
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
-            .map(|id| Route::OrdersByIdRefund { id })
+            .map(|id| Route::OrdersByIdDecline { id })
     });
 
     route_parser

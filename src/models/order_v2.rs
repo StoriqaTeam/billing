@@ -13,7 +13,7 @@ use diesel::{
 use uuid::{self, Uuid};
 
 use models::invoice_v2::InvoiceId;
-use models::{Amount, Currency};
+use models::{Amount, Currency, PaymentState};
 use schema::orders;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
@@ -91,6 +91,7 @@ pub struct RawOrder {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub store_id: StoreId,
+    pub state: PaymentState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]

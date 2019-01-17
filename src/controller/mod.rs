@@ -181,7 +181,7 @@ impl<
 
             (Get, Some(Route::PaymentIntentByInvoice { invoice_id })) => serialize_future({ service.get_by_invoice(invoice_id) }),
             (Post, Some(Route::OrdersByIdCapture { id })) => serialize_future({ service.order_capture(id) }),
-            (Post, Some(Route::OrdersByIdRefund { id })) => serialize_future({ service.order_refund(id) }),
+            (Post, Some(Route::OrdersByIdDecline { id })) => serialize_future({ service.order_decline(id) }),
             // Fallback
             (m, _) => not_found(m, path),
         }

@@ -265,7 +265,7 @@ pub mod tests {
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
-    use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder};
+    use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder, StoreId as StoreV2Id};
     use models::*;
     use models::{Currency as BillingCurrency, NewPaymentIntent, PaymentIntent, TransactionId, TureCurrency, UpdatePaymentIntent};
     use repos::*;
@@ -759,6 +759,7 @@ pub mod tests {
                 created_at: NaiveDateTime::from_timestamp(0, 0),
                 updated_at: NaiveDateTime::from_timestamp(0, 0),
                 store_id,
+                state: PaymentState::Initial,
             })
         }
 
@@ -769,6 +770,20 @@ pub mod tests {
         fn delete_by_invoice_id(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Vec<RawOrder>> {
             Ok(vec![])
         }
+        fn update_state(&self, order_id: OrderV2Id, _state: PaymentState) -> RepoResultV2<RawOrder> {
+            Ok(RawOrder {
+                id: order_id,
+                seller_currency: BillingCurrency::Btc,
+                total_amount: Amount::new(0),
+                cashback_amount: Amount::new(0),
+                invoice_id: InvoiceV2Id::generate(),
+                created_at: NaiveDateTime::from_timestamp(0, 0),
+                updated_at: NaiveDateTime::from_timestamp(0, 0),
+                store_id: StoreV2Id::new(1),
+                state: PaymentState::Initial,
+            })
+        }
+
     }
 
     #[derive(Debug, Default)]
