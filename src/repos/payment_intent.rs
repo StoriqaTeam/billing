@@ -41,6 +41,7 @@ pub trait PaymentIntentRepo {
     fn create(&self, new_payment_intent: NewPaymentIntent) -> RepoResultV2<PaymentIntent>;
     fn update(&self, payment_intent_id: PaymentIntentId, update_payment_intent: UpdatePaymentIntent) -> RepoResultV2<PaymentIntent>;
     fn delete(&self, payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>>;
+    fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Option<PaymentIntent>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> PaymentIntentRepoImpl<'a, T> {
@@ -114,6 +115,18 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::delete(PaymentIntentDsl::payment_intent.filter(PaymentIntentDsl::id.eq(payment_intent_id)));
+
+        command.get_result::<PaymentIntent>(self.db_conn).optional().map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+
+    fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Option<PaymentIntent>> {
+        debug!("Deleting a payment intent with invoice ID: {}", invoice_id);
+        acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        let command = diesel::delete(PaymentIntentDsl::payment_intent.filter(PaymentIntentDsl::invoice_id.eq(invoice_id)));
 
         command.get_result::<PaymentIntent>(self.db_conn).optional().map_err(|e| {
             let error_kind = ErrorKind::from(&e);

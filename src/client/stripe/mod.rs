@@ -12,6 +12,7 @@ use self::types::*;
 use config;
 use models::order_v2::OrderId;
 use models::*;
+use stq_types::stripe::PaymentIntentId;
 
 pub use self::error::*;
 
@@ -33,6 +34,8 @@ pub trait StripeClient: Send + Sync + 'static {
     fn create_payout(&self, input: NewPayOut) -> Box<Future<Item = PayOut, Error = Error> + Send>;
 
     fn create_payment_intent(&self, input: PaymentIntentCreateParams) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
+
+    fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
 }
 
 #[derive(Clone)]
@@ -167,6 +170,13 @@ impl StripeClient for StripeClientImpl {
         Box::new(self.cpu_pool.spawn_fn({
             let client = self.client.clone();
             move || PaymentIntent::create(&client, input).map_err(From::from)
+        }))
+    }
+
+    fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
+        Box::new(self.cpu_pool.spawn_fn({
+            let client = self.client.clone();
+            move || PaymentIntent::cancel(&client, &payment_intent_id.0, stripe::PaymentIntentCancelParams::default()).map_err(From::from)
         }))
     }
 }

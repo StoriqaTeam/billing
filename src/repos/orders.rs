@@ -31,6 +31,7 @@ pub trait OrdersRepo {
     fn get_many_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>>;
     fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder>;
     fn delete(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrder>>;
+    fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> OrdersRepoImpl<'a, T> {
@@ -133,6 +134,26 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let command = diesel::delete(Orders::orders.filter(Orders::id.eq(order_id)));
 
         command.get_result::<RawOrder>(self.db_conn).optional().map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+
+    fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>> {
+        debug!("Deleting orders with invoice ID: {}", invoice_id);
+
+        acl::check(
+            &*self.acl,
+            Resource::OrderInfo,
+            Action::Write,
+            self,
+            Some(&OrderAccess { invoice_id }),
+        )
+        .map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        let command = diesel::delete(Orders::orders.filter(Orders::invoice_id.eq(invoice_id)));
+
+        command.get_results::<RawOrder>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(err e, ErrorSource::Diesel, error_kind)
         })
