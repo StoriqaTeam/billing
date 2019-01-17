@@ -228,6 +228,7 @@ impl<
 
         let fut = stream::iter_ok::<_, ServiceError>(orders.into_iter().map(move |order| (payments_client.clone(), order)))
             .and_then(move |(payments_client, create_order)| {
+                // process each order individually
                 let CreateOrderV2 {
                     id,
                     store_id,
@@ -255,7 +256,7 @@ impl<
                 };
 
                 match (buyer_currency.is_fiat(), seller_currency.is_fiat()) {
-                    (true, true) => exchage_rate_fiat(payments_client, new_order, buyer_currency, seller_currency, total_amount),
+                    (true, true) => exchage_rate_fiat(new_order),
                     (false, false) => exchage_rate_crypto(payments_client, new_order, buyer_currency, seller_currency, total_amount),
                     _ => {
                         let e = err_msg("fiat - crypto payments are not supported yet");
@@ -265,6 +266,7 @@ impl<
             })
             .collect()
             .and_then({
+                // process collection of orders
                 let repo_factory = self.static_context.repo_factory.clone();
                 let db_pool = self.static_context.db_pool.clone();
                 let cpu_pool = self.static_context.cpu_pool.clone();
@@ -946,16 +948,7 @@ impl<
     }
 }
 
-fn exchage_rate_fiat<PC>(
-    _payments_client: PC,
-    new_order: NewOrder,
-    _buyer_currency: Currency,
-    _seller_currency: Currency,
-    _total_amount: Amount,
-) -> ServiceFutureV2<(NewOrder, Option<ExchangeId>, BigDecimal)>
-where
-    PC: PaymentsClient + Send + Clone + 'static,
-{
+fn exchage_rate_fiat(new_order: NewOrder) -> ServiceFutureV2<(NewOrder, Option<ExchangeId>, BigDecimal)> {
     //todo correct rates for fiat currencies
     Box::new(future::ok((new_order, None, BigDecimal::from(1))))
 }
@@ -1287,12 +1280,24 @@ where
 }
 
 fn payment_intent_create_params(
-    _orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
+    orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
     invoice_id: InvoiceV2Id,
     buyer_currency: Currency,
 ) -> Result<PaymentIntentCreateParams, ServiceError> {
-    //todo calculate total amount
-    let amount: u64 = 0;
+    use bigdecimal::ToPrimitive;
+
+    let exchanged_amount: BigDecimal = orders
+        .iter()
+        .map(|(order, _, exchange_rate)| {
+            let seller_price = order.total_amount.to_super_unit(order.seller_currency);
+            let exchanged_price = seller_price / exchange_rate;
+            exchanged_price
+        })
+        .fold(BigDecimal::from(0), |acc, next| acc + next);
+    let amount = exchanged_amount.to_u64().ok_or_else(|| {
+        let e = format_err!("Invoice with ID: {} can not convert total_price: {}", invoice_id, exchanged_amount,);
+        ectx!(try err e, ErrorKind::Internal)
+    })?;
 
     Ok(PaymentIntentCreateParams {
         allowed_source_types: vec!["card".to_string()],
