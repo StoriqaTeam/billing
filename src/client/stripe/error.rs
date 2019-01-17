@@ -3,6 +3,7 @@ use std::fmt;
 use failure::{Backtrace, Context, Fail};
 use serde_json;
 use stripe::Error as StripeError;
+use stripe::ParseIdError;
 use validator::{ValidationError, ValidationErrors};
 
 #[derive(Debug)]
@@ -73,5 +74,18 @@ impl From<StripeError> for ErrorKind {
                 ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())
             }
         }
+    }
+}
+
+impl From<ParseIdError> for Error {
+    fn from(e: ParseIdError) -> Error {
+        let kind: ErrorKind = e.into();
+        kind.into()
+    }
+}
+
+impl From<ParseIdError> for ErrorKind {
+    fn from(_err: ParseIdError) -> Self {
+        ErrorKind::Internal
     }
 }

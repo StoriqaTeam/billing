@@ -1,8 +1,8 @@
 use bigdecimal::ToPrimitive;
 
-use stq_types::stripe::PaymentIntentId;
+use stq_types::{stripe::PaymentIntentId, UserId};
 
-use models::{invoice_v2::InvoiceId, Currency};
+use models::{invoice_v2::InvoiceId, Currency, CustomerId};
 use models::{ChargeId, PaymentIntent, PaymentIntentStatus};
 
 use failure::Fail;
@@ -44,4 +44,11 @@ impl PaymentIntentResponse {
             _ => Err(ectx!(err ErrorContext::AmountConversion, ErrorKind::Internal)),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CustomerResponse {
+    pub id: CustomerId,
+    pub user_id: UserId,
+    pub email: Option<String>,
 }

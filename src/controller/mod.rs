@@ -4,6 +4,7 @@
 //! of `Service` layer to http responses
 
 pub mod context;
+pub mod requests;
 pub mod responses;
 pub mod routes;
 

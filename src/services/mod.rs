@@ -2,6 +2,7 @@
 //! validation, authorization, etc.
 
 pub mod accounts;
+pub mod customer;
 pub mod error;
 pub mod invoice;
 pub mod merchant;

@@ -12,14 +12,8 @@ pub struct NewCustomer {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewCustomerWithSource {
-    pub email: String,
+    pub email: Option<String>,
     pub token: TokenId,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Customer {
-    pub id: CustomerId,
-    pub email: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

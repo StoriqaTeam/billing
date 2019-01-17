@@ -1,4 +1,4 @@
-//! UserRoles Services, presents CRUD operations with orders
+//! Order Services, presents CRUD operations with orders
 
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
@@ -19,9 +19,9 @@ use services::types::spawn_on_pool;
 use services::Service;
 
 pub trait OrderService {
-    /// Capturing charge on order and seting order state to InProgress
+    /// Capturing charge on order and setting order state to InProgress
     fn order_capture(&self, order_id: OrderId) -> ServiceFutureV2<()>;
-    /// Refunding charge on order and seting order state to Cancel
+    /// Refunding charge on order and setting order state to Cancel
     fn order_refund(&self, order_id: OrderId) -> ServiceFutureV2<()>;
 }
 
