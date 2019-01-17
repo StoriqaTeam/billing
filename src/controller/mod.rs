@@ -4,6 +4,7 @@
 //! of `Service` layer to http responses
 
 pub mod context;
+pub mod responses;
 pub mod routes;
 
 use std::str::FromStr;
