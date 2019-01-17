@@ -64,9 +64,10 @@ pub trait InvoiceService {
     fn get_invoice_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
     fn get_invoice_orders_ids_v1(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
     fn get_invoice_orders_ids_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Vec<OrderV2Id>>;
-    /// Delete invoice merchant
-    /// DEPRECATED
+    /// Delete invoice
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId>;
+    fn delete_invoice_by_saga_id_v1(&self, id: SagaId) -> ServiceFuture<SagaId>;
+    fn delete_invoice_by_saga_id_v2(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// DEPRECATED
     /// Creates orders in billing system, returning url for payment
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
@@ -720,9 +721,16 @@ impl<
         })
     }
 
-    /// DEPRECATED
     /// Delete invoice
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId> {
+        if self.payments_v2_enabled() {
+            self.delete_invoice_by_saga_id_v2(id)
+        } else {
+            self.delete_invoice_by_saga_id_v1(id)
+        }
+    }
+
+    fn delete_invoice_by_saga_id_v1(&self, id: SagaId) -> ServiceFuture<SagaId> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
 
@@ -735,8 +743,50 @@ impl<
                     .delete(id)
                     .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice.id))
             })
-            .map_err(|e: FailureError| e.context("Service invoice, delete endpoint error occured.").into())
+            .map_err(|e: FailureError| e.context("Service invoice, delete endpoint v1 error occured.").into())
         })
+    }
+
+    fn delete_invoice_by_saga_id_v2(&self, id: SagaId) -> ServiceFuture<SagaId> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let stripe_client = self.static_context.stripe_client.clone();
+
+        let fut = self
+            .spawn_on_pool(move |conn| {
+                let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+                let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                let payment_intent_repo = repo_factory.create_payment_intent_repo(&conn, user_id);
+
+                let invoice_id = InvoiceV2Id::new(id.0);
+                conn.transaction::<_, FailureError, _>(move || {
+                    debug!("Deleting invoice: {}", &id);
+                    let deleted_orders = orders_repo.delete_by_invoice_id(invoice_id)?;
+                    for order in deleted_orders {
+                        order_exchange_rates_repo.delete_by_order_id(order.id)?;
+                    }
+                    let deleted_payment_intent = payment_intent_repo.delete_by_invoice_id(invoice_id)?;
+                    invoices_repo.delete(invoice_id)?;
+                    Ok(deleted_payment_intent)
+                })
+                .map_err(|e: FailureError| e.context("Service invoice, delete endpoint v2 error occured.").into())
+            })
+            .and_then(move |deleted_payment_intent| {
+                if let Some(deleted_payment_intent) = deleted_payment_intent {
+                    future::Either::A(
+                        stripe_client
+                            .cancel_payment_intent(deleted_payment_intent.id)
+                            .map_err(FailureError::from)
+                            .map(|_| ()),
+                    )
+                } else {
+                    future::Either::B(future::ok(()))
+                }
+            })
+            .map(move |_| id);
+
+        Box::new(fut)
     }
 
     /// DEPRECATED
