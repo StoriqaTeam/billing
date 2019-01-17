@@ -419,7 +419,7 @@ pub mod tests {
             Ok(Some(create_payment_intent()))
         }
 
-        fn delete_by_invoice_id(&self, _invoice_id: InvoiceId) -> RepoResultV2<Option<PaymentIntent>> {
+        fn delete_by_invoice_id(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Option<PaymentIntent>> {
             Ok(Some(create_payment_intent()))
         }
     }
@@ -766,8 +766,8 @@ pub mod tests {
             Ok(None)
         }
 
-        fn delete_by_invoice_id(&self, _invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>> {
-            Ok(None)
+        fn delete_by_invoice_id(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Vec<RawOrder>> {
+            Ok(vec![])
         }
     }
 
@@ -816,8 +816,8 @@ pub mod tests {
             Ok(None)
         }
 
-        fn delete_by_order_id(&self, _order_id: OrderId) -> RepoResultV2<Vec<RawOrderExchangeRate>> {
-            Ok(None)
+        fn delete_by_order_id(&self, _order_id: OrderV2Id) -> RepoResultV2<Vec<RawOrderExchangeRate>> {
+            Ok(vec![])
         }
     }
 
