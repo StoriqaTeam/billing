@@ -1,6 +1,6 @@
 use bigdecimal::ToPrimitive;
 use failure::Fail;
-use stripe::Card;
+use stripe::{Card as StripeCard, CardBrand as StripeCardBrand};
 
 use stq_types::{stripe::PaymentIntentId, UserId};
 
@@ -53,4 +53,59 @@ pub struct CustomerResponse {
     pub user_id: UserId,
     pub email: Option<String>,
     pub cards: Vec<Card>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Card {
+    pub id: String,
+    pub brand: CardBrand,
+    pub country: String,
+    pub customer: Option<String>,
+    pub exp_month: u32,
+    pub exp_year: u32,
+    pub last4: String,
+    pub name: Option<String>,
+}
+
+impl From<StripeCard> for Card {
+    fn from(other: StripeCard) -> Self {
+        Self {
+            id: other.id,
+            brand: other.brand.into(),
+            country: other.country,
+            customer: other.customer,
+            exp_month: other.exp_month,
+            exp_year: other.exp_year,
+            last4: other.last4,
+            name: other.name,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Eq)]
+pub enum CardBrand {
+    AmericanExpress,
+    DinersClub,
+    Discover,
+    JCB,
+    Visa,
+    MasterCard,
+    UnionPay,
+    #[serde(other)]
+    Unknown,
+}
+
+impl From<StripeCardBrand> for CardBrand {
+    fn from(other: StripeCardBrand) -> Self {
+        match other {
+            StripeCardBrand::AmericanExpress => CardBrand::AmericanExpress,
+            StripeCardBrand::DinersClub => CardBrand::DinersClub,
+            StripeCardBrand::Discover => CardBrand::Discover,
+            StripeCardBrand::JCB => CardBrand::JCB,
+            StripeCardBrand::Visa => CardBrand::Visa,
+            StripeCardBrand::MasterCard => CardBrand::MasterCard,
+            StripeCardBrand::UnionPay => CardBrand::UnionPay,
+            StripeCardBrand::Unknown => CardBrand::Unknown,
+        }
+    }
 }
