@@ -30,6 +30,8 @@ pub enum ErrorContext {
     AmountConversion,
     #[fail(display = "service context - error unauthorized")]
     Unauthorized,
+    #[fail(display = "service context - wrong order state")]
+    OrderState,
 }
 
 derive_error_impls!();

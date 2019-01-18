@@ -5,14 +5,15 @@ pub use self::types::*;
 use futures::Future;
 use futures_cpupool::CpuPool;
 use stripe::{
-    CaptureParams, Charge, ChargeParams, Customer, CustomerParams, Metadata, PaymentIntent, PaymentIntentCreateParams, PaymentSourceParams,
-    Refund, RefundParams,
+    CaptureParams, Charge, ChargeParams, Currency as StripeCurrency, Customer, CustomerParams, Metadata, PaymentIntent,
+    PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
 };
 
 use self::types::*;
 use config;
 use models::order_v2::OrderId;
 use models::*;
+use stq_types::stripe::PaymentIntentId;
 
 pub use self::error::*;
 
@@ -31,9 +32,16 @@ pub trait StripeClient: Send + Sync + 'static {
 
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send>;
 
-    fn create_payout(&self, input: NewPayOut) -> Box<Future<Item = PayOut, Error = Error> + Send>;
+    fn create_payout(
+        &self,
+        amount: Amount,
+        currency: StripeCurrency,
+        order_id: OrderId,
+    ) -> Box<Future<Item = Payout, Error = Error> + Send>;
 
     fn create_payment_intent(&self, input: PaymentIntentCreateParams) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
+
+    fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
 }
 
 #[derive(Clone)]
@@ -160,14 +168,42 @@ impl StripeClient for StripeClientImpl {
             }
         }))
     }
-    fn create_payout(&self, _input: NewPayOut) -> Box<Future<Item = PayOut, Error = Error> + Send> {
-        unimplemented!()
+    fn create_payout(
+        &self,
+        amount: Amount,
+        currency: StripeCurrency,
+        order_id: OrderId,
+    ) -> Box<Future<Item = Payout, Error = Error> + Send> {
+        Box::new(self.cpu_pool.spawn_fn({
+            let client = self.client.clone();
+            move || {
+                let mut metadata = Metadata::new();
+                metadata.insert("order_id".to_string(), format!("{}", order_id));
+                Payout::create(
+                    &client,
+                    PayoutParams {
+                        amount: amount.inner() as u64,
+                        metadata: Some(metadata),
+                        currency,
+                        ..Default::default()
+                    },
+                )
+                .map_err(From::from)
+            }
+        }))
     }
 
     fn create_payment_intent(&self, input: PaymentIntentCreateParams) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
         Box::new(self.cpu_pool.spawn_fn({
             let client = self.client.clone();
             move || PaymentIntent::create(&client, input).map_err(From::from)
+        }))
+    }
+
+    fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
+        Box::new(self.cpu_pool.spawn_fn({
+            let client = self.client.clone();
+            move || PaymentIntent::cancel(&client, &payment_intent_id.0, stripe::PaymentIntentCancelParams::default()).map_err(From::from)
         }))
     }
 }

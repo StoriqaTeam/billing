@@ -103,6 +103,7 @@ table! {
         created_at -> Timestamp,
         updated_at -> Timestamp,
         store_id -> Int4,
+        state -> Varchar,
     }
 }
 

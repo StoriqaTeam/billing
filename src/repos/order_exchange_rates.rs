@@ -39,6 +39,7 @@ pub trait OrderExchangeRatesRepo {
     fn add_new_active_rate(&self, new_rate: NewOrderExchangeRate) -> RepoResultV2<LatestExchangeRates>;
     fn expire_current_active_rate(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrderExchangeRate>>;
     fn delete(&self, rate_id: OrderExchangeRateId) -> RepoResultV2<Option<RawOrderExchangeRate>>;
+    fn delete_by_order_id(&self, order_id: OrderId) -> RepoResultV2<Vec<RawOrderExchangeRate>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> OrderExchangeRatesRepoImpl<'a, T> {
@@ -237,6 +238,26 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let command = diesel::delete(OrderExchangeRates::order_exchange_rates.filter(OrderExchangeRates::id.eq(rate_id)));
 
         command.get_result::<RawOrderExchangeRate>(self.db_conn).optional().map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+
+    fn delete_by_order_id(&self, order_id: OrderId) -> RepoResultV2<Vec<RawOrderExchangeRate>> {
+        debug!("Deleting rates with order ID: {}", order_id);
+
+        acl::check(
+            &*self.acl,
+            Resource::OrderExchangeRate,
+            Action::Write,
+            self,
+            Some(&OrderExchangeRateAccess { order_id }),
+        )
+        .map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        let command = diesel::delete(OrderExchangeRates::order_exchange_rates.filter(OrderExchangeRates::order_id.eq(order_id)));
+
+        command.get_results::<RawOrderExchangeRate>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(err e, ErrorSource::Diesel, error_kind)
         })

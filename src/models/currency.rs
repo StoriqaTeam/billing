@@ -90,6 +90,14 @@ impl Display for Currency {
 }
 
 impl Currency {
+    pub fn is_fiat(self) -> bool {
+        use self::Currency::*;
+        match self {
+            Eth | Stq | Btc => false,
+            Eur | Usd | Rub => true,
+        }
+    }
+
     pub fn try_from_stq_currency(currency: StqCurrency) -> Result<Self, ()> {
         match currency {
             StqCurrency::ETH => Ok(Currency::Eth),
@@ -208,6 +216,15 @@ impl TureCurrency {
             Currency::Usd | Currency::Eur | Currency::Rub => Err(()),
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, Eq, PartialEq, Hash, IntoEnumIterator)]
+#[sql_type = "VarChar"]
+#[serde(rename_all = "lowercase")]
+pub enum FiatCurrency {
+    Eur,
+    Usd,
+    Rub,
 }
 
 #[cfg(test)]

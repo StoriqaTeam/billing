@@ -22,6 +22,7 @@ use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
 use client::payments::{GetRate, PaymentsClient, Rate, RateRefresh};
+use client::stripe::StripeClient;
 use config::ExternalBilling;
 use controller::context::DynamicContext;
 use errors::Error;
@@ -62,9 +63,10 @@ pub trait InvoiceService {
     fn get_invoice_orders_ids(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
     fn get_invoice_orders_ids_v1(&self, id: InvoiceId) -> ServiceFuture<Vec<OrderId>>;
     fn get_invoice_orders_ids_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Vec<OrderV2Id>>;
-    /// Delete invoice merchant
-    /// DEPRECATED
+    /// Delete invoice
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId>;
+    fn delete_invoice_by_saga_id_v1(&self, id: SagaId) -> ServiceFuture<SagaId>;
+    fn delete_invoice_by_saga_id_v2(&self, id: SagaId) -> ServiceFuture<SagaId>;
     /// DEPRECATED
     /// Creates orders in billing system, returning url for payment
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
@@ -223,10 +225,10 @@ impl<
         let cpu_pool = self.static_context.cpu_pool.clone();
 
         let stripe_client = self.static_context.stripe_client.clone();
-        let pools_cloned = (cpu_pool.clone(), db_pool.clone(), repo_factory.clone());
 
         let fut = stream::iter_ok::<_, ServiceError>(orders.into_iter().map(move |order| (payments_client.clone(), order)))
             .and_then(move |(payments_client, create_order)| {
+                // process each order individually
                 let CreateOrderV2 {
                     id,
                     store_id,
@@ -253,38 +255,56 @@ impl<
                     store_id,
                 };
 
-                Future::join(to_ture_currency(buyer_currency), to_ture_currency(seller_currency))
-                    .and_then(move |(buyer_currency, seller_currency)| {
-                        get_rate(&payments_client, buyer_currency, seller_currency, total_amount)
-                    })
-                    .map(|(exchange_id, exchange_rate)| (new_order, exchange_id, exchange_rate))
+                match (buyer_currency.is_fiat(), seller_currency.is_fiat()) {
+                    (true, true) => exchage_rate_fiat(new_order),
+                    (false, false) => exchage_rate_crypto(payments_client, new_order, buyer_currency, seller_currency, total_amount),
+                    _ => {
+                        let e = err_msg("fiat - crypto payments are not supported yet");
+                        Box::new(future::err::<_, ServiceError>(ectx!(err e, ErrorKind::Internal)))
+                    }
+                }
             })
             .collect()
             .and_then(move |orders| {
-                to_ture_currency(buyer_currency).and_then(move |buyer_currency| {
-                    account_service
-                        .get_or_create_free_pooled_account(buyer_currency)
-                        .map_err(ectx!(convert => buyer_currency))
-                        .map(|account| (account.id, account.wallet_address, orders))
-                })
+                // process collection of orders
+                if buyer_currency.is_fiat() {
+                    future::Either::A(
+                        create_payment_intent(stripe_client, &orders, invoice_id, buyer_currency)
+                            .map(|new_payment_intent| (None, None, Some(new_payment_intent), orders)),
+                    )
+                } else {
+                    future::Either::B(to_ture_currency(buyer_currency).and_then(move |buyer_currency| {
+                        account_service
+                            .get_or_create_free_pooled_account(buyer_currency)
+                            .map_err(ectx!(convert => buyer_currency))
+                            .map(|account| (Some(account.id), account.wallet_address, None, orders))
+                    }))
+                }
             })
-            .and_then(move |(account_id, wallet_address, orders)| {
+            .and_then(move |(account_id, wallet_address, new_payment_intent, orders)| {
                 cpu_pool.spawn_fn(move || {
                     db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
                         let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
                         let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                         let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                        let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
 
                         conn.transaction::<InvoiceDump, ServiceError, _>(move || {
                             let invoice = NewInvoice {
                                 id: invoice_id,
-                                account_id: Some(account_id),
+                                account_id,
                                 buyer_currency,
                                 amount_captured: Amount::new(0u128),
                                 buyer_user_id,
                             };
 
                             let invoice = invoices_repo.create(invoice.clone()).map_err(ectx!(try convert => invoice))?;
+
+                            if let Some(new_payment_intent) = new_payment_intent {
+                                payment_intent_repo
+                                    .create(new_payment_intent.clone())
+                                    .map_err(ectx!(try convert => new_payment_intent))?;
+                            }
 
                             let orders_with_rates = orders
                                 .into_iter()
@@ -311,35 +331,6 @@ impl<
                         })
                     })
                 })
-            })
-            .and_then(|invoice_dump| {
-                payment_intent_create_params(&invoice_dump).map(move |payment_intent_creation| (invoice_dump, payment_intent_creation))
-            })
-            .and_then(move |(invoice_dump, payment_intent_creation)| {
-                stripe_client
-                    .create_payment_intent(payment_intent_creation)
-                    .map(move |payment_intent| (invoice_dump, payment_intent))
-                    .map_err(ectx!(convert => buyer_currency))
-            })
-            .and_then(move |(invoice_dump, stripe_payment_intent)| {
-                new_payment_intent(&invoice_dump, stripe_payment_intent).map(move |new_payment_intent| (invoice_dump, new_payment_intent))
-            })
-            .and_then({
-                let (cpu_pool, db_pool, repo_factory) = pools_cloned;
-                move |(invoice_dump, new_payment_intent)| {
-                    cpu_pool.spawn_fn(move || {
-                        db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
-                            let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
-
-                            conn.transaction::<InvoiceDump, ServiceError, _>(move || {
-                                payment_intent_repo
-                                    .create(new_payment_intent.clone())
-                                    .map_err(ectx!(try convert => new_payment_intent))?;
-                                Ok(invoice_dump)
-                            })
-                        })
-                    })
-                }
             });
 
         Box::new(fut)
@@ -731,9 +722,16 @@ impl<
         })
     }
 
-    /// DEPRECATED
     /// Delete invoice
     fn delete_invoice_by_saga_id(&self, id: SagaId) -> ServiceFuture<SagaId> {
+        if self.payments_v2_enabled() {
+            self.delete_invoice_by_saga_id_v2(id)
+        } else {
+            self.delete_invoice_by_saga_id_v1(id)
+        }
+    }
+
+    fn delete_invoice_by_saga_id_v1(&self, id: SagaId) -> ServiceFuture<SagaId> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
 
@@ -746,8 +744,50 @@ impl<
                     .delete(id)
                     .and_then(|invoice| order_info_repo.delete_by_saga_id(invoice.id).map(|_| invoice.id))
             })
-            .map_err(|e: FailureError| e.context("Service invoice, delete endpoint error occured.").into())
+            .map_err(|e: FailureError| e.context("Service invoice, delete endpoint v1 error occured.").into())
         })
+    }
+
+    fn delete_invoice_by_saga_id_v2(&self, id: SagaId) -> ServiceFuture<SagaId> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+        let stripe_client = self.static_context.stripe_client.clone();
+
+        let fut = self
+            .spawn_on_pool(move |conn| {
+                let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+                let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                let payment_intent_repo = repo_factory.create_payment_intent_repo(&conn, user_id);
+
+                let invoice_id = InvoiceV2Id::new(id.0);
+                conn.transaction::<_, FailureError, _>(move || {
+                    debug!("Deleting invoice: {}", &id);
+                    let deleted_orders = orders_repo.delete_by_invoice_id(invoice_id)?;
+                    for order in deleted_orders {
+                        order_exchange_rates_repo.delete_by_order_id(order.id)?;
+                    }
+                    let deleted_payment_intent = payment_intent_repo.delete_by_invoice_id(invoice_id)?;
+                    invoices_repo.delete(invoice_id)?;
+                    Ok(deleted_payment_intent)
+                })
+                .map_err(|e: FailureError| e.context("Service invoice, delete endpoint v2 error occured.").into())
+            })
+            .and_then(move |deleted_payment_intent| {
+                if let Some(deleted_payment_intent) = deleted_payment_intent {
+                    future::Either::A(
+                        stripe_client
+                            .cancel_payment_intent(deleted_payment_intent.id)
+                            .map_err(FailureError::from)
+                            .map(|_| ()),
+                    )
+                } else {
+                    future::Either::B(future::ok(()))
+                }
+            })
+            .map(move |_| id);
+
+        Box::new(fut)
     }
 
     /// DEPRECATED
@@ -957,6 +997,46 @@ impl<
 
         Box::new(fut)
     }
+}
+
+fn exchage_rate_fiat(new_order: NewOrder) -> ServiceFutureV2<(NewOrder, Option<ExchangeId>, BigDecimal)> {
+    //todo correct rates for fiat currencies
+    Box::new(future::ok((new_order, None, BigDecimal::from(1))))
+}
+
+fn exchage_rate_crypto<PC>(
+    payments_client: PC,
+    new_order: NewOrder,
+    buyer_currency: Currency,
+    seller_currency: Currency,
+    total_amount: Amount,
+) -> ServiceFutureV2<(NewOrder, Option<ExchangeId>, BigDecimal)>
+where
+    PC: PaymentsClient + Send + Clone + 'static,
+{
+    let fut = Future::join(to_ture_currency(buyer_currency), to_ture_currency(seller_currency))
+        .and_then(move |(buyer_currency, seller_currency)| get_rate(&payments_client, buyer_currency, seller_currency, total_amount))
+        .map(|(exchange_id, exchange_rate)| (new_order, exchange_id, exchange_rate));
+
+    Box::new(fut)
+}
+
+fn create_payment_intent(
+    stripe_client: std::sync::Arc<dyn StripeClient>,
+    orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
+    invoice_id: InvoiceV2Id,
+    buyer_currency: Currency,
+) -> ServiceFutureV2<NewPaymentIntent> {
+    let fut = payment_intent_create_params(orders, invoice_id, buyer_currency)
+        .into_future()
+        .and_then(move |payment_intent_creation| {
+            stripe_client
+                .create_payment_intent(payment_intent_creation)
+                .map_err(ectx!(convert => invoice_id))
+        })
+        .and_then(move |stripe_payment_intent| new_payment_intent(invoice_id, stripe_payment_intent));
+
+    Box::new(fut)
 }
 
 pub fn payment_intent_success<C>(
@@ -1228,24 +1308,31 @@ where
     })
 }
 
-fn payment_intent_create_params(invoice_dump: &InvoiceDump) -> Result<PaymentIntentCreateParams, ServiceError> {
+fn payment_intent_create_params(
+    orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
+    invoice_id: InvoiceV2Id,
+    buyer_currency: Currency,
+) -> Result<PaymentIntentCreateParams, ServiceError> {
     use bigdecimal::ToPrimitive;
+
+    let exchanged_amount: BigDecimal = orders
+        .iter()
+        .map(|(order, _, exchange_rate)| {
+            let seller_price = order.total_amount.to_super_unit(order.seller_currency);
+            let exchanged_price = seller_price / exchange_rate;
+            exchanged_price
+        })
+        .fold(BigDecimal::from(0), |acc, next| acc + next);
+    let amount = exchanged_amount.to_u64().ok_or_else(|| {
+        let e = format_err!("Invoice with ID: {} can not convert total_price: {}", invoice_id, exchanged_amount,);
+        ectx!(try err e, ErrorKind::Internal)
+    })?;
+
     Ok(PaymentIntentCreateParams {
         allowed_source_types: vec!["card".to_string()],
-        amount: invoice_dump.total_price.to_u64().ok_or_else(|| {
-            let e = format_err!(
-                "Invoice with ID: {} can not convert total_price: {}",
-                invoice_dump.id,
-                invoice_dump.total_price,
-            );
-            ectx!(try err e, ErrorKind::Internal)
-        })?,
-        currency: invoice_dump.buyer_currency.try_into_stripe_currency().map_err(|_| {
-            let e = format_err!(
-                "Invoice with ID: {} can not convert total_price: {}",
-                invoice_dump.id,
-                invoice_dump.buyer_currency,
-            );
+        amount,
+        currency: buyer_currency.try_into_stripe_currency().map_err(|_| {
+            let e = format_err!("Invoice with ID: {} can not convert total_price: {}", invoice_id, buyer_currency,);
             ectx!(try err e, ErrorKind::Internal)
         })?,
         capture_method: Some(stripe::CaptureMethod::Manual),
@@ -1253,24 +1340,29 @@ fn payment_intent_create_params(invoice_dump: &InvoiceDump) -> Result<PaymentInt
     })
 }
 
-fn new_payment_intent(invoice_dump: &InvoiceDump, stripe_payment_intent: stripe::PaymentIntent) -> Result<NewPaymentIntent, ServiceError> {
+fn new_payment_intent(invoice_id: InvoiceV2Id, stripe_payment_intent: stripe::PaymentIntent) -> Result<NewPaymentIntent, ServiceError> {
     Ok(NewPaymentIntent {
         id: PaymentIntentId(stripe_payment_intent.id),
-        invoice_id: invoice_dump.id,
+        invoice_id,
         amount: stripe_payment_intent.amount.into(),
         amount_received: stripe_payment_intent.amount_received.into(),
         client_secret: stripe_payment_intent.client_secret,
         currency: Currency::try_from_stripe_currency(stripe_payment_intent.currency).map_err({
             let e = format_err!(
                 "Payment intent for invoice with ID: {} can not convert currency: {}",
-                invoice_dump.id,
+                invoice_id,
                 stripe_payment_intent.currency,
             );
             move |_| ectx!(try err e, ErrorKind::Internal)
         })?,
         last_payment_error_message: stripe_payment_intent.last_payment_error.map(|err| format!("{:?}", err)),
         receipt_email: stripe_payment_intent.receipt_email,
-        charge_id: None,
+        charge_id: stripe_payment_intent
+            .charges
+            .data
+            .into_iter()
+            .next()
+            .map(|charge| ChargeId::new(charge.id)),
         status: stripe_payment_intent.status.into(),
     })
 }

@@ -1,0 +1,1 @@
+ALTER TABLE orders ADD COLUMN state VARCHAR NOT NULL DEFAULT 'initital';
