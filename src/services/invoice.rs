@@ -13,7 +13,7 @@ use models::invoice_v2::InvoiceSetAmountPaid;
 use models::invoice_v2::RawInvoice;
 use r2d2::ManageConnection;
 use serde_json;
-use stripe::{PaymentIntentCreateParams, Webhook};
+use stripe::{Currency as StripeCurrency, PaymentIntentCreateParams as StripePaymentIntentCreateParams, Webhook};
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
@@ -74,6 +74,13 @@ pub trait InvoiceService {
     fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
     /// Handles the callback from Stripe
     fn handle_stripe_event(&self, signature_header: StripeSignature, event_payload: String) -> ServiceFutureV2<()>;
+}
+
+struct PaymentIntentCreateParams {
+    allowed_source_types: Vec<stripe::PaymentIntentSourceType>,
+    amount: u64,
+    currency: StripeCurrency,
+    capture_method: Option<stripe::CaptureMethod>,
 }
 
 impl<
@@ -1031,7 +1038,13 @@ fn create_payment_intent(
         .into_future()
         .and_then(move |payment_intent_creation| {
             stripe_client
-                .create_payment_intent(payment_intent_creation)
+                .create_payment_intent(StripePaymentIntentCreateParams {
+                    allowed_source_types: payment_intent_creation.allowed_source_types,
+                    amount: payment_intent_creation.amount,
+                    currency: payment_intent_creation.currency,
+                    capture_method: payment_intent_creation.capture_method,
+                    ..Default::default()
+                })
                 .map_err(ectx!(convert => invoice_id))
         })
         .and_then(move |stripe_payment_intent| new_payment_intent(invoice_id, stripe_payment_intent));
@@ -1329,14 +1342,13 @@ fn payment_intent_create_params(
     })?;
 
     Ok(PaymentIntentCreateParams {
-        allowed_source_types: vec!["card".to_string()],
+        allowed_source_types: vec![stripe::PaymentIntentSourceType::Card],
         amount,
         currency: buyer_currency.try_into_stripe_currency().map_err(|_| {
             let e = format_err!("Invoice with ID: {} can not convert total_price: {}", invoice_id, buyer_currency,);
             ectx!(try err e, ErrorKind::Internal)
         })?,
         capture_method: Some(stripe::CaptureMethod::Manual),
-        ..Default::default()
     })
 }
 

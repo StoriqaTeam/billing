@@ -43,7 +43,7 @@ impl<
     /// Create a new static context
     pub fn new(db_pool: Pool<M>, cpu_pool: CpuPool, client_handle: ClientHandle, config: Arc<Config>, repo_factory: F) -> Self {
         let route_parser = Arc::new(create_route_parser());
-        let stripe_client = Arc::new(StripeClientImpl::create_from_config(&config, cpu_pool.clone()));
+        let stripe_client = Arc::new(StripeClientImpl::create_from_config(&config));
         Self {
             route_parser,
             db_pool,

@@ -3,7 +3,7 @@ mod types;
 pub use self::types::*;
 
 use futures::Future;
-use futures_cpupool::CpuPool;
+use futures::IntoFuture;
 use stripe::{
     CaptureParams, Charge, ChargeParams, Currency as StripeCurrency, Customer, CustomerParams, Metadata, PaymentIntent,
     PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
@@ -48,125 +48,103 @@ pub trait StripeClient: Send + Sync + 'static {
 pub struct StripeClientImpl {
     public_key: String,
     secret_key: String,
-    client: stripe::Client,
-    cpu_pool: CpuPool,
+    client: stripe::async::Client,
 }
 
 impl StripeClientImpl {
-    pub fn create_from_config(config: &config::Config, cpu_pool: CpuPool) -> Self {
+    pub fn create_from_config(config: &config::Config) -> Self {
         let secret_key = config.stripe.secret_key.clone();
-        let client = stripe::Client::new(secret_key.clone());
+        let client = stripe::async::Client::new(secret_key.clone());
         Self {
             public_key: config.stripe.public_key.clone(),
             secret_key,
             client,
-            cpu_pool,
         }
     }
 }
 
 impl StripeClient for StripeClientImpl {
     fn create_customer(&self, input: NewCustomer) -> Box<Future<Item = Customer, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || {
-                Customer::create(
-                    &client,
-                    CustomerParams {
-                        email: Some(&input.email),
-                        ..Default::default()
-                    },
-                )
-                .map_err(From::from)
-            }
-        }))
+        Box::new(
+            Customer::create(
+                &self.client,
+                CustomerParams {
+                    email: Some(&input.email),
+                    ..Default::default()
+                },
+            )
+            .map_err(From::from),
+        )
     }
 
     fn create_customer_with_source(&self, input: NewCustomerWithSource) -> Box<Future<Item = Customer, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || {
-                Customer::create(
-                    &client,
-                    CustomerParams {
-                        email: input.email.as_ref().map(|s| s.as_str()),
-                        source: Some(PaymentSourceParams::Token(input.token)),
-                        ..Default::default()
-                    },
-                )
-                .map_err(From::from)
-            }
-        }))
+        Box::new(
+            Customer::create(
+                &self.client,
+                CustomerParams {
+                    email: input.email.as_ref().map(|s| s.as_str()),
+                    source: Some(PaymentSourceParams::Token(input.token)),
+                    ..Default::default()
+                },
+            )
+            .map_err(From::from),
+        )
     }
 
     fn get_customer(&self, customer_id: CustomerId) -> Box<Future<Item = Customer, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || Customer::retrieve(&client, &customer_id.inner()).map_err(From::from)
-        }))
+        Box::new(Customer::retrieve(&self.client, &customer_id.inner()).map_err(From::from))
     }
 
     fn create_charge(&self, input: NewCharge) -> Box<Future<Item = Charge, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || {
-                input.currency.convert().and_then(|currency| {
-                    Charge::create(
-                        &client,
-                        ChargeParams {
-                            amount: Some(input.amount.inner() as u64),
-                            currency: Some(currency),
-                            customer: Some(input.customer_id.inner()),
-                            ..Default::default()
-                        },
-                    )
-                    .map_err(From::from)
-                })
-            }
-        }))
+        let client = self.client.clone();
+
+        let fut = input.currency.convert().into_future().and_then(move |currency| {
+            Charge::create(
+                &client,
+                ChargeParams {
+                    amount: Some(input.amount.inner() as u64),
+                    currency: Some(currency),
+                    customer: Some(input.customer_id.inner()),
+                    ..Default::default()
+                },
+            )
+            .map_err(From::from)
+        });
+        Box::new(fut)
     }
     fn get_charge(&self, charge_id: ChargeId) -> Box<Future<Item = Charge, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || Charge::retrieve(&client, &charge_id.inner()).map_err(From::from)
-        }))
+        Box::new(Charge::retrieve(&self.client, &charge_id.inner()).map_err(From::from))
     }
     fn capture_charge(&self, charge_id: ChargeId, amount: Amount) -> Box<Future<Item = Charge, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || {
-                Charge::capture(
-                    &client,
-                    &charge_id.inner(),
-                    CaptureParams {
-                        amount: Some(amount.inner() as u64),
-                        ..Default::default()
-                    },
-                )
-                .map_err(From::from)
-            }
-        }))
+        Box::new(
+            Charge::capture(
+                &self.client,
+                &charge_id.inner(),
+                CaptureParams {
+                    amount: Some(amount.inner() as u64),
+                    ..Default::default()
+                },
+            )
+            .map_err(From::from),
+        )
     }
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || {
-                let mut metadata = Metadata::new();
-                metadata.insert("order_id".to_string(), format!("{}", order_id));
-                Refund::create(
-                    &client,
-                    RefundParams {
-                        charge: charge_id.inner(),
-                        amount: Some(amount.inner() as u64),
-                        metadata,
-                        reason: None,
-                        refund_application_fee: None,
-                        reverse_transfer: None,
-                    },
-                )
-                .map_err(From::from)
-            }
-        }))
+        let mut metadata = Metadata::new();
+        metadata.insert("order_id".to_string(), format!("{}", order_id));
+        Box::new(
+            Refund::create(
+                &self.client,
+                RefundParams {
+                    charge: &charge_id.inner(),
+                    amount: Some(amount.inner() as u64),
+                    metadata,
+                    reason: None,
+                    refund_application_fee: None,
+                    reverse_transfer: None,
+                },
+            )
+            .map_err(From::from),
+        )
     }
     fn create_payout(
         &self,
@@ -174,36 +152,29 @@ impl StripeClient for StripeClientImpl {
         currency: StripeCurrency,
         order_id: OrderId,
     ) -> Box<Future<Item = Payout, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || {
-                let mut metadata = Metadata::new();
-                metadata.insert("order_id".to_string(), format!("{}", order_id));
-                Payout::create(
-                    &client,
-                    PayoutParams {
-                        amount: amount.inner() as u64,
-                        metadata: Some(metadata),
-                        currency,
-                        ..Default::default()
-                    },
-                )
-                .map_err(From::from)
-            }
-        }))
+        let mut metadata = Metadata::new();
+        metadata.insert("order_id".to_string(), format!("{}", order_id));
+        Box::new(
+            Payout::create(
+                &self.client,
+                PayoutParams {
+                    amount: amount.inner() as u64,
+                    metadata: Some(metadata),
+                    currency,
+                    ..Default::default()
+                },
+            )
+            .map_err(From::from),
+        )
     }
 
     fn create_payment_intent(&self, input: PaymentIntentCreateParams) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || PaymentIntent::create(&client, input).map_err(From::from)
-        }))
+        Box::new(PaymentIntent::create(&self.client, input).map_err(From::from))
     }
 
     fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
-        Box::new(self.cpu_pool.spawn_fn({
-            let client = self.client.clone();
-            move || PaymentIntent::cancel(&client, &payment_intent_id.0, stripe::PaymentIntentCancelParams::default()).map_err(From::from)
-        }))
+        Box::new(
+            PaymentIntent::cancel(&self.client, &payment_intent_id.0, stripe::PaymentIntentCancelParams::default()).map_err(From::from),
+        )
     }
 }
