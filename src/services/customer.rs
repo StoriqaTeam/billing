@@ -7,7 +7,7 @@ use r2d2::ManageConnection;
 
 use failure::Fail;
 use futures::{future, Future, IntoFuture};
-use stripe::{Card, ParseIdError, PaymentSource};
+use stripe::{ParseIdError, PaymentSource};
 
 use stq_http::client::HttpClient;
 
@@ -24,7 +24,7 @@ use services::{
 use super::types::ServiceFutureV2;
 use client::stripe::{ErrorKind as StripeErrorKind, NewCustomerWithSource};
 use controller::requests::NewCustomerWithSourceRequest;
-use controller::responses::CustomerResponse;
+use controller::responses::{Card, CustomerResponse};
 
 use services::types::spawn_on_pool;
 
@@ -147,7 +147,7 @@ fn get_customer_cards(elements: Vec<PaymentSource>) -> Vec<Card> {
     elements
         .into_iter()
         .filter_map(|data_element| match data_element {
-            PaymentSource::Card(card) => Some(card),
+            PaymentSource::Card(card) => Some(card.into()),
             PaymentSource::BankAccount(_) => {
                 warn!("cannot get source for variant PaymentSource::BankAccount");
                 None
