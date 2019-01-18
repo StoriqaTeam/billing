@@ -1,4 +1,5 @@
-//! OrderInfos Services, presents CRUD operations with order_info
+//! Invoices Services, presents CRUD operations with invoices
+use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
 use diesel::connection::AnsiTransactionManager;
@@ -855,6 +856,10 @@ impl<
                     let repo_factory = repo_factory.clone();
                     move |conn| {
                         let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                        let amount_received = Amount::from_str(&amount_received).map_err(move |e| {
+                                let e = format_err!("Amount has wrong format: {}", e);
+                                ectx!(try err e, ErrorKind::Internal => amount_received)
+                            })?;
 
                         invoices_repo.increase_amount_captured(account_id.clone(), transaction_id.clone(), amount_received)
                             .or_else(|e| match e.kind() {
