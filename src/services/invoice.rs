@@ -257,7 +257,7 @@ impl<
                 };
 
                 match (buyer_currency.is_fiat(), seller_currency.is_fiat()) {
-                    (true, true) => exchage_rate_fiat(new_order),
+                    (true, true) => exchage_rate_fiat(new_order, buyer_currency, seller_currency),
                     (false, false) => exchage_rate_crypto(payments_client, new_order, buyer_currency, seller_currency, total_amount),
                     _ => {
                         let e = err_msg("fiat - crypto payments are not supported yet");
@@ -1003,8 +1003,23 @@ impl<
     }
 }
 
-fn exchage_rate_fiat(new_order: NewOrder) -> ServiceFutureV2<(NewOrder, Option<ExchangeId>, BigDecimal)> {
+fn exchage_rate_fiat(
+    new_order: NewOrder,
+    buyer_currency: Currency,
+    seller_currency: Currency,
+) -> ServiceFutureV2<(NewOrder, Option<ExchangeId>, BigDecimal)> {
     //todo correct rates for fiat currencies
+    if buyer_currency != seller_currency {
+        let e = format_err!(
+            "buyer currency ({}) and seller currency ({}) are not the same",
+            buyer_currency,
+            seller_currency
+        );
+        return Box::new(future::err(ectx!(err e, ErrorKind::Validation(serde_json::json!({
+            "buyer_currency": buyer_currency,
+            "seller_currency": seller_currency,
+        })))));
+    }
     Box::new(future::ok((new_order, None, BigDecimal::from(1))))
 }
 
