@@ -33,6 +33,7 @@ pub enum Route {
     RolesByUserId { user_id: UserId },
     PaymentIntentByInvoice { invoice_id: invoice_v2::InvoiceId },
     Customers,
+    CustomersWithSource,
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -141,6 +142,8 @@ pub fn create_route_parser() -> RouteParser<Route> {
     });
 
     route_parser.add_route(r"^/customers$", || Route::Customers);
+
+    route_parser.add_route(r"^/customers/with_source$", || Route::CustomersWithSource);
 
     route_parser
 }
