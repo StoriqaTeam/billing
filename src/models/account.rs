@@ -132,7 +132,7 @@ pub struct NewAccount {
 pub struct PaymentsCallback {
     pub url: String,
     pub transaction_id: TransactionId,
-    pub amount_captured: Amount,
+    pub amount_captured: String,
     pub currency: TureCurrency,
     pub address: WalletAddress,
     pub account_id: AccountId,
