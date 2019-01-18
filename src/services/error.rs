@@ -28,6 +28,8 @@ pub enum ErrorKind {
 pub enum ErrorContext {
     #[fail(display = "service context - error amount conversion")]
     AmountConversion,
+    #[fail(display = "service context - error unauthorized")]
+    Unauthorized,
     #[fail(display = "service context - wrong order state")]
     OrderState,
 }

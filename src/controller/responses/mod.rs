@@ -1,12 +1,12 @@
 use bigdecimal::ToPrimitive;
-
-use stq_static_resources::Currency as StqCurrency;
-use stq_types::stripe::PaymentIntentId;
-
-use models::invoice_v2::InvoiceId;
-use models::{ChargeId, PaymentIntent, PaymentIntentStatus};
-
 use failure::Fail;
+use stripe::Card;
+
+use stq_types::{stripe::PaymentIntentId, UserId};
+
+use models::{invoice_v2::InvoiceId, CustomerId};
+use models::{ChargeId, PaymentIntent, PaymentIntentStatus};
+use stq_static_resources::Currency as StqCurrency;
 
 use services::error::{Error, ErrorContext, ErrorKind};
 
@@ -45,4 +45,12 @@ impl PaymentIntentResponse {
             _ => Err(ectx!(err ErrorContext::AmountConversion, ErrorKind::Internal)),
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CustomerResponse {
+    pub id: CustomerId,
+    pub user_id: UserId,
+    pub email: Option<String>,
+    pub cards: Vec<Card>,
 }

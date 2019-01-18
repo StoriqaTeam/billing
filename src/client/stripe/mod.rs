@@ -1,5 +1,6 @@
 mod error;
 mod types;
+pub use self::types::*;
 
 use futures::Future;
 use futures_cpupool::CpuPool;
@@ -88,7 +89,7 @@ impl StripeClient for StripeClientImpl {
                 Customer::create(
                     &client,
                     CustomerParams {
-                        email: Some(&input.email),
+                        email: input.email.as_ref().map(|s| s.as_str()),
                         source: Some(PaymentSourceParams::Token(input.token)),
                         ..Default::default()
                     },
