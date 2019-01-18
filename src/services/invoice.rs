@@ -6,13 +6,12 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use failure::{err_msg, Error as FailureError, Fail};
 use futures::{future, stream, Future, IntoFuture, Stream};
-use futures_cpupool::CpuPool;
 use hyper::header::{Authorization, Bearer, ContentType};
 use hyper::Headers;
 use hyper::Post;
 use models::invoice_v2::InvoiceSetAmountPaid;
 use models::invoice_v2::RawInvoice;
-use r2d2::{ManageConnection, Pool};
+use r2d2::ManageConnection;
 use serde_json;
 use stripe::{PaymentIntentCreateParams, Webhook};
 use uuid::Uuid;
@@ -266,33 +265,29 @@ impl<
                 }
             })
             .collect()
-            .and_then({
+            .and_then(move |orders| {
                 // process collection of orders
-                let repo_factory = self.static_context.repo_factory.clone();
-                let db_pool = self.static_context.db_pool.clone();
-                let cpu_pool = self.static_context.cpu_pool.clone();
-                move |orders| {
-                    if buyer_currency.is_fiat() {
-                        future::Either::A(
-                            create_payment_intent(cpu_pool, db_pool, repo_factory, stripe_client, &orders, invoice_id, buyer_currency)
-                                .map(|_payment_intent| (None, None, orders)),
-                        )
-                    } else {
-                        future::Either::B(to_ture_currency(buyer_currency).and_then(move |buyer_currency| {
-                            account_service
-                                .get_or_create_free_pooled_account(buyer_currency)
-                                .map_err(ectx!(convert => buyer_currency))
-                                .map(|account| (Some(account.id), account.wallet_address, orders))
-                        }))
-                    }
+                if buyer_currency.is_fiat() {
+                    future::Either::A(
+                        create_payment_intent(stripe_client, &orders, invoice_id, buyer_currency)
+                            .map(|new_payment_intent| (None, None, Some(new_payment_intent), orders)),
+                    )
+                } else {
+                    future::Either::B(to_ture_currency(buyer_currency).and_then(move |buyer_currency| {
+                        account_service
+                            .get_or_create_free_pooled_account(buyer_currency)
+                            .map_err(ectx!(convert => buyer_currency))
+                            .map(|account| (Some(account.id), account.wallet_address, None, orders))
+                    }))
                 }
             })
-            .and_then(move |(account_id, wallet_address, orders)| {
+            .and_then(move |(account_id, wallet_address, new_payment_intent, orders)| {
                 cpu_pool.spawn_fn(move || {
                     db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
                         let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
                         let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                         let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                        let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
 
                         conn.transaction::<InvoiceDump, ServiceError, _>(move || {
                             let invoice = NewInvoice {
@@ -304,6 +299,12 @@ impl<
                             };
 
                             let invoice = invoices_repo.create(invoice.clone()).map_err(ectx!(try convert => invoice))?;
+
+                            if let Some(new_payment_intent) = new_payment_intent {
+                                payment_intent_repo
+                                    .create(new_payment_intent.clone())
+                                    .map_err(ectx!(try convert => new_payment_intent))?;
+                            }
 
                             let orders_with_rates = orders
                                 .into_iter()
@@ -1020,20 +1021,12 @@ where
     Box::new(fut)
 }
 
-fn create_payment_intent<T, F, M>(
-    cpu_pool: CpuPool,
-    db_pool: Pool<M>,
-    repo_factory: F,
+fn create_payment_intent(
     stripe_client: std::sync::Arc<dyn StripeClient>,
     orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
     invoice_id: InvoiceV2Id,
     buyer_currency: Currency,
-) -> ServiceFutureV2<()>
-where
-    T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-    F: ReposFactory<T>,
-    M: ManageConnection<Connection = T>,
-{
+) -> ServiceFutureV2<NewPaymentIntent> {
     let fut = payment_intent_create_params(orders, invoice_id, buyer_currency)
         .into_future()
         .and_then(move |payment_intent_creation| {
@@ -1041,21 +1034,7 @@ where
                 .create_payment_intent(payment_intent_creation)
                 .map_err(ectx!(convert => invoice_id))
         })
-        .and_then(move |stripe_payment_intent| new_payment_intent(invoice_id, stripe_payment_intent))
-        .and_then({
-            move |new_payment_intent| {
-                cpu_pool.spawn_fn(move || {
-                    db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
-                        let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
-
-                        payment_intent_repo
-                            .create(new_payment_intent.clone())
-                            .map_err(ectx!(try convert => new_payment_intent))?;
-                        Ok(())
-                    })
-                })
-            }
-        });
+        .and_then(move |stripe_payment_intent| new_payment_intent(invoice_id, stripe_payment_intent));
 
     Box::new(fut)
 }
