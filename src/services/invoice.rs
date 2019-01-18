@@ -839,7 +839,6 @@ impl<
         let db_pool = self.static_context.db_pool.clone();
         let cpu_pool = self.static_context.cpu_pool.clone();
         let repo_factory = self.static_context.repo_factory.clone();
-        let user_id = self.dynamic_context.user_id;
 
         let PaymentsCallback {
             transaction_id,
@@ -855,7 +854,7 @@ impl<
                 {
                     let repo_factory = repo_factory.clone();
                     move |conn| {
-                        let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                        let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
                         let amount_received = Amount::from_str(&amount_received).map_err(move |e| {
                                 let e = format_err!("Amount has wrong format: {}", e);
                                 ectx!(try err e, ErrorKind::Internal => amount_received)
@@ -891,8 +890,8 @@ impl<
                                 let invoice_id = invoice.id.clone();
                                 let repo_factory = repo_factory.clone();
                                 move |conn| {
-                                    let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
-                                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                    let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
+                                    let rates_repo = repo_factory.create_order_exchange_rates_repo_with_sys_acl(&conn);
                                     get_order_active_rates(&*orders_repo, &*rates_repo, invoice_id.clone())
                                 }
                             })
@@ -911,7 +910,7 @@ impl<
                                 let repo_factory = repo_factory.clone();
                                 move |new_active_rates| {
                                     spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                                        let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                        let rates_repo = repo_factory.create_order_exchange_rates_repo_with_sys_acl(&conn);
 
                                         new_active_rates
                                             .into_iter()
@@ -931,9 +930,9 @@ impl<
                                 let invoice = invoice.clone();
                                 let repo_factory = repo_factory.clone();
                                 move |_| spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                                    let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
-                                    let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
-                                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                    let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
+                                    let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
+                                    let rates_repo = repo_factory.create_order_exchange_rates_repo_with_sys_acl(&conn);
                                     let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
                                     let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
