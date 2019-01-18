@@ -783,7 +783,6 @@ pub mod tests {
                 state: PaymentState::Initial,
             })
         }
-
     }
 
     #[derive(Debug, Default)]

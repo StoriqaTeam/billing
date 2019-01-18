@@ -13,7 +13,7 @@ use validator::{ValidationError, ValidationErrors};
 use stq_http::client::HttpClient;
 use stq_types::UserId;
 
-use super::error::{ErrorKind, ErrorContext};
+use super::error::{ErrorContext, ErrorKind};
 use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
 use client::stripe::StripeClient;
@@ -62,7 +62,9 @@ impl<
                     let mut error = ValidationError::new("wrong_state");
                     error.message = Some(format!("Cannot capture order in state is \"{}\"", order.state,).into());
                     errors.add("order", error);
-                    return Err(ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
+                    return Err(
+                        ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())),
+                    );
                 }
 
                 Ok(order)
@@ -103,7 +105,9 @@ impl<
                     let mut error = ValidationError::new("wrong_state");
                     error.message = Some(format!("Cannot capture order in state is \"{}\"", order.state,).into());
                     errors.add("order", error);
-                    return Err(ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
+                    return Err(
+                        ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())),
+                    );
                 }
 
                 Ok(order)

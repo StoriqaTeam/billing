@@ -51,7 +51,10 @@ impl From<StripeError> for ErrorKind {
             | StripeError::Http(_)
             | StripeError::Io(_)
             | StripeError::Unexpected(_)
-            | StripeError::Unsupported(_) => ErrorKind::Internal,
+            | StripeError::Unsupported(_) => {
+                error!("stripe error - {}", err);
+                ErrorKind::Internal
+            }
             StripeError::Stripe(e) => {
                 let mut errors = ValidationErrors::new();
                 let mut error = ValidationError::new("stripe");

@@ -160,7 +160,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             ectx!(err e, ErrorSource::Diesel, error_kind)
         })
     }
-    
+
     fn update_state(&self, order_id: OrderId, state: PaymentState) -> RepoResultV2<RawOrder> {
         debug!("Updating state of order with ID: {} - {}", order_id, state);
 
