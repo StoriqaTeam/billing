@@ -1,8 +1,9 @@
 use bigdecimal::ToPrimitive;
 
+use stq_static_resources::Currency as StqCurrency;
 use stq_types::stripe::PaymentIntentId;
 
-use models::{invoice_v2::InvoiceId, Currency};
+use models::invoice_v2::InvoiceId;
 use models::{ChargeId, PaymentIntent, PaymentIntentStatus};
 
 use failure::Fail;
@@ -16,7 +17,7 @@ pub struct PaymentIntentResponse {
     pub amount: f64,
     pub amount_received: f64,
     pub client_secret: Option<String>,
-    pub currency: Currency,
+    pub currency: StqCurrency,
     pub last_payment_error_message: Option<String>,
     pub receipt_email: Option<String>,
     pub charge_id: Option<ChargeId>,
@@ -35,7 +36,7 @@ impl PaymentIntentResponse {
                 amount,
                 amount_received,
                 client_secret: other.client_secret,
-                currency: other.currency,
+                currency: other.currency.into(),
                 last_payment_error_message: other.last_payment_error_message,
                 receipt_email: other.receipt_email,
                 charge_id: other.charge_id,
