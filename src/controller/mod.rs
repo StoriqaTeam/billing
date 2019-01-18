@@ -29,11 +29,13 @@ use stq_types::UserId;
 use self::context::{DynamicContext, StaticContext};
 use self::routes::Route;
 use client::payments::PaymentsClientImpl;
+use controller::requests::*;
 use errors::Error;
 use models::*;
 use repos::repo_factory::*;
 use sentry_integration::log_and_capture_error;
 use services::accounts::AccountServiceImpl;
+use services::customer::CustomersService;
 use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
 use services::order::OrderService;
@@ -183,6 +185,13 @@ impl<
             (Get, Some(Route::PaymentIntentByInvoice { invoice_id })) => serialize_future({ service.get_by_invoice(invoice_id) }),
             (Post, Some(Route::OrdersByIdCapture { id })) => serialize_future({ service.order_capture(id) }),
             (Post, Some(Route::OrdersByIdRefund { id })) => serialize_future({ service.order_refund(id) }),
+
+            (Post, Some(Route::Customers)) => serialize_future({
+                parse_body::<NewCustomerWithSourceRequest>(req.body())
+                    .and_then(move |data| service.create_customer_with_source(data).map_err(failure::Error::from))
+            }),
+            (Get, Some(Route::Customers)) => serialize_future({ service.get_customer() }),
+
             // Fallback
             (m, _) => not_found(m, path),
         }

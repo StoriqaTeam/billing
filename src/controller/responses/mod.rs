@@ -1,11 +1,11 @@
 use bigdecimal::ToPrimitive;
+use failure::Fail;
+use stripe::Card;
 
 use stq_types::{stripe::PaymentIntentId, UserId};
 
 use models::{invoice_v2::InvoiceId, Currency, CustomerId};
 use models::{ChargeId, PaymentIntent, PaymentIntentStatus};
-
-use failure::Fail;
 
 use services::error::{Error, ErrorContext, ErrorKind};
 
@@ -51,4 +51,5 @@ pub struct CustomerResponse {
     pub id: CustomerId,
     pub user_id: UserId,
     pub email: Option<String>,
+    pub cards: Vec<Card>,
 }
