@@ -13,7 +13,7 @@ use models::invoice_v2::InvoiceSetAmountPaid;
 use models::invoice_v2::RawInvoice;
 use r2d2::ManageConnection;
 use serde_json;
-use stripe::{PaymentIntentCreateParams, Webhook};
+use stripe::Webhook;
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
@@ -22,7 +22,7 @@ use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
 use client::payments::{GetRate, PaymentsClient, Rate, RateRefresh};
-use client::stripe::StripeClient;
+use client::stripe::{NewPaymentIntent as StripeClientNewPaymentIntent, StripeClient};
 use config::ExternalBilling;
 use controller::context::DynamicContext;
 use errors::Error;
@@ -1312,7 +1312,7 @@ fn payment_intent_create_params(
     orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
     invoice_id: InvoiceV2Id,
     buyer_currency: Currency,
-) -> Result<PaymentIntentCreateParams, ServiceError> {
+) -> Result<StripeClientNewPaymentIntent, ServiceError> {
     use bigdecimal::ToPrimitive;
 
     let exchanged_amount: BigDecimal = orders
@@ -1328,15 +1328,14 @@ fn payment_intent_create_params(
         ectx!(try err e, ErrorKind::Internal)
     })?;
 
-    Ok(PaymentIntentCreateParams {
-        allowed_source_types: vec!["card".to_string()],
+    Ok(StripeClientNewPaymentIntent {
+        allowed_source_types: vec![stripe::PaymentIntentSourceType::Card],
         amount,
         currency: buyer_currency.try_into_stripe_currency().map_err(|_| {
             let e = format_err!("Invoice with ID: {} can not convert total_price: {}", invoice_id, buyer_currency,);
             ectx!(try err e, ErrorKind::Internal)
         })?,
         capture_method: Some(stripe::CaptureMethod::Manual),
-        ..Default::default()
     })
 }
 

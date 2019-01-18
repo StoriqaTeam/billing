@@ -48,11 +48,15 @@ impl From<StripeError> for Error {
 impl From<StripeError> for ErrorKind {
     fn from(err: StripeError) -> Self {
         match err {
-            StripeError::Conversion(_)
-            | StripeError::Http(_)
-            | StripeError::Io(_)
-            | StripeError::Unexpected(_)
-            | StripeError::Unsupported(_) => {
+            StripeError::Serialize(err) => {
+                error!("stripe error - {}", err);
+                ErrorKind::Internal
+            }
+            StripeError::Deserialize(err) => {
+                error!("stripe error - {}", err);
+                ErrorKind::Internal
+            }
+            StripeError::Http(_) | StripeError::Io(_) | StripeError::Unexpected(_) | StripeError::Unsupported(_) => {
                 error!("stripe error - {}", err);
                 ErrorKind::Internal
             }

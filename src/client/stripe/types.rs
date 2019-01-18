@@ -1,4 +1,6 @@
+use stripe::CaptureMethod;
 use stripe::Currency as StripeCurrency;
+use stripe::PaymentIntentSourceType;
 use stripe::TokenId;
 
 use super::{Error, ErrorContext, ErrorKind};
@@ -8,6 +10,14 @@ use models::*;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewCustomer {
     pub email: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewPaymentIntent {
+    pub allowed_source_types: Vec<PaymentIntentSourceType>,
+    pub amount: u64,
+    pub currency: StripeCurrency,
+    pub capture_method: Option<CaptureMethod>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
