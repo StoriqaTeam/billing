@@ -13,7 +13,7 @@ use client::payments::{Account as PaymentsAccount, CreateAccount, PaymentsClient
 use models::*;
 use repos::repo_factory::ReposFactory;
 
-pub trait AccountService {
+pub trait AccountService: 'static {
     fn init_system_accounts(&self) -> ServiceFutureV2<()>;
 
     fn init_account_pools(&self) -> ServiceFutureV2<()>;

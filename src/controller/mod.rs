@@ -9,6 +9,7 @@ pub mod responses;
 pub mod routes;
 
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
@@ -36,6 +37,7 @@ use repos::repo_factory::*;
 use sentry_integration::log_and_capture_error;
 use services::accounts::AccountServiceImpl;
 use services::customer::CustomersService;
+use services::customer::CustomersServiceImpl;
 use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
 use services::order::OrderService;
@@ -120,7 +122,15 @@ impl<
             account_service,
         );
 
-        let service = Service::new(self.static_context.clone(), dynamic_context);
+        let service = Service::new(self.static_context.clone(), dynamic_context.clone());
+
+        let customer_service = Arc::new(CustomersServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            stripe_client: self.static_context.stripe_client.clone(),
+            dynamic_context,
+        });
 
         let path = req.path().to_string();
 
@@ -188,9 +198,9 @@ impl<
 
             (Post, Some(Route::Customers)) => serialize_future({
                 parse_body::<NewCustomerWithSourceRequest>(req.body())
-                    .and_then(move |data| service.create_customer_with_source(data).map_err(failure::Error::from))
+                    .and_then(move |data| customer_service.create_customer_with_source(data).map_err(failure::Error::from))
             }),
-            (Get, Some(Route::Customers)) => serialize_future({ service.get_customer() }),
+            (Get, Some(Route::Customers)) => serialize_future({ customer_service.get_customer() }),
 
             // Fallback
             (m, _) => not_found(m, path),
