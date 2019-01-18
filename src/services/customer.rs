@@ -148,6 +148,10 @@ fn get_customer_cards(elements: Vec<PaymentSource>) -> Vec<Card> {
         .into_iter()
         .filter_map(|data_element| match data_element {
             PaymentSource::Card(card) => Some(card),
+            PaymentSource::BankAccount(_) => {
+                warn!("cannot get source for variant PaymentSource::BankAccount");
+                None
+            }
             PaymentSource::Source(_) => {
                 warn!("cannot get source for variant PaymentSource::Source");
                 None

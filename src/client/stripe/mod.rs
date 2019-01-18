@@ -1,6 +1,6 @@
 mod error;
 mod types;
-pub use self::types::*;
+pub use self::types::{NewPaymentIntent, *};
 
 use futures::Future;
 use futures::IntoFuture;
@@ -9,7 +9,6 @@ use stripe::{
     PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
 };
 
-use self::types::*;
 use config;
 use models::order_v2::OrderId;
 use models::*;
@@ -39,7 +38,7 @@ pub trait StripeClient: Send + Sync + 'static {
         order_id: OrderId,
     ) -> Box<Future<Item = Payout, Error = Error> + Send>;
 
-    fn create_payment_intent(&self, input: PaymentIntentCreateParams) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
+    fn create_payment_intent(&self, input: NewPaymentIntent) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
 
     fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
 }
@@ -168,8 +167,15 @@ impl StripeClient for StripeClientImpl {
         )
     }
 
-    fn create_payment_intent(&self, input: PaymentIntentCreateParams) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
-        Box::new(PaymentIntent::create(&self.client, input).map_err(From::from))
+    fn create_payment_intent(&self, input: NewPaymentIntent) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
+        let params = PaymentIntentCreateParams {
+            allowed_source_types: input.allowed_source_types,
+            amount: input.amount,
+            currency: input.currency,
+            capture_method: input.capture_method,
+            ..Default::default()
+        };
+        Box::new(PaymentIntent::create(&self.client, params).map_err(From::from))
     }
 
     fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {

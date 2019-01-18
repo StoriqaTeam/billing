@@ -13,7 +13,7 @@ use models::invoice_v2::InvoiceSetAmountPaid;
 use models::invoice_v2::RawInvoice;
 use r2d2::ManageConnection;
 use serde_json;
-use stripe::{Currency as StripeCurrency, PaymentIntentCreateParams as StripePaymentIntentCreateParams, Webhook};
+use stripe::Webhook;
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
@@ -22,7 +22,7 @@ use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
 use client::payments::{GetRate, PaymentsClient, Rate, RateRefresh};
-use client::stripe::StripeClient;
+use client::stripe::{NewPaymentIntent as StripeClientNewPaymentIntent, StripeClient};
 use config::ExternalBilling;
 use controller::context::DynamicContext;
 use errors::Error;
@@ -74,13 +74,6 @@ pub trait InvoiceService {
     fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
     /// Handles the callback from Stripe
     fn handle_stripe_event(&self, signature_header: StripeSignature, event_payload: String) -> ServiceFutureV2<()>;
-}
-
-struct PaymentIntentCreateParams {
-    allowed_source_types: Vec<stripe::PaymentIntentSourceType>,
-    amount: u64,
-    currency: StripeCurrency,
-    capture_method: Option<stripe::CaptureMethod>,
 }
 
 impl<
@@ -1038,13 +1031,7 @@ fn create_payment_intent(
         .into_future()
         .and_then(move |payment_intent_creation| {
             stripe_client
-                .create_payment_intent(StripePaymentIntentCreateParams {
-                    allowed_source_types: payment_intent_creation.allowed_source_types,
-                    amount: payment_intent_creation.amount,
-                    currency: payment_intent_creation.currency,
-                    capture_method: payment_intent_creation.capture_method,
-                    ..Default::default()
-                })
+                .create_payment_intent(payment_intent_creation)
                 .map_err(ectx!(convert => invoice_id))
         })
         .and_then(move |stripe_payment_intent| new_payment_intent(invoice_id, stripe_payment_intent));
@@ -1325,7 +1312,7 @@ fn payment_intent_create_params(
     orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
     invoice_id: InvoiceV2Id,
     buyer_currency: Currency,
-) -> Result<PaymentIntentCreateParams, ServiceError> {
+) -> Result<StripeClientNewPaymentIntent, ServiceError> {
     use bigdecimal::ToPrimitive;
 
     let exchanged_amount: BigDecimal = orders
@@ -1341,7 +1328,7 @@ fn payment_intent_create_params(
         ectx!(try err e, ErrorKind::Internal)
     })?;
 
-    Ok(PaymentIntentCreateParams {
+    Ok(StripeClientNewPaymentIntent {
         allowed_source_types: vec![stripe::PaymentIntentSourceType::Card],
         amount,
         currency: buyer_currency.try_into_stripe_currency().map_err(|_| {
