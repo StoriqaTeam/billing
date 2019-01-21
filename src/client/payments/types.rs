@@ -187,3 +187,24 @@ impl CreateInternalTransactionRequestBody {
         }
     }
 }
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionsResponse {
+    pub id: Uuid,
+    pub from: Vec<TransactionAddressInfo>,
+    pub to: TransactionAddressInfo,
+    pub from_value: String,
+    pub from_currency: TureCurrency,
+    pub to_value: String,
+    pub to_currency: TureCurrency,
+    pub fee: String,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct TransactionAddressInfo {
+    pub account_id: Option<Uuid>,
+    pub owner_name: Option<String>,
+    pub blockchain_address: String,
+}

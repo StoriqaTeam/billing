@@ -20,7 +20,7 @@ pub use self::error::*;
 use self::types::AccountResponse;
 pub use self::types::{
     Account, CreateAccount, CreateInternalTransaction, CreateInternalTransactionRequestBody, GetRate, GetRateResponse, Rate, RateRefresh,
-    RefreshRateResponse,
+    RefreshRateResponse, TransactionsResponse,
 };
 
 pub trait PaymentsClient: Send + Sync + 'static {
@@ -262,8 +262,9 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
                     let query = format!("/v1/transactions");
                     future::Either::B(
                         self_
-                            .request_with_auth::<_, ()>(Method::Post, query.clone(), body.clone())
-                            .map_err(ectx!(ErrorKind::Internal => Method::Post, query, body)),
+                            .request_with_auth::<_, TransactionsResponse>(Method::Post, query.clone(), body.clone())
+                            .map_err(ectx!(ErrorKind::Internal => Method::Post, query, body))
+                            .map(|_| ()),
                     )
                 }
             }
