@@ -1,4 +1,4 @@
-use stq_types::{RussiaBillingId, StoreId, UserId};
+use stq_types::{RussiaBillingId, StoreId};
 
 use schema::russia_billing_info;
 
@@ -7,7 +7,6 @@ use schema::russia_billing_info;
 pub struct RussiaBillingInfo {
     pub id: RussiaBillingId,
     pub store_id: StoreId,
-    pub user_id: UserId,
     pub kpp: Option<String>,
     pub bic: Option<String>,
 }
@@ -23,7 +22,6 @@ pub struct UpdateRussiaBillingInfo {
 #[table_name = "russia_billing_info"]
 pub struct NewRussiaBillingInfo {
     pub store_id: StoreId,
-    pub user_id: UserId,
     pub kpp: Option<String>,
     pub bic: Option<String>,
 }
@@ -32,5 +30,4 @@ pub struct NewRussiaBillingInfo {
 pub struct RussiaBillingInfoSearch {
     pub id: Option<RussiaBillingId>,
     pub store_id: Option<StoreId>,
-    pub user_id: Option<UserId>,
 }

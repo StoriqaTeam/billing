@@ -8,13 +8,14 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 
-use stq_types::UserId;
+use stq_types::{StoreId, UserId};
 
 use models::authorization::*;
 use models::{InternationalBillingInfo, InternationalBillingInfoSearch, NewInternationalBillingInfo, UpdateInternationalBillingInfo};
 use repos::legacy_acl::*;
 
 use schema::international_billing_info::dsl as InternationalBillingInfoDsl;
+use schema::merchants::dsl as MerchantDsl;
 
 use super::acl;
 use super::error::*;
@@ -30,7 +31,7 @@ pub struct InternationalBillingInfoRepoImpl<'a, T: Connection<Backend = Pg, Tran
 }
 
 pub struct InternationalBillingInfoAccess {
-    pub user_id: UserId,
+    pub store_id: StoreId,
 }
 
 pub trait InternationalBillingInfoRepo {
@@ -60,7 +61,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             Action::Write,
             self,
             Some(&InternationalBillingInfoAccess {
-                user_id: new_international_billing_info.user_id,
+                store_id: new_international_billing_info.store_id,
             }),
         )
         .map_err(ectx!(try ErrorKind::Forbidden))?;
@@ -98,7 +99,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let billing_info = billing_info_list.pop();
         let access = billing_info
             .as_ref()
-            .map(|info| InternationalBillingInfoAccess { user_id: info.user_id });
+            .map(|info| InternationalBillingInfoAccess { store_id: info.store_id });
         acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
         Ok(billing_info)
     }
@@ -112,7 +113,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let updated_entry = self.get(search_params.clone())?;
         let access = updated_entry
             .as_ref()
-            .map(|entry| InternationalBillingInfoAccess { user_id: entry.user_id });
+            .map(|entry| InternationalBillingInfoAccess { store_id: entry.store_id });
         acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
         let query: Option<BoxedExpr> = into_expr(search_params);
 
@@ -136,8 +137,16 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         match *scope {
             Scope::All => true,
             Scope::Owned => {
-                if let Some(InternationalBillingInfoAccess { user_id: store_user_id }) = obj {
-                    *store_user_id == user_id
+                if let Some(InternationalBillingInfoAccess { store_id }) = obj {
+                    let query = MerchantDsl::merchants
+                        .filter(MerchantDsl::store_id.eq(store_id))
+                        .select(MerchantDsl::user_id);
+
+                    match query.get_result::<Option<UserId>>(self.db_conn) {
+                        Ok(None) => false,
+                        Ok(Some(store_owner_id)) => store_owner_id == user_id,
+                        Err(_) => false,
+                    }
                 } else {
                     false
                 }
@@ -159,13 +168,8 @@ fn into_expr(search: InternationalBillingInfoSearch) -> Option<BoxedExpr> {
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(user_id_filter) = search.user_id {
-        let new_condition = InternationalBillingInfoDsl::user_id.eq(user_id_filter);
-        query = Some(and(query, Box::new(new_condition)));
-    }
-
-    if let Some(swift_id_filter) = search.swift_id {
-        let new_condition = InternationalBillingInfoDsl::swift_id.eq(swift_id_filter);
+    if let Some(swift_bic_filter) = search.swift_bic {
+        let new_condition = InternationalBillingInfoDsl::swift_bic.eq(swift_bic_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
