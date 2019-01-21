@@ -39,6 +39,15 @@ table! {
 }
 
 table! {
+    international_billing_info (id) {
+        id -> Int4,
+        store_id -> Int4,
+        user_id -> Int4,
+        swift_id -> Nullable<Varchar>,
+    }
+}
+
+table! {
     invoices (id) {
         id -> Uuid,
         invoice_id -> Uuid,
@@ -166,6 +175,7 @@ allow_tables_to_appear_in_same_query!(
     amounts_received,
     customers,
     event_store,
+    international_billing_info,
     invoices,
     invoices_v2,
     merchants,

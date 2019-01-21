@@ -80,7 +80,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     for StoreBillingTypeRepoImpl<'a, T>
 {
     fn is_in_scope(&self, _user_id: stq_types::UserId, _scope: &Scope, _obj: Option<&StoreBillingType>) -> bool {
-        false
+        true
     }
 }
 

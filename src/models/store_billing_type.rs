@@ -17,7 +17,7 @@ pub struct NewStoreBillingType {
     pub billing_type: BillingType,
 }
 
-#[derive(Clone, Copy, Serialize, Debug)]
+#[derive(Clone, Copy, Serialize, Debug, Default)]
 pub struct StoreBillingTypeSearch {
     pub id: Option<StoreBillingTypeId>,
     pub store_id: Option<StoreId>,
