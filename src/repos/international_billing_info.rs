@@ -56,7 +56,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         debug!("create international billing info {:?}.", new_international_billing_info);
         acl::check(
             &*self.acl,
-            Resource::InternationalBillingInfo,
+            Resource::BillingInfo,
             Action::Write,
             self,
             Some(&InternationalBillingInfoAccess {
@@ -99,8 +99,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let access = billing_info
             .as_ref()
             .map(|info| InternationalBillingInfoAccess { user_id: info.user_id });
-        acl::check(&*self.acl, Resource::InternationalBillingInfo, Action::Read, self, access.as_ref())
-            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
         Ok(billing_info)
     }
 
@@ -114,8 +113,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let access = updated_entry
             .as_ref()
             .map(|entry| InternationalBillingInfoAccess { user_id: entry.user_id });
-        acl::check(&*self.acl, Resource::InternationalBillingInfo, Action::Read, self, access.as_ref())
-            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {

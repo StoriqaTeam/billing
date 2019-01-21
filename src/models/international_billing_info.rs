@@ -14,8 +14,6 @@ pub struct InternationalBillingInfo {
 #[derive(Serialize, Deserialize, Insertable, AsChangeset, Debug, Clone)]
 #[table_name = "international_billing_info"]
 pub struct UpdateInternationalBillingInfo {
-    pub store_id: Option<StoreId>,
-    pub user_id: Option<UserId>,
     pub swift_id: Option<SwiftId>,
 }
 

@@ -157,6 +157,16 @@ table! {
 }
 
 table! {
+    russia_billing_info (id) {
+        id -> Int4,
+        store_id -> Int4,
+        user_id -> Int4,
+        kpp -> Nullable<Varchar>,
+        bic -> Nullable<Varchar>,
+    }
+}
+
+table! {
     store_billing_type (id) {
         id -> Int4,
         store_id -> Int4,
@@ -184,5 +194,6 @@ allow_tables_to_appear_in_same_query!(
     orders_info,
     payment_intent,
     roles,
+    russia_billing_info,
     store_billing_type,
 );
