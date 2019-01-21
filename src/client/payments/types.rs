@@ -165,9 +165,9 @@ pub struct CreateInternalTransactionRequestBody {
     pub to: Uuid,
     pub to_type: String,
     pub to_currency: TureCurrency,
-    pub value: Amount,
+    pub value: String,
     pub value_currency: TureCurrency,
-    pub fee: Amount,
+    pub fee: String,
 }
 
 impl CreateInternalTransactionRequestBody {
@@ -181,9 +181,9 @@ impl CreateInternalTransactionRequestBody {
             to,
             to_type: "account".into(),
             to_currency: currency,
-            value: amount,
+            value: amount.to_string(),
             value_currency: currency,
-            fee: Amount::new(0u128),
+            fee: Amount::new(0u128).to_string(),
         }
     }
 }
