@@ -14,6 +14,7 @@ pub mod order_info;
 pub mod orders;
 pub mod payment_intent;
 pub mod repo_factory;
+pub mod store_billing_type;
 pub mod types;
 pub mod user_roles;
 
@@ -30,5 +31,6 @@ pub use self::order_info::*;
 pub use self::orders::*;
 pub use self::payment_intent::*;
 pub use self::repo_factory::*;
+pub use self::store_billing_type::*;
 pub use self::types::*;
 pub use self::user_roles::*;

@@ -147,6 +147,14 @@ table! {
     }
 }
 
+table! {
+    store_billing_type (id) {
+        id -> Int4,
+        store_id -> Int4,
+        billing_type -> Varchar,
+    }
+}
+
 joinable!(amounts_received -> invoices_v2 (invoice_id));
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(order_exchange_rates -> orders (order_id));
@@ -166,4 +174,5 @@ allow_tables_to_appear_in_same_query!(
     orders_info,
     payment_intent,
     roles,
+    store_billing_type,
 );

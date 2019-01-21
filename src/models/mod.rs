@@ -21,6 +21,7 @@ pub mod payment_intent;
 pub mod payment_state;
 pub mod payout_id;
 pub mod role;
+pub mod store_billing_type;
 pub mod transaction_id;
 pub mod user;
 
@@ -42,5 +43,6 @@ pub use self::payment_intent::*;
 pub use self::payment_state::*;
 pub use self::payout_id::*;
 pub use self::role::*;
+pub use self::store_billing_type::*;
 pub use self::transaction_id::*;
 pub use self::user::*;
