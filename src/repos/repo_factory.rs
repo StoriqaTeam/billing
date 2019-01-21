@@ -34,6 +34,13 @@ where
     fn create_payment_intent_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentRepo + 'a>;
     fn create_customers_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a>;
     fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a>;
+    fn create_store_billing_type_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a>;
+    fn create_store_billing_type_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreBillingTypeRepo + 'a>;
+    fn create_international_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>)
+        -> Box<InternationalBillingInfoRepo + 'a>;
+    fn create_international_billing_repo_info_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InternationalBillingInfoRepo + 'a>;
+    fn create_russia_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<RussiaBillingInfoRepo + 'a>;
+    fn create_russia_billing_info_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<RussiaBillingInfoRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -211,6 +218,40 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(CustomersRepoImpl::new(db_conn, acl))
     }
+
+    fn create_store_billing_type_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(StoreBillingTypeRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_store_billing_type_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreBillingTypeRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(StoreBillingTypeRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_international_billing_info_repo<'a>(
+        &self,
+        db_conn: &'a C,
+        user_id: Option<UserId>,
+    ) -> Box<InternationalBillingInfoRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(InternationalBillingInfoRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_international_billing_repo_info_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InternationalBillingInfoRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(InternationalBillingInfoRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_russia_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<RussiaBillingInfoRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(RussiaBillingInfoRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_russia_billing_info_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<RussiaBillingInfoRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(RussiaBillingInfoRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -353,6 +394,85 @@ pub mod tests {
 
         fn create_customers_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<CustomersRepo + 'a> {
             Box::new(CustomersRepoMock::default())
+        }
+
+        fn create_store_billing_type_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a> {
+            Box::new(StoreBillingTypeRepoMock::default())
+        }
+
+        fn create_store_billing_type_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<StoreBillingTypeRepo + 'a> {
+            Box::new(StoreBillingTypeRepoMock::default())
+        }
+
+        fn create_international_billing_info_repo<'a>(
+            &self,
+            _db_conn: &'a C,
+            _user_id: Option<UserId>,
+        ) -> Box<InternationalBillingInfoRepo + 'a> {
+            Box::new(InternationalBillingInfoRepoMock::default())
+        }
+
+        fn create_international_billing_repo_info_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InternationalBillingInfoRepo + 'a> {
+            Box::new(InternationalBillingInfoRepoMock::default())
+        }
+
+        fn create_russia_billing_info_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<RussiaBillingInfoRepo + 'a> {
+            Box::new(RussiaBillingInfoRepoMock::default())
+        }
+
+        fn create_russia_billing_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<RussiaBillingInfoRepo + 'a> {
+            Box::new(RussiaBillingInfoRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct StoreBillingTypeRepoMock;
+
+    impl StoreBillingTypeRepo for StoreBillingTypeRepoMock {
+        fn create(&self, _new_store_billing_type: NewStoreBillingType) -> RepoResultV2<StoreBillingType> {
+            Ok(store_billing_type())
+        }
+
+        fn get(&self, _search: StoreBillingTypeSearch) -> RepoResultV2<Option<StoreBillingType>> {
+            Ok(Some(store_billing_type()))
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct InternationalBillingInfoRepoMock;
+
+    impl InternationalBillingInfoRepo for InternationalBillingInfoRepoMock {
+        fn create(&self, _new_store_billing_type: NewInternationalBillingInfo) -> RepoResultV2<InternationalBillingInfo> {
+            Ok(international_billing_info())
+        }
+
+        fn get(&self, _search: InternationalBillingInfoSearch) -> RepoResultV2<Option<InternationalBillingInfo>> {
+            Ok(Some(international_billing_info()))
+        }
+
+        fn update(
+            &self,
+            _search_params: InternationalBillingInfoSearch,
+            _payload: UpdateInternationalBillingInfo,
+        ) -> RepoResultV2<InternationalBillingInfo> {
+            Ok(international_billing_info())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct RussiaBillingInfoRepoMock;
+
+    impl RussiaBillingInfoRepo for RussiaBillingInfoRepoMock {
+        fn create(&self, _new_store_billing_type: NewRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo> {
+            Ok(russian_billing_info())
+        }
+
+        fn get(&self, _search: RussiaBillingInfoSearch) -> RepoResultV2<Option<RussiaBillingInfo>> {
+            Ok(Some(russian_billing_info()))
+        }
+
+        fn update(&self, _search_params: RussiaBillingInfoSearch, _payload: UpdateRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo> {
+            Ok(russian_billing_info())
         }
     }
 
@@ -905,6 +1025,34 @@ pub mod tests {
                 created_at: chrono::Utc::now().naive_utc(),
                 status_updated_at: chrono::Utc::now().naive_utc(),
             })
+        }
+    }
+
+    fn russian_billing_info() -> RussiaBillingInfo {
+        RussiaBillingInfo {
+            id: RussiaBillingId(1),
+            store_id: StoreId(1),
+            kpp: None,
+            bic: None,
+        }
+    }
+
+    fn international_billing_info() -> InternationalBillingInfo {
+        InternationalBillingInfo {
+            id: InternationalBillingId(1),
+            store_id: StoreId(1),
+            swift_bic: None,
+            bank_name: None,
+            full_name: None,
+            iban: None,
+        }
+    }
+
+    fn store_billing_type() -> StoreBillingType {
+        StoreBillingType {
+            id: StoreBillingTypeId(1),
+            store_id: StoreId(1),
+            billing_type: BillingType::International,
         }
     }
 
