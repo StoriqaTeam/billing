@@ -10,7 +10,7 @@ use stq_http::client::HttpClient;
 use stq_types::{BillingRole, RoleId, UserId};
 
 use client::payments::PaymentsClient;
-use models::{NewUserRole, UserRole};
+use models::{NewUserRole, RemoveUserRole, UserRole};
 use repos::ReposFactory;
 use services::accounts::AccountService;
 use services::types::ServiceFuture;
@@ -21,6 +21,8 @@ pub trait UserRolesService {
     fn get_roles(&self, user_id: UserId) -> ServiceFuture<Vec<BillingRole>>;
     /// Creates new user_role
     fn create_user_role(&self, payload: NewUserRole) -> ServiceFuture<UserRole>;
+    /// Deletes user_role
+    fn delete_user_role(&self, payload: RemoveUserRole) -> ServiceFuture<UserRole>;
     /// Deletes roles for user
     fn delete_user_role_by_user_id(&self, user_id_arg: UserId) -> ServiceFuture<Vec<UserRole>>;
     /// Deletes role for user by id
@@ -58,6 +60,18 @@ impl<
             let user_roles_repo = repo_factory.create_user_roles_repo(&*conn, current_uid);
             conn.transaction::<UserRole, FailureError, _>(move || user_roles_repo.create(new_user_role))
                 .map_err(|e: FailureError| e.context("Service user_roles, create endpoint error occured.").into())
+        })
+    }
+
+    /// Deletes user_role
+    fn delete_user_role(&self, payload: RemoveUserRole) -> ServiceFuture<UserRole> {
+        let current_user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+
+        self.spawn_on_pool(move |conn| {
+            let user_roles_repo = repo_factory.create_user_roles_repo(&*conn, current_user_id);
+            conn.transaction::<UserRole, FailureError, _>(move || user_roles_repo.delete(payload))
+                .map_err(|e: FailureError| e.context("Service user_roles, delete endpoint error occured.").into())
         })
     }
 
