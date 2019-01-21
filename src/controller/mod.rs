@@ -189,6 +189,9 @@ impl<
             (Post, Some(Route::Roles)) => {
                 serialize_future({ parse_body::<NewUserRole>(req.body()).and_then(move |data| service.create_user_role(data)) })
             }
+            (Delete, Some(Route::Roles)) => {
+                serialize_future({ parse_body::<RemoveUserRole>(req.body()).and_then(move |data| service.delete_user_role(data)) })
+            }
             (Delete, Some(Route::RolesByUserId { user_id })) => serialize_future({ service.delete_user_role_by_user_id(user_id) }),
             (Delete, Some(Route::RoleById { id })) => serialize_future({ service.delete_user_role_by_id(id) }),
 

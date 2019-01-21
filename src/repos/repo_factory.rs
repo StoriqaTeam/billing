@@ -601,6 +601,15 @@ pub mod tests {
             })
         }
 
+        fn delete(&self, payload: RemoveUserRole) -> RepoResult<UserRole> {
+            Ok(UserRole {
+                id: RoleId::new(),
+                user_id: payload.user_id,
+                name: payload.name,
+                data: None,
+            })
+        }
+
         fn delete_by_user_id(&self, user_id_arg: UserId) -> RepoResult<Vec<UserRole>> {
             Ok(vec![UserRole {
                 id: RoleId::new(),

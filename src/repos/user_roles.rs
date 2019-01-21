@@ -14,8 +14,9 @@ use std::sync::Arc;
 use stq_cache::cache::Cache;
 use stq_types::{BillingRole, RoleId, UserId};
 
+use super::acl;
 use models::authorization::*;
-use models::{NewUserRole, UserRole};
+use models::{NewUserRole, RemoveUserRole, UserRole};
 use repos::legacy_acl::*;
 use repos::types::RepoResult;
 use repos::RolesCacheImpl;
@@ -28,6 +29,9 @@ pub trait UserRolesRepo {
 
     /// Create a new user role
     fn create(&self, payload: NewUserRole) -> RepoResult<UserRole>;
+
+    /// Delete existing user role
+    fn delete(&self, payload: RemoveUserRole) -> RepoResult<UserRole>;
 
     /// Delete roles of a user
     fn delete_by_user_id(&self, user_id: UserId) -> RepoResult<Vec<UserRole>>;
@@ -101,11 +105,28 @@ where
     /// Create a new user role
     fn create(&self, payload: NewUserRole) -> RepoResult<UserRole> {
         debug!("create new user role {:?}.", payload);
+        acl::check(&*self.acl, Resource::UserRoles, Action::Write, self, None)?;
+
         self.cached_roles.remove(payload.user_id);
         let query = diesel::insert_into(roles).values(&payload);
         query
             .get_result(self.db_conn)
             .map_err(|e| e.context(format!("Create a new user role {:?} error occurred", payload)).into())
+    }
+
+    /// Delete existing user role
+    fn delete(&self, payload: RemoveUserRole) -> RepoResult<UserRole> {
+        debug!("delete user role {:?}.", payload);
+        self.cached_roles.remove(payload.user_id);
+        let filtered = roles.filter(user_id.eq(payload.user_id).and(name.eq(payload.name)));
+        let query = diesel::delete(filtered);
+        let deleted_role = query
+            .get_result(self.db_conn)
+            .map_err(|e| e.context(format!("Delete user {} roles error occurred", payload.user_id)))?;
+
+        acl::check(&*self.acl, Resource::UserRoles, Action::Write, self, Some(&deleted_role))?;
+
+        Ok(deleted_role)
     }
 
     /// Delete roles of a user
