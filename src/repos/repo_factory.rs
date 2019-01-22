@@ -41,6 +41,12 @@ where
     fn create_international_billing_repo_info_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<InternationalBillingInfoRepo + 'a>;
     fn create_russia_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<RussiaBillingInfoRepo + 'a>;
     fn create_russia_billing_info_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<RussiaBillingInfoRepo + 'a>;
+    fn create_proxy_companies_billing_info_repo<'a>(
+        &self,
+        db_conn: &'a C,
+        user_id: Option<UserId>,
+    ) -> Box<ProxyCompanyBillingInfoRepo + 'a>;
+    fn create_proxy_companies_billing_info_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<ProxyCompanyBillingInfoRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -252,6 +258,20 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(RussiaBillingInfoRepoImpl::new(db_conn, acl))
     }
+
+    fn create_proxy_companies_billing_info_repo<'a>(
+        &self,
+        db_conn: &'a C,
+        user_id: Option<UserId>,
+    ) -> Box<ProxyCompanyBillingInfoRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(ProxyCompanyBillingInfoRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_proxy_companies_billing_info_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<ProxyCompanyBillingInfoRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(ProxyCompanyBillingInfoRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -422,6 +442,39 @@ pub mod tests {
 
         fn create_russia_billing_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<RussiaBillingInfoRepo + 'a> {
             Box::new(RussiaBillingInfoRepoMock::default())
+        }
+
+        fn create_proxy_companies_billing_info_repo<'a>(
+            &self,
+            _db_conn: &'a C,
+            _user_id: Option<UserId>,
+        ) -> Box<ProxyCompanyBillingInfoRepo + 'a> {
+            Box::new(ProxyCompanyBillingInfoRepoMock::default())
+        }
+
+        fn create_proxy_companies_billing_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<ProxyCompanyBillingInfoRepo + 'a> {
+            Box::new(ProxyCompanyBillingInfoRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct ProxyCompanyBillingInfoRepoMock;
+
+    impl ProxyCompanyBillingInfoRepo for ProxyCompanyBillingInfoRepoMock {
+        fn create(&self, _new_proxy_companies_billing_info: NewProxyCompanyBillingInfo) -> RepoResultV2<ProxyCompanyBillingInfo> {
+            Ok(proxy_companies_billing_info())
+        }
+
+        fn get(&self, _search: ProxyCompanyBillingInfoSearch) -> RepoResultV2<Option<ProxyCompanyBillingInfo>> {
+            Ok(Some(proxy_companies_billing_info()))
+        }
+
+        fn update(
+            &self,
+            _search_params: ProxyCompanyBillingInfoSearch,
+            _payload: UpdateProxyCompanyBillingInfo,
+        ) -> RepoResultV2<ProxyCompanyBillingInfo> {
+            Ok(proxy_companies_billing_info())
         }
     }
 
@@ -1043,6 +1096,17 @@ pub mod tests {
         InternationalBillingInfo {
             id: InternationalBillingId(1),
             store_id: StoreId(1),
+            swift_bic: SwiftId("swift_bic".to_string()),
+            bank_name: "bank_name".to_string(),
+            full_name: "full_name".to_string(),
+            iban: "iban".to_string(),
+        }
+    }
+
+    fn proxy_companies_billing_info() -> ProxyCompanyBillingInfo {
+        ProxyCompanyBillingInfo {
+            id: ProxyCompanyBillingInfoId(1),
+            country: Alpha3("RUS".to_string()),
             swift_bic: SwiftId("swift_bic".to_string()),
             bank_name: "bank_name".to_string(),
             full_name: "full_name".to_string(),

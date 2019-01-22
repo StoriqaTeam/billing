@@ -1,0 +1,1 @@
+DROP TABLE proxy_companies_billing_info;
