@@ -17,6 +17,8 @@ pub enum ErrorKind {
     Internal,
     #[fail(display = "repo error - access forbidden")]
     Forbidden,
+    #[fail(display = "repo error - not found")]
+    NotFound,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
@@ -49,6 +51,7 @@ impl<'a> From<&'a DieselError> for ErrorKind {
                 errors.add("repo", error);
                 ErrorKind::Constraints(errors)
             }
+            DieselError::NotFound => ErrorKind::NotFound,
             _ => ErrorKind::Internal,
         }
     }

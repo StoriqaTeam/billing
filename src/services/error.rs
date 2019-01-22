@@ -42,6 +42,7 @@ impl From<RepoErrorKind> for ErrorKind {
             RepoErrorKind::Constraints(errors) => ErrorKind::Validation(serde_json::to_value(errors).unwrap_or(json!({}))),
             RepoErrorKind::Forbidden => ErrorKind::Forbidden,
             RepoErrorKind::Internal => ErrorKind::Internal,
+            RepoErrorKind::NotFound => ErrorKind::Internal,
         }
     }
 }
