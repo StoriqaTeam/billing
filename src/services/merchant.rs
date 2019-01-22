@@ -28,9 +28,9 @@ pub trait MerchantService {
     /// Creates user merchant
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
     /// Creates user merchant v1
-    fn create_user_v1(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
+    fn create_user_tugush(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
     /// Creates user merchant v2
-    fn create_user_v2(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
+    fn create_user_ture(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
     /// Delete user merchant
     fn delete_user(&self, user_id: UserId) -> ServiceFuture<MerchantId>;
     /// Creates store merchant
@@ -55,14 +55,14 @@ impl<
     /// Creates user merchant
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
         if !self.payments_v2_enabled() {
-            self.create_user_v1(user)
+            self.create_user_tugush(user)
         } else {
-            self.create_user_v2(user)
+            self.create_user_ture(user)
         }
     }
 
-    /// Creates user merchant v2
-    fn create_user_v2(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
+    /// Creates user merchant in ture
+    fn create_user_ture(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
 
@@ -78,8 +78,8 @@ impl<
         })
     }
 
-    /// Creates user merchant v1
-    fn create_user_v1(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
+    /// Creates user merchant in tugush
+    fn create_user_tugush(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
 
