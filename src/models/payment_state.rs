@@ -25,6 +25,8 @@ pub enum PaymentState {
     Refunded,
     /// Money was paid to seller
     PaidToSeller,
+    /// Need money payment to seller
+    PaimentToSellerNeeded,
 }
 
 #[derive(Debug, Clone, Fail)]
