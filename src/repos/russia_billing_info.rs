@@ -75,7 +75,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {
-            let e = format_err!("store billing info search_params is empty");
+            let e = format_err!("russia billing info search_params is empty");
             ectx!(try err e, ErrorKind::Internal)
         })?;
 
@@ -88,7 +88,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             })?;
 
         if billing_info_list.len() > 1 {
-            let e = format_err!("store international billing search returned more than 1 entry");
+            let e = format_err!("russia billing search returned more than 1 entry");
             return Err(ectx!(err e, ErrorKind::Internal));
         }
 
@@ -110,7 +110,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {
-            let e = format_err!("store billing info search_params is empty");
+            let e = format_err!("russia billing info search_params is empty");
             ectx!(try err e, ErrorKind::Internal)
         })?;
 

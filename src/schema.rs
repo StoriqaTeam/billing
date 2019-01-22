@@ -150,6 +150,17 @@ table! {
 }
 
 table! {
+    proxy_companies_billing_info (id) {
+        id -> Int4,
+        country -> Varchar,
+        swift_bic -> Varchar,
+        bank_name -> Varchar,
+        full_name -> Varchar,
+        iban -> Varchar,
+    }
+}
+
+table! {
     roles (id) {
         id -> Uuid,
         user_id -> Int4,
@@ -196,6 +207,7 @@ allow_tables_to_appear_in_same_query!(
     orders,
     orders_info,
     payment_intent,
+    proxy_companies_billing_info,
     roles,
     russia_billing_info,
     store_billing_type,

@@ -11,6 +11,7 @@ pub enum Resource {
     Invoice,
     OrderExchangeRate,
     PaymentIntent,
+    ProxyCompanyBillingInfo,
     StoreBillingType,
     Customer,
 }
@@ -26,6 +27,7 @@ impl fmt::Display for Resource {
             Resource::BillingInfo => write!(f, "billing info"),
             Resource::OrderExchangeRate => write!(f, "order exchange rate"),
             Resource::PaymentIntent => write!(f, "payment intent"),
+            Resource::ProxyCompanyBillingInfo => write!(f, "proxy company billing info"),
             Resource::StoreBillingType => write!(f, "store billing type"),
             Resource::Customer => write!(f, "customer"),
         }
