@@ -7,10 +7,10 @@ use schema::international_billing_info;
 pub struct InternationalBillingInfo {
     pub id: InternationalBillingId,
     pub store_id: StoreId,
-    pub swift_bic: Option<SwiftId>,
-    pub bank_name: Option<String>,
-    pub full_name: Option<String>,
-    pub iban: Option<String>,
+    pub swift_bic: SwiftId,
+    pub bank_name: String,
+    pub full_name: String,
+    pub iban: String,
 }
 
 #[derive(Serialize, Deserialize, Insertable, AsChangeset, Debug, Clone)]
@@ -26,10 +26,10 @@ pub struct UpdateInternationalBillingInfo {
 #[table_name = "international_billing_info"]
 pub struct NewInternationalBillingInfo {
     pub store_id: StoreId,
-    pub swift_bic: Option<SwiftId>,
-    pub bank_name: Option<String>,
-    pub full_name: Option<String>,
-    pub iban: Option<String>,
+    pub swift_bic: SwiftId,
+    pub bank_name: String,
+    pub full_name: String,
+    pub iban: String,
 }
 
 #[derive(Clone, Serialize, Debug, Default)]

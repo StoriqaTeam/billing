@@ -42,10 +42,10 @@ table! {
     international_billing_info (id) {
         id -> Int4,
         store_id -> Int4,
-        swift_bic -> Nullable<Varchar>,
-        bank_name -> Nullable<Varchar>,
-        full_name -> Nullable<Varchar>,
-        iban -> Nullable<Varchar>,
+        swift_bic -> Varchar,
+        bank_name -> Varchar,
+        full_name -> Varchar,
+        iban -> Varchar,
     }
 }
 
@@ -162,8 +162,10 @@ table! {
     russia_billing_info (id) {
         id -> Int4,
         store_id -> Int4,
-        kpp -> Nullable<Varchar>,
-        bic -> Nullable<Varchar>,
+        kpp -> Varchar,
+        bic -> Varchar,
+        inn -> Varchar,
+        full_name -> Varchar,
     }
 }
 

@@ -1032,8 +1032,10 @@ pub mod tests {
         RussiaBillingInfo {
             id: RussiaBillingId(1),
             store_id: StoreId(1),
-            kpp: None,
-            bic: None,
+            kpp: "kpp".to_string(),
+            bic: "bic".to_string(),
+            inn: "inn".to_string(),
+            full_name: "full_name".to_string(),
         }
     }
 
@@ -1041,10 +1043,10 @@ pub mod tests {
         InternationalBillingInfo {
             id: InternationalBillingId(1),
             store_id: StoreId(1),
-            swift_bic: None,
-            bank_name: None,
-            full_name: None,
-            iban: None,
+            swift_bic: SwiftId("swift_bic".to_string()),
+            bank_name: "bank_name".to_string(),
+            full_name: "full_name".to_string(),
+            iban: "iban".to_string(),
         }
     }
 
