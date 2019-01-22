@@ -4,12 +4,14 @@ use std::fmt;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Resource {
     Account,
+    BillingInfo,
     OrderInfo,
     UserRoles,
     Merchant,
     Invoice,
     OrderExchangeRate,
     PaymentIntent,
+    StoreBillingType,
     Customer,
 }
 
@@ -21,8 +23,10 @@ impl fmt::Display for Resource {
             Resource::UserRoles => write!(f, "user roles"),
             Resource::Merchant => write!(f, "merchant"),
             Resource::Invoice => write!(f, "invoice"),
+            Resource::BillingInfo => write!(f, "billing info"),
             Resource::OrderExchangeRate => write!(f, "order exchange rate"),
             Resource::PaymentIntent => write!(f, "payment intent"),
+            Resource::StoreBillingType => write!(f, "store billing type"),
             Resource::Customer => write!(f, "customer"),
         }
     }

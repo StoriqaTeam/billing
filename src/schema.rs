@@ -39,6 +39,17 @@ table! {
 }
 
 table! {
+    international_billing_info (id) {
+        id -> Int4,
+        store_id -> Int4,
+        swift_bic -> Varchar,
+        bank_name -> Varchar,
+        full_name -> Varchar,
+        iban -> Varchar,
+    }
+}
+
+table! {
     invoices (id) {
         id -> Uuid,
         invoice_id -> Uuid,
@@ -147,6 +158,25 @@ table! {
     }
 }
 
+table! {
+    russia_billing_info (id) {
+        id -> Int4,
+        store_id -> Int4,
+        kpp -> Varchar,
+        bic -> Varchar,
+        inn -> Varchar,
+        full_name -> Varchar,
+    }
+}
+
+table! {
+    store_billing_type (id) {
+        id -> Int4,
+        store_id -> Int4,
+        billing_type -> Varchar,
+    }
+}
+
 joinable!(amounts_received -> invoices_v2 (invoice_id));
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(order_exchange_rates -> orders (order_id));
@@ -158,6 +188,7 @@ allow_tables_to_appear_in_same_query!(
     amounts_received,
     customers,
     event_store,
+    international_billing_info,
     invoices,
     invoices_v2,
     merchants,
@@ -166,4 +197,6 @@ allow_tables_to_appear_in_same_query!(
     orders_info,
     payment_intent,
     roles,
+    russia_billing_info,
+    store_billing_type,
 );
