@@ -44,6 +44,7 @@ impl FromStr for PaymentState {
             "refunded" => Ok(PaymentState::Refunded),
             "refund_needed" => Ok(PaymentState::RefundNeeded),
             "paid_to_seller" => Ok(PaymentState::PaidToSeller),
+            "paiment_to_seller_needed" => Ok(PaymentState::PaimentToSellerNeeded),
             _ => Err(ParsePaymentStateError),
         }
     }
@@ -58,6 +59,7 @@ impl FromSql<VarChar, Pg> for PaymentState {
             Some(b"refunded") => Ok(PaymentState::Refunded),
             Some(b"refund_needed") => Ok(PaymentState::RefundNeeded),
             Some(b"paid_to_seller") => Ok(PaymentState::PaidToSeller),
+            Some(b"paiment_to_seller_needed") => Ok(PaymentState::PaimentToSellerNeeded),
             Some(v) => Err(format!(
                 "Unrecognized enum variant: {:?}",
                 String::from_utf8(v.to_vec()).unwrap_or_else(|_| "Non - UTF8 value".to_string()),
@@ -78,6 +80,7 @@ impl ToSql<VarChar, Pg> for PaymentState {
             PaymentState::Refunded => out.write_all(b"refunded")?,
             PaymentState::RefundNeeded => out.write_all(b"refund_needed")?,
             PaymentState::PaidToSeller => out.write_all(b"paid_to_seller")?,
+            PaymentState::PaimentToSellerNeeded => out.write_all(b"paiment_to_seller_needed")?,
         };
         Ok(IsNull::No)
     }
@@ -92,6 +95,7 @@ impl Display for PaymentState {
             PaymentState::Refunded => f.write_str("refunded"),
             PaymentState::RefundNeeded => f.write_str("refund_needed"),
             PaymentState::PaidToSeller => f.write_str("paid_to_seller"),
+            PaymentState::PaimentToSellerNeeded => f.write_str("paiment_to_seller_needed"),
         }
     }
 }
