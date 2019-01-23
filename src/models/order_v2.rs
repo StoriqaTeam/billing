@@ -114,13 +114,13 @@ pub struct OrderAccess {
     pub invoice_id: InvoiceId,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct OrdersSearch {
     pub store_id: Option<StoreId>,
     pub state: Option<PaymentState>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OrderSearchResults {
     pub total_count: i64,
     pub orders: Vec<RawOrder>,

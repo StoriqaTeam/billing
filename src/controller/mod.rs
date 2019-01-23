@@ -32,6 +32,7 @@ use self::routes::Route;
 use client::payments::PaymentsClientImpl;
 use controller::requests::*;
 use errors::Error;
+use models::order_v2::OrdersSearch;
 use models::*;
 use repos::repo_factory::*;
 use sentry_integration::log_and_capture_error;
@@ -234,6 +235,22 @@ impl<
                 serialize_future(parse_body::<OrderBillingSearchTerms>(req.body()).and_then(move |payload| {
                     order_billing_service
                         .search(skip, count, payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                }))
+            }
+            (Post, Some(Route::OrderSearch)) => {
+                let (skip_opt, count_opt) = parse_query!(
+                    req.query().unwrap_or_default(),
+                    "skip" => i64, "count" => i64
+                );
+
+                let skip = skip_opt.unwrap_or(0);
+                let count = count_opt.unwrap_or(0);
+
+                serialize_future(parse_body::<OrdersSearch>(req.body()).and_then(move |payload| {
+                    service
+                        .search_orders(skip, count, payload)
                         .map_err(Error::from)
                         .map_err(failure::Error::from)
                 }))
