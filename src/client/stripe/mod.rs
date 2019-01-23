@@ -5,7 +5,7 @@ pub use self::types::{NewPaymentIntent, *};
 use futures::Future;
 use futures::IntoFuture;
 use stripe::{
-    CaptureParams, Charge, ChargeParams, Currency as StripeCurrency, Customer, CustomerParams, Metadata, PaymentIntent,
+    CaptureParams, Charge, ChargeParams, Currency as StripeCurrency, Customer, CustomerParams, Deleted, Metadata, PaymentIntent,
     PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
 };
 
@@ -22,6 +22,8 @@ pub trait StripeClient: Send + Sync + 'static {
     fn create_customer_with_source(&self, input: NewCustomerWithSource) -> Box<Future<Item = Customer, Error = Error> + Send>;
 
     fn get_customer(&self, customer_id: CustomerId) -> Box<Future<Item = Customer, Error = Error> + Send>;
+
+    fn delete_customer(&self, customer_id: CustomerId) -> Box<Future<Item = Deleted, Error = Error> + Send>;
 
     fn create_charge(&self, input: NewCharge) -> Box<Future<Item = Charge, Error = Error> + Send>;
 
@@ -92,6 +94,10 @@ impl StripeClient for StripeClientImpl {
 
     fn get_customer(&self, customer_id: CustomerId) -> Box<Future<Item = Customer, Error = Error> + Send> {
         Box::new(Customer::retrieve(&self.client, &customer_id.inner()).map_err(From::from))
+    }
+
+    fn delete_customer(&self, customer_id: CustomerId) -> Box<Future<Item = Deleted, Error = Error> + Send> {
+        Box::new(Customer::delete(&self.client, &customer_id.inner()).map_err(From::from))
     }
 
     fn create_charge(&self, input: NewCharge) -> Box<Future<Item = Charge, Error = Error> + Send> {

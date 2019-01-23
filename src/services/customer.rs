@@ -36,6 +36,9 @@ pub trait CustomersService {
 
     /// Getting customer for current user
     fn get_customer(&self) -> ServiceFutureV2<Option<CustomerResponse>>;
+
+    /// Delete customer for current user
+    fn delete(&self, payload: CustomerId) -> ServiceFutureV2<()>;
 }
 
 pub struct CustomersServiceImpl<
@@ -174,6 +177,36 @@ impl<
             ),
             _ => future::Either::B(future::err(ectx!(err ErrorContext::Unauthorized, ErrorKind::Forbidden))),
         };
+
+        Box::new(fut)
+    }
+
+    fn delete(&self, customer_id: CustomerId) -> ServiceFutureV2<()> {
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let stripe_client = self.stripe_client.clone();
+        let customer_id_cloned = customer_id.clone();
+
+        let fut = stripe_client
+            .delete_customer(customer_id.clone())
+            .map_err(ectx!(convert => customer_id_cloned))
+            .and_then(move |deleted_customer| {
+                spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                    let customers_repo = repo_factory.create_customers_repo(&conn, user_id);
+
+                    if deleted_customer.deleted {
+                        customers_repo
+                            .delete(customer_id)
+                            .map_err(ectx!(convert => deleted_customer.id))
+                            .map(|_| ())
+                    } else {
+                        let e = format_err!("Cannot delete customer in stripe with id: {:?}", customer_id);
+                        Err(ectx!(err e, ErrorKind::Internal))
+                    }
+                })
+            });
 
         Box::new(fut)
     }
