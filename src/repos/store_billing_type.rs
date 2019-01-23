@@ -31,6 +31,7 @@ pub struct StoreBillingTypeRepoImpl<'a, T: Connection<Backend = Pg, TransactionM
 pub trait StoreBillingTypeRepo {
     fn create(&self, new_store_billing_type: NewStoreBillingType) -> RepoResultV2<StoreBillingType>;
     fn get(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Option<StoreBillingType>>;
+    fn search(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> StoreBillingTypeRepoImpl<'a, T> {
@@ -74,6 +75,27 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 ectx!(err e, ErrorSource::Diesel, error_kind)
             })
     }
+
+    fn search(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>> {
+        debug!("search store billing type {:?}.", search);
+
+        acl::check(&*self.acl, Resource::StoreBillingType, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        let query: Option<BoxedExpr> = into_expr(search);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("store billing type search is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        crate::schema::store_billing_type::table
+            .filter(query)
+            .get_results(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(err e, ErrorSource::Diesel, error_kind)
+            })
+    }
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, StoreBillingType>
@@ -99,6 +121,11 @@ fn into_expr(search: StoreBillingTypeSearch) -> Option<BoxedExpr> {
 
     if let Some(billing_type_filter) = search.billing_type {
         let new_condition = StoreBillingTypeDsl::billing_type.eq(billing_type_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(store_ids_filter) = search.store_ids {
+        let new_condition = StoreBillingTypeDsl::store_id.eq_any(store_ids_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 

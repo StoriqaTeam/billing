@@ -17,9 +17,19 @@ pub struct NewStoreBillingType {
     pub billing_type: BillingType,
 }
 
-#[derive(Clone, Copy, Serialize, Debug, Default)]
+#[derive(Clone, Serialize, Debug, Default)]
 pub struct StoreBillingTypeSearch {
     pub id: Option<StoreBillingTypeId>,
     pub store_id: Option<StoreId>,
+    pub store_ids: Option<Vec<StoreId>>,
     pub billing_type: Option<BillingType>,
+}
+
+impl StoreBillingTypeSearch {
+    pub fn by_store_ids(store_ids: Vec<StoreId>) -> StoreBillingTypeSearch {
+        StoreBillingTypeSearch {
+            store_ids: Some(store_ids),
+            ..Default::default()
+        }
+    }
 }
