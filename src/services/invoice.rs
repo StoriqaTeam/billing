@@ -860,6 +860,12 @@ impl<
                                 ectx!(try err e, ErrorKind::Internal => amount_received)
                             })?;
 
+                        // if callback received to an account that is not connected to any invoice
+                        let account_id_clone = account_id.clone();
+                        if invoices_repo.get_by_account_id(account_id_clone.clone()).map_err(ectx!(try convert => account_id_clone))?.is_none() {
+                            return Err(ErrorKind::NotFound.into());
+                        }
+
                         invoices_repo.increase_amount_captured(account_id.clone(), transaction_id.clone(), amount_received)
                             .or_else(|e| match e.kind() {
                                 // If the amount received has already been saved to the database, just get the invoice by account ID
@@ -953,6 +959,16 @@ impl<
                         // Skip recalc if the invoice is paid
                         Some(_) => future::Either::B(future::ok(())),
                     }
+                }
+            })
+            .then(|res| {
+                if let Err(e) = res {
+                    match e.kind() {
+                        ErrorKind::NotFound => Ok(()),
+                        _ => Err(e)
+                    }
+                } else {
+                    res
                 }
             });
 

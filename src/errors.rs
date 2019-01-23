@@ -33,6 +33,7 @@ impl From<services::Error> for Error {
         match error.kind() {
             services::ErrorKind::Internal => Error::InternalV2,
             services::ErrorKind::Forbidden => Error::Forbidden,
+            services::ErrorKind::NotFound => Error::NotFound,
             services::ErrorKind::Validation(value) => Error::ValidateV2(value),
         }
     }

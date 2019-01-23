@@ -19,6 +19,8 @@ pub enum ErrorKind {
     Internal,
     #[fail(display = "service error - forbidden")]
     Forbidden,
+    #[fail(display = "service error - not found")]
+    NotFound,
     #[fail(display = "service error - validation")]
     Validation(serde_json::Value),
 }
