@@ -141,10 +141,23 @@ impl<
             let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
             info!("Set new payment state order by id: {}, payment_state: {:?}", order_id, state);
 
-            orders_repo
-                .update_state(order_id, state)
-                .map_err(ectx!(convert => order_id, state))
-                .map(|_| ())
+            let order = orders_repo.get(order_id).map_err(ectx!(try convert => order_id))?.ok_or({
+                let e = format_err!("Order {} not found", order_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+
+            if check_change_order_payment_state(order.state, state) {
+                orders_repo
+                    .update_state(order_id, state)
+                    .map_err(ectx!(convert => order_id, state))
+                    .map(|_| ())
+            } else {
+                let mut errors = ValidationErrors::new();
+                let mut error = ValidationError::new("wrong_state");
+                error.message = Some(format!("Cannot change order state from \"{}\" to \"{}\"", order.state, state).into());
+                errors.add("order", error);
+                return Err(ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
+            }
         });
 
         Box::new(fut)
@@ -336,4 +349,21 @@ where
             .map(|_| ())
     });
     Box::new(fut)
+}
+
+fn check_change_order_payment_state(current_state: PaymentState, new_state: PaymentState) -> bool {
+    use models::PaymentState::*;
+
+    match (current_state, new_state) {
+        (Initial, Captured)
+        | (Initial, Declined)
+        | (Captured, RefundNeeded)
+        | (Captured, PaymentToSellerNeeded)
+        | (RefundNeeded, Refunded)
+        | (PaymentToSellerNeeded, PaidToSeller) => true,
+        _ => {
+            debug!("Change state from {} to {} unreachable.", current_state, new_state);
+            false
+        }
+    }
 }
