@@ -105,10 +105,15 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             ectx!(try err e, ErrorKind::Internal)
         })?;
 
-        let orders = Orders::orders.filter(&query).get_results::<RawOrder>(self.db_conn).map_err(|e| {
-            let error_kind = ErrorKind::from(&e);
-            ectx!(try err e, ErrorSource::Diesel, error_kind)
-        })?;
+        let orders = Orders::orders
+            .filter(&query)
+            .offset(skip)
+            .limit(count)
+            .get_results::<RawOrder>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
 
         let total_count = Orders::orders.filter(&query).count().get_result::<i64>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
