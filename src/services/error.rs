@@ -19,6 +19,8 @@ pub enum ErrorKind {
     Internal,
     #[fail(display = "service error - forbidden")]
     Forbidden,
+    #[fail(display = "service error - not found")]
+    NotFound,
     #[fail(display = "service error - validation")]
     Validation(serde_json::Value),
 }
@@ -42,6 +44,7 @@ impl From<RepoErrorKind> for ErrorKind {
             RepoErrorKind::Constraints(errors) => ErrorKind::Validation(serde_json::to_value(errors).unwrap_or(json!({}))),
             RepoErrorKind::Forbidden => ErrorKind::Forbidden,
             RepoErrorKind::Internal => ErrorKind::Internal,
+            RepoErrorKind::NotFound => ErrorKind::Internal,
         }
     }
 }

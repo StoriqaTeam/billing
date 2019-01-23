@@ -78,7 +78,9 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     fn create(&self, payload: NewDbCustomer) -> RepoResultV2<DbCustomer> {
         debug!("Create a customer with ID: {}", payload.id);
-        acl::check(&*self.acl, Resource::Customer, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+        let access = CustomersAccess { user_id: payload.user_id };
+
+        acl::check(&*self.acl, Resource::Customer, Action::Write, self, Some(&access)).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::insert_into(CustomersDsl::customers).values(&payload);
 
@@ -90,27 +92,49 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     fn update(&self, id_arg: CustomerId, payload: UpdateDbCustomer) -> RepoResultV2<DbCustomer> {
         debug!("Updating a customer with ID: {}", id_arg);
-        acl::check(&*self.acl, Resource::Customer, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let filter = CustomersDsl::customers.filter(CustomersDsl::id.eq(&id_arg));
+        CustomersDsl::customers
+            .filter(CustomersDsl::id.eq(&id_arg))
+            .get_result(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(err e, ErrorSource::Diesel, error_kind)
+            })
+            .and_then(|customer: DbCustomer| {
+                let access = CustomersAccess::from(&customer);
+                acl::check(&*self.acl, Resource::Customer, Action::Write, self, Some(&access)).map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let query = diesel::update(filter).set(&payload);
-        query.get_result::<DbCustomer>(self.db_conn).map_err(|e| {
-            let error_kind = ErrorKind::from(&e);
-            ectx!(err e, ErrorSource::Diesel, error_kind)
-        })
+                let filter = CustomersDsl::customers.filter(CustomersDsl::id.eq(&id_arg));
+                let query = diesel::update(filter).set(&payload);
+
+                query.get_result::<DbCustomer>(self.db_conn).map_err(|e| {
+                    let error_kind = ErrorKind::from(&e);
+                    ectx!(err e, ErrorSource::Diesel, error_kind)
+                })
+            })
     }
 
     fn delete(&self, id_arg: CustomerId) -> RepoResultV2<Option<DbCustomer>> {
         debug!("Deleting a customer with ID: {}", id_arg);
-        acl::check(&*self.acl, Resource::Customer, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let command = diesel::delete(CustomersDsl::customers.filter(CustomersDsl::id.eq(id_arg)));
+        CustomersDsl::customers
+            .filter(CustomersDsl::id.eq(&id_arg))
+            .get_result(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(err e, ErrorSource::Diesel, error_kind)
+            })
+            .and_then(|customer: DbCustomer| {
+                let access = CustomersAccess::from(&customer);
+                acl::check(&*self.acl, Resource::Customer, Action::Write, self, Some(&access)).map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        command.get_result::<DbCustomer>(self.db_conn).optional().map_err(|e| {
-            let error_kind = ErrorKind::from(&e);
-            ectx!(err e, ErrorSource::Diesel, error_kind)
-        })
+                let command = diesel::delete(CustomersDsl::customers.filter(CustomersDsl::id.eq(id_arg)));
+
+                command.get_result::<DbCustomer>(self.db_conn).optional().map_err(|e| {
+                    let error_kind = ErrorKind::from(&e);
+                    ectx!(err e, ErrorSource::Diesel, error_kind)
+                })
+            })
     }
 }
 

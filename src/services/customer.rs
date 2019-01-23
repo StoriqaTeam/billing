@@ -36,6 +36,9 @@ pub trait CustomersService {
 
     /// Getting customer for current user
     fn get_customer(&self) -> ServiceFutureV2<Option<CustomerResponse>>;
+
+    /// Delete customer for current user
+    fn delete(&self, payload: CustomerId) -> ServiceFutureV2<()>;
 }
 
 pub struct CustomersServiceImpl<
@@ -64,53 +67,72 @@ impl<
 {
     fn create_customer_with_source(&self, payload: NewCustomerWithSourceRequest) -> ServiceFutureV2<CustomerResponse> {
         let repo_factory = self.repo_factory.clone();
+        let repo_factory2 = self.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
+        let db_pool2 = self.db_pool.clone();
+        let cpu_pool2 = self.cpu_pool.clone();
         let stripe_client = self.stripe_client.clone();
 
         let fut = match user_id {
             Some(user_id) => future::Either::A(
-                payload
-                    .card_token
-                    .parse()
-                    .map_err(|e: ParseIdError| {
-                        let stripe_err: StripeErrorKind = e.into();
-                        ectx!(err stripe_err, ErrorKind::Internal)
-                    })
-                    .into_future()
-                    .and_then(move |token| {
-                        let payload_cloned = payload.clone();
-                        let client_payload = NewCustomerWithSource {
-                            email: payload_cloned.email,
-                            token,
-                        };
+                spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                    let customers_repo = repo_factory.create_customers_repo(&conn, Some(user_id));
 
-                        stripe_client
-                            .create_customer_with_source(client_payload)
-                            .map_err(ectx!(convert => payload))
-                    })
-                    .and_then(move |customer| {
-                        spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                            let customers_repo = repo_factory.create_customers_repo(&conn, Some(user_id));
-
-                            let new_customer = NewDbCustomer {
-                                id: CustomerId::new(customer.id.clone()),
-                                user_id: user_id,
-                                email: customer.email.clone(),
-                            };
-
-                            customers_repo
-                                .create(new_customer.clone())
-                                .map_err(ectx!(convert => new_customer))
-                                .map(move |db_customer| CustomerResponse {
-                                    id: db_customer.id,
-                                    user_id: db_customer.user_id,
-                                    email: db_customer.email,
-                                    cards: get_customer_cards(customer.sources.data),
+                    customers_repo
+                        .get(SearchCustomer::UserId(user_id))
+                        .map_err(ectx!(convert => user_id))
+                })
+                .and_then(move |db_customer| {
+                    if db_customer.is_some() {
+                        let e = format_err!("Stripe Customer already exists for user_id {}", user_id);
+                        future::Either::A(future::err(ectx!(err e, ErrorKind::Internal)))
+                    } else {
+                        future::Either::B(
+                            payload
+                                .card_token
+                                .parse()
+                                .map_err(|e: ParseIdError| {
+                                    let stripe_err: StripeErrorKind = e.into();
+                                    ectx!(err stripe_err, ErrorKind::Internal)
                                 })
-                        })
-                    }),
+                                .into_future()
+                                .and_then(move |token| {
+                                    let payload_cloned = payload.clone();
+                                    let client_payload = NewCustomerWithSource {
+                                        email: payload_cloned.email,
+                                        token,
+                                    };
+
+                                    stripe_client
+                                        .create_customer_with_source(client_payload)
+                                        .map_err(ectx!(convert => payload))
+                                })
+                                .and_then(move |customer| {
+                                    spawn_on_pool(db_pool2, cpu_pool2, move |conn| {
+                                        let customers_repo = repo_factory2.create_customers_repo(&conn, Some(user_id));
+
+                                        let new_customer = NewDbCustomer {
+                                            id: CustomerId::new(customer.id.clone()),
+                                            user_id: user_id,
+                                            email: customer.email.clone(),
+                                        };
+
+                                        customers_repo
+                                            .create(new_customer.clone())
+                                            .map_err(ectx!(convert => new_customer))
+                                            .map(move |db_customer| CustomerResponse {
+                                                id: db_customer.id,
+                                                user_id: db_customer.user_id,
+                                                email: db_customer.email,
+                                                cards: get_customer_cards(customer.sources.data),
+                                            })
+                                    })
+                                }),
+                        )
+                    }
+                }),
             ),
             _ => future::Either::B(future::err(ectx!(err ErrorContext::Unauthorized, ErrorKind::Forbidden))),
         };
@@ -155,6 +177,36 @@ impl<
             ),
             _ => future::Either::B(future::err(ectx!(err ErrorContext::Unauthorized, ErrorKind::Forbidden))),
         };
+
+        Box::new(fut)
+    }
+
+    fn delete(&self, customer_id: CustomerId) -> ServiceFutureV2<()> {
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let stripe_client = self.stripe_client.clone();
+        let customer_id_cloned = customer_id.clone();
+
+        let fut = stripe_client
+            .delete_customer(customer_id.clone())
+            .map_err(ectx!(convert => customer_id_cloned))
+            .and_then(move |deleted_customer| {
+                spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                    let customers_repo = repo_factory.create_customers_repo(&conn, user_id);
+
+                    if deleted_customer.deleted {
+                        customers_repo
+                            .delete(customer_id)
+                            .map_err(ectx!(convert => deleted_customer.id))
+                            .map(|_| ())
+                    } else {
+                        let e = format_err!("Cannot delete customer in stripe with id: {:?}", customer_id);
+                        Err(ectx!(err e, ErrorKind::Internal))
+                    }
+                })
+            });
 
         Box::new(fut)
     }

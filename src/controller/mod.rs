@@ -199,11 +199,21 @@ impl<
             (Post, Some(Route::OrdersByIdCapture { id })) => serialize_future({ service.order_capture(id) }),
             (Post, Some(Route::OrdersByIdDecline { id })) => serialize_future({ service.order_decline(id) }),
 
+            (Post, Some(Route::OrdersSetPaymentState { order_id })) => serialize_future({
+                parse_body::<OrderPaymentStateRequest>(req.body())
+                    .map_err(failure::Error::from)
+                    .and_then(move |payload| service.update_order_state(order_id, payload.state).map_err(failure::Error::from))
+            }),
+
             (Post, Some(Route::CustomersWithSource)) => serialize_future({
                 parse_body::<NewCustomerWithSourceRequest>(req.body())
                     .and_then(move |data| customer_service.create_customer_with_source(data).map_err(failure::Error::from))
             }),
             (Get, Some(Route::Customers)) => serialize_future({ customer_service.get_customer() }),
+            (Delete, Some(Route::Customers)) => serialize_future({
+                parse_body::<DeleteCustomerRequest>(req.body())
+                    .and_then(move |payload| customer_service.delete(payload.customer_id).map_err(failure::Error::from))
+            }),
 
             // Fallback
             (m, _) => not_found(m, path),

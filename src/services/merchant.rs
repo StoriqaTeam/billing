@@ -27,6 +27,10 @@ use services::Service;
 pub trait MerchantService {
     /// Creates user merchant
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
+    /// Creates user merchant v1
+    fn create_user_tugush(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
+    /// Creates user merchant v2
+    fn create_user_ture(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant>;
     /// Delete user merchant
     fn delete_user(&self, user_id: UserId) -> ServiceFuture<MerchantId>;
     /// Creates store merchant
@@ -50,8 +54,35 @@ impl<
 {
     /// Creates user merchant
     fn create_user(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
+        if !self.payments_v2_enabled() {
+            self.create_user_tugush(user)
+        } else {
+            self.create_user_ture(user)
+        }
+    }
+
+    /// Creates user merchant in ture
+    fn create_user_ture(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
         let user_id = self.dynamic_context.user_id;
         let repo_factory = self.static_context.repo_factory.clone();
+
+        self.spawn_on_pool(move |conn| {
+            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            conn.transaction::<Merchant, FailureError, _>(move || {
+                debug!("Creating new user merchant: {:?}", &user);
+                let merchant_id = MerchantId::new();
+                let payload = NewUserMerchant::new(merchant_id, user.id);
+                merchant_repo.create_user_merchant(payload)
+            })
+            .map_err(|e: FailureError| e.context("Service merchant, create user endpoint error occured.").into())
+        })
+    }
+
+    /// Creates user merchant in tugush
+    fn create_user_tugush(&self, user: CreateUserMerchantPayload) -> ServiceFuture<Merchant> {
+        let user_id = self.dynamic_context.user_id;
+        let repo_factory = self.static_context.repo_factory.clone();
+
         let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
             merchant_url,
