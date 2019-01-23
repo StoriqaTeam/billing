@@ -1,13 +1,3 @@
-extern crate billing_lib;
-extern crate diesel;
-extern crate failure;
-extern crate futures;
-extern crate hyper;
-extern crate serde_json;
-extern crate stq_http;
-extern crate tokio_core;
-extern crate uuid;
-
 use billing_lib::client::payments::{self, CreateAccount, GetRate, PaymentsClient, PaymentsClientImpl};
 use billing_lib::models::{Amount, TureCurrency};
 use failure::Error as FailureError;

@@ -1,9 +1,3 @@
-extern crate billing_lib;
-extern crate diesel;
-extern crate failure;
-extern crate futures;
-extern crate uuid;
-
 use diesel::pg::PgConnection;
 use diesel::Connection;
 use uuid::Uuid;
