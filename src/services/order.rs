@@ -362,7 +362,7 @@ fn check_change_order_payment_state(current_state: PaymentState, new_state: Paym
         | (RefundNeeded, Refunded)
         | (PaymentToSellerNeeded, PaidToSeller) => true,
         _ => {
-            debug!("Change state from {} to {} unreachable.", current_state, new_state);
+            error!("Change state from {} to {} unreachable.", current_state, new_state);
             false
         }
     }
