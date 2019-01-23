@@ -29,6 +29,8 @@ pub trait OrderService {
     fn order_capture(&self, order_id: OrderId) -> ServiceFutureV2<()>;
     /// Refunding charge on order and setting order state to Cancel
     fn order_decline(&self, order_id: OrderId) -> ServiceFutureV2<()>;
+    /// Update order payment state
+    fn update_order_state(&self, order_id: OrderId, state: PaymentState) -> ServiceFutureV2<()>;
 }
 
 impl<
@@ -83,6 +85,7 @@ impl<
             }),
         )
     }
+
     fn order_decline(&self, order_id: OrderId) -> ServiceFutureV2<()> {
         let repo_factory = self.static_context.repo_factory.clone();
         let stripe_client = self.static_context.stripe_client.clone();
@@ -125,6 +128,26 @@ impl<
                 }
             }),
         )
+    }
+
+    fn update_order_state(&self, order_id: OrderId, state: PaymentState) -> ServiceFutureV2<()> {
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            info!("Set new payment state order by id: {}, payment_state: {:?}", order_id, state);
+
+            orders_repo
+                .update_state(order_id, state)
+                .map_err(ectx!(convert => order_id, state))
+                .map(|_| ())
+        });
+
+        Box::new(fut)
     }
 }
 

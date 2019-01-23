@@ -34,6 +34,7 @@ pub enum Route {
     PaymentIntentByInvoice { invoice_id: invoice_v2::InvoiceId },
     Customers,
     CustomersWithSource,
+    OrdersSetPaymentState { order_id: Orderv2Id },
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -139,6 +140,13 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::OrdersByIdDecline { id })
+    });
+
+    route_parser.add_route_with_params(r"^/orders/([a-zA-Z0-9-]+)/set_payment_state$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|order_id| Route::OrdersSetPaymentState { order_id })
     });
 
     route_parser.add_route(r"^/customers$", || Route::Customers);
