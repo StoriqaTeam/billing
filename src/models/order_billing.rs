@@ -10,7 +10,7 @@ pub struct OrderBillingSearchTerms {
 }
 
 #[derive(Serialize, Debug, Clone)]
-pub struct OrderBilling {
+pub struct OrderBillingInfo {
     pub order: RawOrder,
     pub billing_type: BillingType,
     pub proxy_company_billing_info: Option<ProxyCompanyBillingInfo>,
@@ -19,7 +19,7 @@ pub struct OrderBilling {
 }
 
 #[derive(Serialize, Clone, Debug)]
-pub struct OrderBillingSearchResults {
+pub struct OrderBillingInfoSearchResults {
     pub total_count: i64,
-    pub orders: Vec<OrderBilling>,
+    pub orders: Vec<OrderBillingInfo>,
 }

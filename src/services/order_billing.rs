@@ -17,15 +17,15 @@ use controller::context::DynamicContext;
 use models::order_v2::OrdersSearch;
 use models::order_v2::StoreId as StoreIdV2;
 use models::{
-    InternationalBillingInfoSearch, OrderBilling, OrderBillingSearchResults, OrderBillingSearchTerms, ProxyCompanyBillingInfoSearch,
-    RussiaBillingInfoSearch, StoreBillingTypeSearch,
+    InternationalBillingInfoSearch, OrderBillingInfo, OrderBillingInfoSearchResults, OrderBillingSearchTerms,
+    ProxyCompanyBillingInfoSearch, RussiaBillingInfoSearch, StoreBillingTypeSearch,
 };
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 
 pub trait OrderBillingService {
-    fn search(&self, skip: i64, count: i64, payload: OrderBillingSearchTerms) -> ServiceFutureV2<OrderBillingSearchResults>;
+    fn search(&self, skip: i64, count: i64, payload: OrderBillingSearchTerms) -> ServiceFutureV2<OrderBillingInfoSearchResults>;
 }
 
 pub struct OrderBillingServiceImpl<
@@ -51,7 +51,7 @@ impl<
         AS: AccountService + Clone,
     > OrderBillingService for OrderBillingServiceImpl<T, M, F, C, PC, AS>
 {
-    fn search(&self, skip: i64, count: i64, payload: OrderBillingSearchTerms) -> ServiceFutureV2<OrderBillingSearchResults> {
+    fn search(&self, skip: i64, count: i64, payload: OrderBillingSearchTerms) -> ServiceFutureV2<OrderBillingInfoSearchResults> {
         let repo_factory = self.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
 
@@ -121,7 +121,7 @@ impl<
                         .get(&store_id)
                         .map(|store_billing| store_billing.billing_type)
                         .unwrap_or(BillingType::International);
-                    OrderBilling {
+                    OrderBillingInfo {
                         russia_billing_info: russia_billings.get(&store_id).cloned(),
                         international_billing_info: international_billings.get(&store_id).cloned(),
                         billing_type,
@@ -133,7 +133,7 @@ impl<
                 })
                 .collect();
 
-            Ok(OrderBillingSearchResults { total_count, orders })
+            Ok(OrderBillingInfoSearchResults { total_count, orders })
         })
     }
 }
