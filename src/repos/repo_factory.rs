@@ -34,6 +34,8 @@ where
     fn create_payment_intent_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentRepo + 'a>;
     fn create_customers_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<CustomersRepo + 'a>;
     fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a>;
+    fn create_fees_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<FeeRepo + 'a>;
+    fn create_fees_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<FeeRepo + 'a>;
     fn create_store_billing_type_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_store_billing_type_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_international_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>)
@@ -223,6 +225,16 @@ where
     fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a> {
         let acl = Box::new(SystemACL::default());
         Box::new(CustomersRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_fees_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<FeeRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(FeeRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_fees_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<FeeRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(FeeRepoImpl::new(db_conn, acl))
     }
 
     fn create_store_billing_type_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a> {
@@ -416,6 +428,14 @@ pub mod tests {
             Box::new(CustomersRepoMock::default())
         }
 
+        fn create_fees_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<FeeRepo + 'a> {
+            Box::new(FeesRepoMock::default())
+        }
+
+        fn create_fees_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<FeeRepo + 'a> {
+            Box::new(FeesRepoMock::default())
+        }
+
         fn create_store_billing_type_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a> {
             Box::new(StoreBillingTypeRepoMock::default())
         }
@@ -581,6 +601,44 @@ pub mod tests {
             let customer = create_db_customer();
 
             Ok(Some(DbCustomer { id, ..customer }))
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct FeesRepoMock;
+
+    impl FeeRepo for FeesRepoMock {
+        fn get(&self, search: SearchFee) -> RepoResultV2<Option<Fee>> {
+            let fee = create_fee();
+
+            let res = match search {
+                SearchFee::Id(fee_id) => Fee { id: fee_id, ..fee },
+                SearchFee::OrderId(order_id) => Fee { order_id, ..fee },
+            };
+
+            Ok(Some(res))
+        }
+
+        fn create(&self, payload: NewFee) -> RepoResultV2<Fee> {
+            let fee = create_fee();
+
+            Ok(Fee {
+                order_id: payload.order_id,
+                amount: payload.amount,
+                status: payload.status,
+                currency: payload.currency,
+                ..fee
+            })
+        }
+
+        fn update(&self, fee_id: FeeId, _payload: UpdateFee) -> RepoResultV2<Fee> {
+            let fee = create_fee();
+
+            Ok(Fee { id: fee_id, ..fee })
+        }
+
+        fn delete(&self, _fee_id: FeeId) -> RepoResultV2<()> {
+            Ok(())
         }
     }
 
@@ -1173,6 +1231,21 @@ pub mod tests {
             id: CustomerId::new("cus_ELDLXPOc4SVNP4".to_string()),
             user_id: UserId(1),
             email: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    fn create_fee() -> Fee {
+        let now = chrono::offset::Utc::now().naive_utc();
+        Fee {
+            id: FeeId::new(1),
+            order_id: OrderV2Id::new(Uuid::new_v4()),
+            amount: Amount::new(100),
+            status: FeeStatus::NotPaid,
+            currency: BillingCurrency::Eur,
+            charge_id: None,
+            metadata: None,
             created_at: now,
             updated_at: now,
         }

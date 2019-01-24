@@ -14,6 +14,7 @@ pub enum Resource {
     ProxyCompanyBillingInfo,
     StoreBillingType,
     Customer,
+    Fee,
 }
 
 impl fmt::Display for Resource {
@@ -30,6 +31,7 @@ impl fmt::Display for Resource {
             Resource::ProxyCompanyBillingInfo => write!(f, "proxy company billing info"),
             Resource::StoreBillingType => write!(f, "store billing type"),
             Resource::Customer => write!(f, "customer"),
+            Resource::Fee => write!(f, "fee"),
         }
     }
 }

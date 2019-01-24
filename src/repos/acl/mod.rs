@@ -62,6 +62,7 @@ impl ApplicationAcl {
                 permission!(Resource::OrderExchangeRate),
                 permission!(Resource::PaymentIntent),
                 permission!(Resource::Customer),
+                permission!(Resource::Fee),
                 permission!(Resource::StoreBillingType),
                 permission!(Resource::BillingInfo),
             ],
@@ -80,6 +81,8 @@ impl ApplicationAcl {
                 permission!(Resource::PaymentIntent, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Write, Scope::Owned),
+                permission!(Resource::Fee, Action::Read),
+                permission!(Resource::Fee, Action::Write),
             ],
         );
         hash.insert(
@@ -99,6 +102,7 @@ impl ApplicationAcl {
             vec![
                 permission!(Resource::StoreBillingType, Action::Read),
                 permission!(Resource::BillingInfo, Action::Read),
+                permission!(Resource::Fee, Action::Read),
             ],
         );
         ApplicationAcl {
