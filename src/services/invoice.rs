@@ -1,5 +1,6 @@
 //! Invoices Services, presents CRUD operations with invoices
 use std::str::FromStr;
+use std::sync::Arc;
 
 use bigdecimal::BigDecimal;
 use diesel::connection::AnsiTransactionManager;
@@ -75,6 +76,13 @@ pub trait InvoiceService {
     fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
     /// Handles the callback from Stripe
     fn handle_stripe_event(&self, signature_header: StripeSignature, event_payload: String) -> ServiceFutureV2<()>;
+    /// Get missing rates from Payments gateway and refresh existing rates
+    fn get_missing_rates_from_payments_gateway_and_refresh_existing_rates(
+        &self,
+        invoice: InvoiceV2,
+        current_order_rates: Vec<(RawOrder, Option<RawOrderExchangeRate>)>,
+        user_id: Option<stq_types::UserId>,
+    ) -> ServiceFutureV2<()>;
 }
 
 impl<
@@ -536,13 +544,6 @@ impl<
     }
 
     fn recalc_invoice_v2(&self, id: InvoiceV2Id) -> ServiceFutureV2<Option<InvoiceDump>> {
-        let payments_client = if let Some(payments_client) = self.dynamic_context.payments_client.clone() {
-            payments_client
-        } else {
-            let e = err_msg("payments integration has not been configured");
-            return Box::new(future::err::<_, ServiceError>(ectx!(err e, ErrorKind::Internal)));
-        };
-
         let db_pool = self.static_context.db_pool.clone();
         let cpu_pool = self.static_context.cpu_pool.clone();
 
@@ -594,6 +595,7 @@ impl<
             let cpu_pool = self.static_context.cpu_pool.clone();
             let repo_factory = self.static_context.repo_factory.clone();
             let user_id = self.dynamic_context.user_id;
+            let self_ = self.clone();
 
             move |invoice_data| match invoice_data {
                 None => future::Either::A(future::ok(None)),
@@ -608,52 +610,39 @@ impl<
                     }
 
                     // Get missing rates from Payments gateway and refresh existing rates
-                    let fut = to_ture_currency(invoice.buyer_currency.clone())
-                        .and_then(move |buyer_currency| refresh_rates(payments_client, buyer_currency, current_order_rates))
-                        // Save new and updated rates to database
-                        .and_then({
-                            let db_pool = db_pool.clone();
-                            let cpu_pool = cpu_pool.clone();
-                            let repo_factory = repo_factory.clone();
-                            move |new_active_rates| {
-                                spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                    let fut = if invoice.buyer_currency.is_fiat() {
+                        future::Either::A(future::ok(()))
+                    } else {
+                        future::Either::B(self_.get_missing_rates_from_payments_gateway_and_refresh_existing_rates(
+                            invoice.clone(),
+                            current_order_rates,
+                            user_id,
+                        ))
+                    };
 
-                                    new_active_rates
-                                        .into_iter()
-                                        .map(|new_rate| {
-                                            rates_repo
-                                                .add_new_active_rate(new_rate.clone())
-                                                .map_err(ectx!(convert => new_rate))
-                                                .map(|_| ())
-                                        })
-                                        .collect::<Result<Vec<_>, ServiceError>>()
-                                })
-                            }
-                        })
-                        .and_then({
-                            let db_pool = db_pool.clone();
-                            let cpu_pool = cpu_pool.clone();
-                            move |_| {
-                                spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                                    let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
-                                    let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
-                                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
-                                    let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
-                                    let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
+                    let fut = fut.and_then({
+                        let db_pool = db_pool.clone();
+                        let cpu_pool = cpu_pool.clone();
+                        move |_| {
+                            spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                                let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                                let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+                                let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                                let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
+                                let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
-                                    calculate_invoice_price_and_set_final_price_if_paid(
-                                        &*conn,
-                                        &*invoices_repo,
-                                        &*orders_repo,
-                                        &*rates_repo,
-                                        &*accounts_repo,
-                                        &*event_store_repo,
-                                        invoice.id.clone(),
-                                    )
-                                })
-                            }
-                        });
+                                calculate_invoice_price_and_set_final_price_if_paid(
+                                    &*conn,
+                                    &*invoices_repo,
+                                    &*orders_repo,
+                                    &*rates_repo,
+                                    &*accounts_repo,
+                                    &*event_store_repo,
+                                    invoice.id.clone(),
+                                )
+                            })
+                        }
+                    });
 
                     future::Either::B(fut)
                 }))),
@@ -1017,6 +1006,49 @@ impl<
 
         Box::new(fut)
     }
+
+    fn get_missing_rates_from_payments_gateway_and_refresh_existing_rates(
+        &self,
+        invoice: InvoiceV2,
+        current_order_rates: Vec<(RawOrder, Option<RawOrderExchangeRate>)>,
+        user_id: Option<stq_types::UserId>,
+    ) -> ServiceFutureV2<()> {
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+        let repo_factory = self.static_context.repo_factory.clone();
+
+        let fut = self
+            .dynamic_context
+            .payments_client
+            .clone()
+            .ok_or_else(|| {
+                let e = err_msg("payments integration has not been configured");
+                ectx!(err e, ErrorKind::Internal)
+            })
+            .into_future()
+            .and_then(move |payments_client| {
+                to_ture_currency(invoice.buyer_currency.clone()).map(move |buyer_currency| (payments_client, buyer_currency))
+            })
+            .and_then(move |(payments_client, buyer_currency)| refresh_rates(payments_client, buyer_currency, current_order_rates))
+            // Save new and updated rates to database
+            .and_then(move |new_active_rates| {
+                spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                    let rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+
+                    new_active_rates
+                        .into_iter()
+                        .map(|new_rate| {
+                            rates_repo
+                                .add_new_active_rate(new_rate.clone())
+                                .map_err(ectx!(convert => new_rate))
+                                .map(|_| ())
+                        })
+                        .collect::<Result<Vec<_>, ServiceError>>()
+                })
+            })
+            .map(|_| ());
+        Box::new(fut)
+    }
 }
 
 fn exchage_rate_fiat(
@@ -1057,7 +1089,7 @@ where
 }
 
 fn create_payment_intent(
-    stripe_client: std::sync::Arc<dyn StripeClient>,
+    stripe_client: Arc<dyn StripeClient>,
     orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
     invoice_id: InvoiceV2Id,
     buyer_currency: Currency,
