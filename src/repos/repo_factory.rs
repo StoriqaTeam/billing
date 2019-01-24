@@ -1125,11 +1125,16 @@ pub mod tests {
     fn proxy_companies_billing_info() -> ProxyCompanyBillingInfo {
         ProxyCompanyBillingInfo {
             id: ProxyCompanyBillingInfoId(1),
-            country: Alpha3("RUS".to_string()),
-            swift_bic: SwiftId("swift_bic".to_string()),
-            bank_name: "bank_name".to_string(),
-            full_name: "full_name".to_string(),
-            iban: "iban".to_string(),
+            country_alpha3: Alpha3("RUS".to_string()),
+            swift: SwiftId("swift_bic".to_string()),
+            currency: Currency::RUB,
+            account: "account".to_string(),
+            name: "name".to_string(),
+            bank: "bank".to_string(),
+            bank_address: "bank_address".to_string(),
+            country: "country".to_string(),
+            city: "city".to_string(),
+            recipient_address: "recipient_address".to_string(),
         }
     }
 

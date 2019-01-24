@@ -152,11 +152,16 @@ table! {
 table! {
     proxy_companies_billing_info (id) {
         id -> Int4,
+        country_alpha3 -> Varchar,
+        account -> Varchar,
+        currency -> Varchar,
+        name -> Varchar,
+        bank -> Varchar,
+        swift -> Varchar,
+        bank_address -> Varchar,
         country -> Varchar,
-        swift_bic -> Varchar,
-        bank_name -> Varchar,
-        full_name -> Varchar,
-        iban -> Varchar,
+        city -> Varchar,
+        recipient_address -> Varchar,
     }
 }
 
