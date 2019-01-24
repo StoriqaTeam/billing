@@ -129,8 +129,8 @@ fn into_expr(search: ProxyCompanyBillingInfoSearch) -> Option<BoxedExpr> {
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(country_filter) = search.country {
-        let new_condition = ProxyCompanyBillingInfoDsl::country.eq(country_filter);
+    if let Some(country_alpha3_filter) = search.country_alpha3 {
+        let new_condition = ProxyCompanyBillingInfoDsl::country_alpha3.eq(country_alpha3_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 

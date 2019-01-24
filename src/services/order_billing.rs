@@ -109,7 +109,7 @@ impl<
             // todo find correct store country
             let russia = Alpha3("RUS".to_string());
             let proxy_company_billing_info = proxy_companies_billing_info_repo
-                .get(ProxyCompanyBillingInfoSearch::by_country(russia))
+                .get(ProxyCompanyBillingInfoSearch::by_country_alpha3(russia))
                 .map_err(ectx!(try convert))?;
 
             let total_count = orders_search_result.total_count;
