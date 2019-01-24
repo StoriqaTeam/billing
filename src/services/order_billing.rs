@@ -106,6 +106,7 @@ impl<
                 .map(|billing| (billing.store_id, billing))
                 .collect();
 
+            // todo find correct store country
             let russia = Alpha3("RUS".to_string());
             let proxy_company_billing_info = proxy_companies_billing_info_repo
                 .get(ProxyCompanyBillingInfoSearch::by_country(russia))
