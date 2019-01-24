@@ -41,6 +41,7 @@ pub enum Route {
     RussiaBillingInfos,
     InternationalBillingInfo { id: InternationalBillingId },
     RussiaBillingInfo { id: RussiaBillingId },
+    FeesByOrder { id: Orderv2Id },
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -158,6 +159,13 @@ pub fn create_route_parser() -> RouteParser<Route> {
     route_parser.add_route(r"^/orders/search$", || Route::OrderSearch);
 
     route_parser.add_route(r"^/customers$", || Route::Customers);
+
+    route_parser.add_route_with_params(r"^/fees/by-order-id/([a-zA-Z0-9-]+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::FeesByOrder { id })
+    });
 
     route_parser.add_route(r"^/customers/with_source$", || Route::CustomersWithSource);
     route_parser.add_route(r"^/order_billing_info$", || Route::OrderBillingInfo);

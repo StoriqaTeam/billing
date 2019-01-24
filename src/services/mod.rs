@@ -5,6 +5,7 @@ pub mod accounts;
 pub mod billing_info;
 pub mod customer;
 pub mod error;
+pub mod fee;
 pub mod invoice;
 pub mod merchant;
 pub mod order;

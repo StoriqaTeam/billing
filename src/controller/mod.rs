@@ -40,6 +40,7 @@ use services::accounts::AccountServiceImpl;
 use services::billing_info::{BillingInfoService, BillingInfoServiceImpl};
 use services::customer::CustomersService;
 use services::customer::CustomersServiceImpl;
+use services::fee::{FeesService, FeesServiceImpl};
 use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
 use services::order::OrderService;
@@ -143,6 +144,13 @@ impl<
         });
 
         let billing_info_service = Arc::new(BillingInfoServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
+        });
+
+        let fees_service = Arc::new(FeesServiceImpl {
             db_pool: self.static_context.db_pool.clone(),
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
@@ -293,6 +301,8 @@ impl<
                         .map_err(failure::Error::from)
                 })
             }),
+
+            (Get, Some(Route::FeesByOrder { id })) => serialize_future({ fees_service.get_by_order_id(id).map_err(failure::Error::from) }),
 
             // Fallback
             (m, _) => not_found(m, path),
