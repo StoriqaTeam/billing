@@ -326,7 +326,7 @@ pub mod tests {
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
-    use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder, StoreId as StoreV2Id};
+    use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, OrderSearchResults, OrdersSearch, RawOrder, StoreId as StoreV2Id};
     use models::*;
     use models::{Currency as BillingCurrency, NewPaymentIntent, PaymentIntent, TransactionId, TureCurrency, UpdatePaymentIntent};
     use repos::*;
@@ -489,6 +489,14 @@ pub mod tests {
         fn get(&self, _search: StoreBillingTypeSearch) -> RepoResultV2<Option<StoreBillingType>> {
             Ok(Some(store_billing_type()))
         }
+
+        fn search(&self, _search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>> {
+            Ok(vec![store_billing_type()])
+        }
+
+        fn update(&self, _search: StoreBillingTypeSearch, _payload: UpdateStoreBillingType) -> RepoResultV2<StoreBillingType> {
+            Ok(store_billing_type())
+        }
     }
 
     #[derive(Clone, Default)]
@@ -503,11 +511,19 @@ pub mod tests {
             Ok(Some(international_billing_info()))
         }
 
+        fn search(&self, _search: InternationalBillingInfoSearch) -> RepoResultV2<Vec<InternationalBillingInfo>> {
+            Ok(vec![international_billing_info()])
+        }
+
         fn update(
             &self,
             _search_params: InternationalBillingInfoSearch,
             _payload: UpdateInternationalBillingInfo,
         ) -> RepoResultV2<InternationalBillingInfo> {
+            Ok(international_billing_info())
+        }
+
+        fn delete(&self, _search_params: InternationalBillingInfoSearch) -> RepoResultV2<InternationalBillingInfo> {
             Ok(international_billing_info())
         }
     }
@@ -524,7 +540,15 @@ pub mod tests {
             Ok(Some(russian_billing_info()))
         }
 
+        fn search(&self, _search: RussiaBillingInfoSearch) -> RepoResultV2<Vec<RussiaBillingInfo>> {
+            Ok(vec![russian_billing_info()])
+        }
+
         fn update(&self, _search_params: RussiaBillingInfoSearch, _payload: UpdateRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo> {
+            Ok(russian_billing_info())
+        }
+
+        fn delete(&self, _search_params: RussiaBillingInfoSearch) -> RepoResultV2<RussiaBillingInfo> {
             Ok(russian_billing_info())
         }
     }
@@ -922,6 +946,13 @@ pub mod tests {
             Ok(vec![])
         }
 
+        fn search(&self, _skip: i64, _count: i64, _search: OrdersSearch) -> RepoResultV2<OrderSearchResults> {
+            Ok(OrderSearchResults {
+                total_count: 0,
+                orders: vec![],
+            })
+        }
+
         fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder> {
             let NewOrder {
                 id,
@@ -1106,11 +1137,16 @@ pub mod tests {
     fn proxy_companies_billing_info() -> ProxyCompanyBillingInfo {
         ProxyCompanyBillingInfo {
             id: ProxyCompanyBillingInfoId(1),
-            country: Alpha3("RUS".to_string()),
-            swift_bic: SwiftId("swift_bic".to_string()),
-            bank_name: "bank_name".to_string(),
-            full_name: "full_name".to_string(),
-            iban: "iban".to_string(),
+            country_alpha3: Alpha3("RUS".to_string()),
+            swift: SwiftId("swift_bic".to_string()),
+            currency: Currency::RUB,
+            account: "account".to_string(),
+            name: "name".to_string(),
+            bank: "bank".to_string(),
+            bank_address: "bank_address".to_string(),
+            country: "country".to_string(),
+            city: "city".to_string(),
+            recipient_address: "recipient_address".to_string(),
         }
     }
 

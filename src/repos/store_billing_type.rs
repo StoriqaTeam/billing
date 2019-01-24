@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use diesel;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
@@ -8,18 +10,20 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 
-use repos::legacy_acl::*;
+use stq_types::{StoreId, UserId};
 
 use models::authorization::*;
-use models::{NewStoreBillingType, StoreBillingType, StoreBillingTypeSearch};
+use models::{NewStoreBillingType, StoreBillingType, StoreBillingTypeSearch, UpdateStoreBillingType};
+use repos::legacy_acl::*;
 
+use schema::merchants::dsl as MerchantDsl;
 use schema::store_billing_type::dsl as StoreBillingTypeDsl;
 
 use super::acl;
 use super::error::*;
 use super::types::RepoResultV2;
 
-type StoreBillingTypeRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, StoreBillingType>>;
+type StoreBillingTypeRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, StoreBillingTypeAccess>>;
 
 type BoxedExpr = Box<BoxableExpression<crate::schema::store_billing_type::table, Pg, SqlType = Bool>>;
 
@@ -28,9 +32,15 @@ pub struct StoreBillingTypeRepoImpl<'a, T: Connection<Backend = Pg, TransactionM
     pub acl: StoreBillingTypeRepoAcl,
 }
 
+pub struct StoreBillingTypeAccess {
+    store_id: StoreId,
+}
+
 pub trait StoreBillingTypeRepo {
     fn create(&self, new_store_billing_type: NewStoreBillingType) -> RepoResultV2<StoreBillingType>;
     fn get(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Option<StoreBillingType>>;
+    fn search(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>>;
+    fn update(&self, search: StoreBillingTypeSearch, payload: UpdateStoreBillingType) -> RepoResultV2<StoreBillingType>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> StoreBillingTypeRepoImpl<'a, T> {
@@ -44,7 +54,16 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 {
     fn create(&self, new_store_billing_type: NewStoreBillingType) -> RepoResultV2<StoreBillingType> {
         debug!("create store billing type {:?}.", new_store_billing_type);
-        acl::check(&*self.acl, Resource::StoreBillingType, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+        acl::check(
+            &*self.acl,
+            Resource::StoreBillingType,
+            Action::Write,
+            self,
+            Some(&StoreBillingTypeAccess {
+                store_id: new_store_billing_type.store_id,
+            }),
+        )
+        .map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::insert_into(StoreBillingTypeDsl::store_billing_type).values(&new_store_billing_type);
 
@@ -56,6 +75,42 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     fn get(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Option<StoreBillingType>> {
         debug!("get store billing type {:?}.", search);
+
+        let query: Option<BoxedExpr> = into_expr(search);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("store billing type search is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let billing_type = crate::schema::store_billing_type::table
+            .filter(query)
+            .get_result::<StoreBillingType>(self.db_conn)
+            .optional()
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        if let Some(ref billing_type) = billing_type {
+            acl::check(
+                &*self.acl,
+                Resource::StoreBillingType,
+                Action::Read,
+                self,
+                Some(&StoreBillingTypeAccess {
+                    store_id: billing_type.store_id,
+                }),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(billing_type)
+    }
+
+    fn search(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>> {
+        debug!("search store billing type {:?}.", search);
+
         acl::check(&*self.acl, Resource::StoreBillingType, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let query: Option<BoxedExpr> = into_expr(search);
@@ -65,22 +120,70 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             ectx!(try err e, ErrorKind::Internal)
         })?;
 
-        crate::schema::store_billing_type::table
+        let entries = crate::schema::store_billing_type::table
             .filter(query)
-            .get_result(self.db_conn)
-            .optional()
+            .get_results::<StoreBillingType>(self.db_conn)
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
-                ectx!(err e, ErrorSource::Diesel, error_kind)
-            })
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        let store_ids: HashSet<StoreId> = entries.iter().map(|billing_type| billing_type.store_id).collect();
+
+        for store_id in store_ids {
+            let access = StoreBillingTypeAccess { store_id };
+            acl::check(&*self.acl, Resource::StoreBillingType, Action::Read, self, Some(&access))
+                .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(entries)
+    }
+
+    fn update(&self, search_params: StoreBillingTypeSearch, payload: UpdateStoreBillingType) -> RepoResultV2<StoreBillingType> {
+        debug!("update store billing type {:?}.", search_params);
+        let updated_entry = self.get(search_params.clone())?;
+        let access = updated_entry
+            .as_ref()
+            .map(|entry| StoreBillingTypeAccess { store_id: entry.store_id });
+        acl::check(&*self.acl, Resource::StoreBillingType, Action::Write, self, access.as_ref())
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("store billing type search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let query = diesel::update(crate::schema::store_billing_type::table.filter(query)).set(&payload);
+        query.get_result::<StoreBillingType>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
     }
 }
 
-impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, StoreBillingType>
+impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, StoreBillingTypeAccess>
     for StoreBillingTypeRepoImpl<'a, T>
 {
-    fn is_in_scope(&self, _user_id: stq_types::UserId, _scope: &Scope, _obj: Option<&StoreBillingType>) -> bool {
-        true
+    fn is_in_scope(&self, user_id: UserId, scope: &Scope, obj: Option<&StoreBillingTypeAccess>) -> bool {
+        match *scope {
+            Scope::All => true,
+            Scope::Owned => {
+                if let Some(StoreBillingTypeAccess { store_id }) = obj {
+                    let query = MerchantDsl::merchants
+                        .filter(MerchantDsl::store_id.eq(store_id))
+                        .select(MerchantDsl::user_id);
+
+                    match query.get_result::<Option<UserId>>(self.db_conn) {
+                        Ok(None) => false,
+                        Ok(Some(store_owner_id)) => store_owner_id == user_id,
+                        Err(_) => false,
+                    }
+                } else {
+                    false
+                }
+            }
+        }
     }
 }
 
@@ -99,6 +202,11 @@ fn into_expr(search: StoreBillingTypeSearch) -> Option<BoxedExpr> {
 
     if let Some(billing_type_filter) = search.billing_type {
         let new_condition = StoreBillingTypeDsl::billing_type.eq(billing_type_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(store_ids_filter) = search.store_ids {
+        let new_condition = StoreBillingTypeDsl::store_id.eq_any(store_ids_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 

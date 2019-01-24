@@ -17,7 +17,7 @@ use super::error::{ErrorContext, ErrorKind};
 use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
 use client::stripe::StripeClient;
-use models::order_v2::{OrderId, RawOrder};
+use models::order_v2::{OrderId, OrderSearchResults, OrdersSearch, RawOrder};
 use models::PaymentState;
 use repos::{ReposFactory, SearchPaymentIntent};
 use services::accounts::AccountService;
@@ -29,6 +29,10 @@ pub trait OrderService {
     fn order_capture(&self, order_id: OrderId) -> ServiceFutureV2<()>;
     /// Refunding charge on order and setting order state to Cancel
     fn order_decline(&self, order_id: OrderId) -> ServiceFutureV2<()>;
+    /// Update order payment state
+    fn update_order_state(&self, order_id: OrderId, state: PaymentState) -> ServiceFutureV2<()>;
+    // Search orders
+    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResults>;
 }
 
 impl<
@@ -83,6 +87,7 @@ impl<
             }),
         )
     }
+
     fn order_decline(&self, order_id: OrderId) -> ServiceFutureV2<()> {
         let repo_factory = self.static_context.repo_factory.clone();
         let stripe_client = self.static_context.stripe_client.clone();
@@ -125,6 +130,55 @@ impl<
                 }
             }),
         )
+    }
+
+    fn update_order_state(&self, order_id: OrderId, state: PaymentState) -> ServiceFutureV2<()> {
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            info!("Set new payment state order by id: {}, payment_state: {:?}", order_id, state);
+
+            let order = orders_repo.get(order_id).map_err(ectx!(try convert => order_id))?.ok_or({
+                let e = format_err!("Order {} not found", order_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+
+            if check_change_order_payment_state(order.state, state) {
+                orders_repo
+                    .update_state(order_id, state)
+                    .map_err(ectx!(convert => order_id, state))
+                    .map(|_| ())
+            } else {
+                let mut errors = ValidationErrors::new();
+                let mut error = ValidationError::new("wrong_state");
+                error.message = Some(format!("Cannot change order state from \"{}\" to \"{}\"", order.state, state).into());
+                errors.add("order", error);
+                return Err(ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
+            }
+        });
+
+        Box::new(fut)
+    }
+
+    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResults> {
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+
+        spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            debug!("Requesting orders  {:?}", payload);
+
+            let orders = orders_repo.search(skip, count, payload).map_err(ectx!(try convert))?;
+            Ok(orders)
+        })
     }
 }
 
@@ -313,4 +367,21 @@ where
             .map(|_| ())
     });
     Box::new(fut)
+}
+
+fn check_change_order_payment_state(current_state: PaymentState, new_state: PaymentState) -> bool {
+    use models::PaymentState::*;
+
+    match (current_state, new_state) {
+        (Initial, Captured)
+        | (Initial, Declined)
+        | (Captured, RefundNeeded)
+        | (Captured, PaymentToSellerNeeded)
+        | (RefundNeeded, Refunded)
+        | (PaymentToSellerNeeded, PaidToSeller) => true,
+        _ => {
+            error!("Change state from {} to {} unreachable.", current_state, new_state);
+            false
+        }
+    }
 }

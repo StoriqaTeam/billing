@@ -43,6 +43,7 @@ extern crate sha2;
 extern crate stq_cache;
 #[macro_use]
 extern crate stq_diesel_macro_derive;
+#[macro_use]
 extern crate stq_http;
 extern crate stq_logging;
 extern crate stq_router;

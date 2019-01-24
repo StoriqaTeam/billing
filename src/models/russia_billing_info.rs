@@ -36,4 +36,26 @@ pub struct NewRussiaBillingInfo {
 pub struct RussiaBillingInfoSearch {
     pub id: Option<RussiaBillingId>,
     pub store_id: Option<StoreId>,
+    pub store_ids: Option<Vec<StoreId>>,
+}
+
+impl RussiaBillingInfoSearch {
+    pub fn by_id(id: RussiaBillingId) -> RussiaBillingInfoSearch {
+        RussiaBillingInfoSearch {
+            id: Some(id),
+            ..Default::default()
+        }
+    }
+    pub fn by_store_id(store_id: StoreId) -> RussiaBillingInfoSearch {
+        RussiaBillingInfoSearch {
+            store_id: Some(store_id),
+            ..Default::default()
+        }
+    }
+    pub fn by_store_ids(store_ids: Vec<StoreId>) -> RussiaBillingInfoSearch {
+        RussiaBillingInfoSearch {
+            store_ids: Some(store_ids),
+            ..Default::default()
+        }
+    }
 }

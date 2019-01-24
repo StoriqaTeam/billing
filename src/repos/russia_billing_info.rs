@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use diesel;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
@@ -37,7 +39,9 @@ pub struct RussiaBillingInfoAccess {
 pub trait RussiaBillingInfoRepo {
     fn create(&self, new_store_billing_type: NewRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo>;
     fn get(&self, search: RussiaBillingInfoSearch) -> RepoResultV2<Option<RussiaBillingInfo>>;
+    fn search(&self, search: RussiaBillingInfoSearch) -> RepoResultV2<Vec<RussiaBillingInfo>>;
     fn update(&self, search_params: RussiaBillingInfoSearch, payload: UpdateRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo>;
+    fn delete(&self, search_params: RussiaBillingInfoSearch) -> RepoResultV2<RussiaBillingInfo>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> RussiaBillingInfoRepoImpl<'a, T> {
@@ -100,13 +104,40 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         Ok(billing_info)
     }
 
+    fn search(&self, search_params: RussiaBillingInfoSearch) -> RepoResultV2<Vec<RussiaBillingInfo>> {
+        debug!("search russia billing info {:?}.", search_params);
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("russia billing info search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let billing_info = crate::schema::russia_billing_info::table
+            .filter(query)
+            .get_results::<RussiaBillingInfo>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        let store_ids: HashSet<StoreId> = billing_info.iter().map(|info| info.store_id).collect();
+
+        for store_id in store_ids {
+            let access = RussiaBillingInfoAccess { store_id };
+            acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, Some(&access)).map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(billing_info)
+    }
+
     fn update(&self, search_params: RussiaBillingInfoSearch, payload: UpdateRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo> {
         debug!("update russia billing info {:?}.", search_params);
         let updated_entry = self.get(search_params.clone())?;
         let access = updated_entry
             .as_ref()
             .map(|entry| RussiaBillingInfoAccess { store_id: entry.store_id });
-        acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
+        acl::check(&*self.acl, Resource::BillingInfo, Action::Write, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {
@@ -115,6 +146,27 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         })?;
 
         let query = diesel::update(crate::schema::russia_billing_info::table.filter(query)).set(&payload);
+        query.get_result::<RussiaBillingInfo>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+
+    fn delete(&self, search_params: RussiaBillingInfoSearch) -> RepoResultV2<RussiaBillingInfo> {
+        debug!("update russia billing info {:?}.", search_params);
+        let updated_entry = self.get(search_params.clone())?;
+        let access = updated_entry
+            .as_ref()
+            .map(|entry| RussiaBillingInfoAccess { store_id: entry.store_id });
+        acl::check(&*self.acl, Resource::BillingInfo, Action::Write, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("russia billing info search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let query = diesel::delete(crate::schema::russia_billing_info::table.filter(query));
         query.get_result::<RussiaBillingInfo>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(err e, ErrorSource::Diesel, error_kind)

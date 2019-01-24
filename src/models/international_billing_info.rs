@@ -37,4 +37,28 @@ pub struct InternationalBillingInfoSearch {
     pub id: Option<InternationalBillingId>,
     pub store_id: Option<StoreId>,
     pub swift_bic: Option<SwiftId>,
+    pub store_ids: Option<Vec<StoreId>>,
+}
+
+impl InternationalBillingInfoSearch {
+    pub fn by_id(id: InternationalBillingId) -> InternationalBillingInfoSearch {
+        InternationalBillingInfoSearch {
+            id: Some(id),
+            ..Default::default()
+        }
+    }
+
+    pub fn by_store_id(store_id: StoreId) -> InternationalBillingInfoSearch {
+        InternationalBillingInfoSearch {
+            store_id: Some(store_id),
+            ..Default::default()
+        }
+    }
+
+    pub fn by_store_ids(store_ids: Vec<StoreId>) -> InternationalBillingInfoSearch {
+        InternationalBillingInfoSearch {
+            store_ids: Some(store_ids),
+            ..Default::default()
+        }
+    }
 }

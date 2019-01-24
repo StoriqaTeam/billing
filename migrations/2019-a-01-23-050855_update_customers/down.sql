@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS customers_id_user_id_idx;

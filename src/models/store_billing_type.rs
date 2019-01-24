@@ -17,9 +17,33 @@ pub struct NewStoreBillingType {
     pub billing_type: BillingType,
 }
 
-#[derive(Clone, Copy, Serialize, Debug, Default)]
+#[derive(Clone, Serialize, Debug, Default)]
 pub struct StoreBillingTypeSearch {
     pub id: Option<StoreBillingTypeId>,
     pub store_id: Option<StoreId>,
+    pub store_ids: Option<Vec<StoreId>>,
     pub billing_type: Option<BillingType>,
+}
+
+#[derive(Serialize, Deserialize, Insertable, AsChangeset, Debug, Clone, Default)]
+#[table_name = "store_billing_type"]
+pub struct UpdateStoreBillingType {
+    pub store_id: Option<StoreId>,
+    pub billing_type: Option<BillingType>,
+}
+
+impl StoreBillingTypeSearch {
+    pub fn by_store_id(store_id: StoreId) -> StoreBillingTypeSearch {
+        StoreBillingTypeSearch {
+            store_id: Some(store_id),
+            ..Default::default()
+        }
+    }
+
+    pub fn by_store_ids(store_ids: Vec<StoreId>) -> StoreBillingTypeSearch {
+        StoreBillingTypeSearch {
+            store_ids: Some(store_ids),
+            ..Default::default()
+        }
+    }
 }

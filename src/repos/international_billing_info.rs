@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use diesel;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
@@ -37,11 +39,13 @@ pub struct InternationalBillingInfoAccess {
 pub trait InternationalBillingInfoRepo {
     fn create(&self, new_store_billing_type: NewInternationalBillingInfo) -> RepoResultV2<InternationalBillingInfo>;
     fn get(&self, search: InternationalBillingInfoSearch) -> RepoResultV2<Option<InternationalBillingInfo>>;
+    fn search(&self, search: InternationalBillingInfoSearch) -> RepoResultV2<Vec<InternationalBillingInfo>>;
     fn update(
         &self,
         search_params: InternationalBillingInfoSearch,
         payload: UpdateInternationalBillingInfo,
     ) -> RepoResultV2<InternationalBillingInfo>;
+    fn delete(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<InternationalBillingInfo>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> InternationalBillingInfoRepoImpl<'a, T> {
@@ -79,7 +83,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {
-            let e = format_err!("store billing info search_params is empty");
+            let e = format_err!("international billing info search_params is empty");
             ectx!(try err e, ErrorKind::Internal)
         })?;
 
@@ -104,6 +108,33 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         Ok(billing_info)
     }
 
+    fn search(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<Vec<InternationalBillingInfo>> {
+        debug!("get international billing info {:?}.", search_params);
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("international billing info search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let billing_info = crate::schema::international_billing_info::table
+            .filter(query)
+            .get_results::<InternationalBillingInfo>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        let store_ids: HashSet<StoreId> = billing_info.iter().map(|info| info.store_id).collect();
+
+        for store_id in store_ids {
+            let access = InternationalBillingInfoAccess { store_id };
+            acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, Some(&access)).map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(billing_info)
+    }
+
     fn update(
         &self,
         search_params: InternationalBillingInfoSearch,
@@ -114,15 +145,36 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         let access = updated_entry
             .as_ref()
             .map(|entry| InternationalBillingInfoAccess { store_id: entry.store_id });
-        acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
+        acl::check(&*self.acl, Resource::BillingInfo, Action::Write, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {
-            let e = format_err!("store billing info search_params is empty");
+            let e = format_err!("international billing info search_params is empty");
             ectx!(try err e, ErrorKind::Internal)
         })?;
 
         let query = diesel::update(crate::schema::international_billing_info::table.filter(query)).set(&payload);
+        query.get_result::<InternationalBillingInfo>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+
+    fn delete(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<InternationalBillingInfo> {
+        debug!("delete international billing info {:?}.", search_params);
+        let deleted_entry = self.get(search_params.clone())?;
+        let access = deleted_entry
+            .as_ref()
+            .map(|entry| InternationalBillingInfoAccess { store_id: entry.store_id });
+        acl::check(&*self.acl, Resource::BillingInfo, Action::Write, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("international billing info search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let query = diesel::delete(crate::schema::international_billing_info::table.filter(query));
         query.get_result::<InternationalBillingInfo>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(err e, ErrorSource::Diesel, error_kind)
@@ -165,6 +217,11 @@ fn into_expr(search: InternationalBillingInfoSearch) -> Option<BoxedExpr> {
 
     if let Some(store_id_filter) = search.store_id {
         let new_condition = InternationalBillingInfoDsl::store_id.eq(store_id_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(store_ids_filter) = search.store_ids {
+        let new_condition = InternationalBillingInfoDsl::store_id.eq_any(store_ids_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
