@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use futures::{future, Future, IntoFuture};
-use hyper::{header::Authorization, server::Request, Delete, Get, Method, Post};
+use hyper::{header::Authorization, server::Request, Delete, Get, Method, Post, Put};
 use r2d2::ManageConnection;
 
 use stq_http::{
@@ -37,6 +37,7 @@ use models::*;
 use repos::repo_factory::*;
 use sentry_integration::log_and_capture_error;
 use services::accounts::AccountServiceImpl;
+use services::billing_info::{BillingInfoService, BillingInfoServiceImpl};
 use services::customer::CustomersService;
 use services::customer::CustomersServiceImpl;
 use services::invoice::InvoiceService;
@@ -135,6 +136,13 @@ impl<
         });
 
         let order_billing_service = Arc::new(OrderBillingServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
+        });
+
+        let billing_info_service = Arc::new(BillingInfoServiceImpl {
             db_pool: self.static_context.db_pool.clone(),
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
@@ -255,6 +263,36 @@ impl<
                         .map_err(failure::Error::from)
                 }))
             }
+
+            (Post, Some(Route::InternationalBillingInfos)) => serialize_future({
+                parse_body::<NewInternationalBillingInfo>(req.body()).and_then(move |payload| {
+                    billing_info_service
+                        .create_international_billing_info(payload)
+                        .map_err(failure::Error::from)
+                })
+            }),
+
+            (Put, Some(Route::InternationalBillingInfo { id })) => serialize_future({
+                parse_body::<UpdateInternationalBillingInfo>(req.body()).and_then(move |payload| {
+                    billing_info_service
+                        .update_international_billing_info(id, payload)
+                        .map_err(failure::Error::from)
+                })
+            }),
+            (Post, Some(Route::RussiaBillingInfos)) => serialize_future({
+                parse_body::<NewRussiaBillingInfo>(req.body()).and_then(move |payload| {
+                    billing_info_service
+                        .create_russia_billing_info(payload)
+                        .map_err(failure::Error::from)
+                })
+            }),
+            (Put, Some(Route::RussiaBillingInfo { id })) => serialize_future({
+                parse_body::<UpdateRussiaBillingInfo>(req.body()).and_then(move |payload| {
+                    billing_info_service
+                        .update_russia_billing_info(id, payload)
+                        .map_err(failure::Error::from)
+                })
+            }),
 
             // Fallback
             (m, _) => not_found(m, path),
