@@ -523,8 +523,8 @@ pub mod tests {
             Ok(international_billing_info())
         }
 
-        fn delete(&self, _search_params: InternationalBillingInfoSearch) -> RepoResultV2<Option<InternationalBillingInfo>> {
-            Ok(Some(international_billing_info()))
+        fn delete(&self, _search_params: InternationalBillingInfoSearch) -> RepoResultV2<InternationalBillingInfo> {
+            Ok(international_billing_info())
         }
     }
 
@@ -548,8 +548,8 @@ pub mod tests {
             Ok(russian_billing_info())
         }
 
-        fn delete(&self, _search_params: RussiaBillingInfoSearch) -> RepoResultV2<Option<RussiaBillingInfo>> {
-            Ok(Some(russian_billing_info()))
+        fn delete(&self, _search_params: RussiaBillingInfoSearch) -> RepoResultV2<RussiaBillingInfo> {
+            Ok(russian_billing_info())
         }
     }
 

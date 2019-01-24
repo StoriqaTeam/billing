@@ -45,7 +45,7 @@ pub trait InternationalBillingInfoRepo {
         search_params: InternationalBillingInfoSearch,
         payload: UpdateInternationalBillingInfo,
     ) -> RepoResultV2<InternationalBillingInfo>;
-    fn delete(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<Option<InternationalBillingInfo>>;
+    fn delete(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<InternationalBillingInfo>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> InternationalBillingInfoRepoImpl<'a, T> {
@@ -160,7 +160,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         })
     }
 
-    fn delete(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<Option<InternationalBillingInfo>> {
+    fn delete(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<InternationalBillingInfo> {
         debug!("delete international billing info {:?}.", search_params);
         let deleted_entry = self.get(search_params.clone())?;
         let access = deleted_entry
@@ -175,7 +175,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         })?;
 
         let query = diesel::delete(crate::schema::international_billing_info::table.filter(query));
-        query.get_result::<InternationalBillingInfo>(self.db_conn).optional().map_err(|e| {
+        query.get_result::<InternationalBillingInfo>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(err e, ErrorSource::Diesel, error_kind)
         })
