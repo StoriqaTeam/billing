@@ -17,7 +17,7 @@ use super::error::{ErrorContext, ErrorKind};
 use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
 use client::stripe::StripeClient;
-use models::order_v2::{OrderId, RawOrder};
+use models::order_v2::{OrderId, OrderSearchResults, OrdersSearch, RawOrder};
 use models::PaymentState;
 use repos::{ReposFactory, SearchPaymentIntent};
 use services::accounts::AccountService;
@@ -31,6 +31,8 @@ pub trait OrderService {
     fn order_decline(&self, order_id: OrderId) -> ServiceFutureV2<()>;
     /// Update order payment state
     fn update_order_state(&self, order_id: OrderId, state: PaymentState) -> ServiceFutureV2<()>;
+    // Search orders
+    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResults>;
 }
 
 impl<
@@ -161,6 +163,22 @@ impl<
         });
 
         Box::new(fut)
+    }
+
+    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResults> {
+        let repo_factory = self.static_context.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let db_pool = self.static_context.db_pool.clone();
+        let cpu_pool = self.static_context.cpu_pool.clone();
+
+        spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            debug!("Requesting orders  {:?}", payload);
+
+            let orders = orders_repo.search(skip, count, payload).map_err(ectx!(try convert))?;
+            Ok(orders)
+        })
     }
 }
 

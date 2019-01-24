@@ -38,3 +38,12 @@ pub struct ProxyCompanyBillingInfoSearch {
     pub id: Option<ProxyCompanyBillingInfoId>,
     pub country: Option<Alpha3>,
 }
+
+impl ProxyCompanyBillingInfoSearch {
+    pub fn by_country(country: Alpha3) -> ProxyCompanyBillingInfoSearch {
+        ProxyCompanyBillingInfoSearch {
+            country: Some(country),
+            ..Default::default()
+        }
+    }
+}

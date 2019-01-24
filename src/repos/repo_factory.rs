@@ -326,7 +326,7 @@ pub mod tests {
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
-    use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, RawOrder, StoreId as StoreV2Id};
+    use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, OrderSearchResults, OrdersSearch, RawOrder, StoreId as StoreV2Id};
     use models::*;
     use models::{Currency as BillingCurrency, NewPaymentIntent, PaymentIntent, TransactionId, TureCurrency, UpdatePaymentIntent};
     use repos::*;
@@ -489,6 +489,10 @@ pub mod tests {
         fn get(&self, _search: StoreBillingTypeSearch) -> RepoResultV2<Option<StoreBillingType>> {
             Ok(Some(store_billing_type()))
         }
+
+        fn search(&self, _search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>> {
+            Ok(vec![store_billing_type()])
+        }
     }
 
     #[derive(Clone, Default)]
@@ -501,6 +505,10 @@ pub mod tests {
 
         fn get(&self, _search: InternationalBillingInfoSearch) -> RepoResultV2<Option<InternationalBillingInfo>> {
             Ok(Some(international_billing_info()))
+        }
+
+        fn search(&self, _search: InternationalBillingInfoSearch) -> RepoResultV2<Vec<InternationalBillingInfo>> {
+            Ok(vec![international_billing_info()])
         }
 
         fn update(
@@ -522,6 +530,10 @@ pub mod tests {
 
         fn get(&self, _search: RussiaBillingInfoSearch) -> RepoResultV2<Option<RussiaBillingInfo>> {
             Ok(Some(russian_billing_info()))
+        }
+
+        fn search(&self, _search: RussiaBillingInfoSearch) -> RepoResultV2<Vec<RussiaBillingInfo>> {
+            Ok(vec![russian_billing_info()])
         }
 
         fn update(&self, _search_params: RussiaBillingInfoSearch, _payload: UpdateRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo> {
@@ -920,6 +932,13 @@ pub mod tests {
 
         fn get_many_by_invoice_id(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Vec<RawOrder>> {
             Ok(vec![])
+        }
+
+        fn search(&self, _skip: i64, _count: i64, _search: OrdersSearch) -> RepoResultV2<OrderSearchResults> {
+            Ok(OrderSearchResults {
+                total_count: 0,
+                orders: vec![],
+            })
         }
 
         fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder> {

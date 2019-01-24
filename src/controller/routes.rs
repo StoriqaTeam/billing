@@ -35,6 +35,8 @@ pub enum Route {
     Customers,
     CustomersWithSource,
     OrdersSetPaymentState { order_id: Orderv2Id },
+    OrderSearch,
+    OrderBillingInfo,
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -149,9 +151,12 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .map(|order_id| Route::OrdersSetPaymentState { order_id })
     });
 
+    route_parser.add_route(r"^/orders/search$", || Route::OrderSearch);
+
     route_parser.add_route(r"^/customers$", || Route::Customers);
 
     route_parser.add_route(r"^/customers/with_source$", || Route::CustomersWithSource);
+    route_parser.add_route(r"^/order_billing_info$", || Route::OrderBillingInfo);
 
     route_parser
 }

@@ -17,7 +17,7 @@ use models::{
 use schema::amounts_received;
 use schema::invoices_v2;
 
-#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq, Eq, Hash)]
 #[sql_type = "SqlUuid"]
 pub struct InvoiceId(Uuid);
 derive_newtype_sql!(invoice_v2, SqlUuid, InvoiceId, InvoiceId);

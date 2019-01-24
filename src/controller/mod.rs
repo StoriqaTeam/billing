@@ -32,6 +32,7 @@ use self::routes::Route;
 use client::payments::PaymentsClientImpl;
 use controller::requests::*;
 use errors::Error;
+use models::order_v2::OrdersSearch;
 use models::*;
 use repos::repo_factory::*;
 use sentry_integration::log_and_capture_error;
@@ -41,6 +42,7 @@ use services::customer::CustomersServiceImpl;
 use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
 use services::order::OrderService;
+use services::order_billing::{OrderBillingService, OrderBillingServiceImpl};
 use services::payment_intent::PaymentIntentService;
 use services::user_roles::UserRolesService;
 use services::Service;
@@ -129,7 +131,14 @@ impl<
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
             stripe_client: self.static_context.stripe_client.clone(),
-            dynamic_context,
+            dynamic_context: dynamic_context.clone(),
+        });
+
+        let order_billing_service = Arc::new(OrderBillingServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
         });
 
         let path = req.path().to_string();
@@ -214,6 +223,38 @@ impl<
                 parse_body::<DeleteCustomerRequest>(req.body())
                     .and_then(move |payload| customer_service.delete(payload.customer_id).map_err(failure::Error::from))
             }),
+            (Post, Some(Route::OrderBillingInfo)) => {
+                let (skip_opt, count_opt) = parse_query!(
+                    req.query().unwrap_or_default(),
+                    "skip" => i64, "count" => i64
+                );
+
+                let skip = skip_opt.unwrap_or(0);
+                let count = count_opt.unwrap_or(0);
+
+                serialize_future(parse_body::<OrderBillingSearchTerms>(req.body()).and_then(move |payload| {
+                    order_billing_service
+                        .search(skip, count, payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                }))
+            }
+            (Post, Some(Route::OrderSearch)) => {
+                let (skip_opt, count_opt) = parse_query!(
+                    req.query().unwrap_or_default(),
+                    "skip" => i64, "count" => i64
+                );
+
+                let skip = skip_opt.unwrap_or(0);
+                let count = count_opt.unwrap_or(0);
+
+                serialize_future(parse_body::<OrdersSearch>(req.body()).and_then(move |payload| {
+                    service
+                        .search_orders(skip, count, payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                }))
+            }
 
             // Fallback
             (m, _) => not_found(m, path),

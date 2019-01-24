@@ -7,6 +7,7 @@ pub mod error;
 pub mod invoice;
 pub mod merchant;
 pub mod order;
+pub mod order_billing;
 pub mod payment_intent;
 pub mod types;
 pub mod user_roles;
