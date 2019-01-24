@@ -65,6 +65,7 @@ impl ApplicationAcl {
                 permission!(Resource::Fee),
                 permission!(Resource::StoreBillingType),
                 permission!(Resource::BillingInfo),
+                permission!(Resource::ProxyCompanyBillingInfo),
             ],
         );
         hash.insert(
@@ -95,6 +96,8 @@ impl ApplicationAcl {
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
                 permission!(Resource::BillingInfo, Action::Read, Scope::Owned),
                 permission!(Resource::BillingInfo, Action::Write, Scope::Owned),
+                permission!(Resource::StoreBillingType, Action::Read, Scope::Owned),
+                permission!(Resource::StoreBillingType, Action::Write, Scope::Owned),
             ],
         );
         hash.insert(
@@ -103,6 +106,7 @@ impl ApplicationAcl {
                 permission!(Resource::StoreBillingType, Action::Read),
                 permission!(Resource::BillingInfo, Action::Read),
                 permission!(Resource::Fee, Action::Read),
+                permission!(Resource::ProxyCompanyBillingInfo, Action::Read),
             ],
         );
         ApplicationAcl {

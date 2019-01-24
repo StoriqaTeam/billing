@@ -513,6 +513,10 @@ pub mod tests {
         fn search(&self, _search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>> {
             Ok(vec![store_billing_type()])
         }
+
+        fn update(&self, _search: StoreBillingTypeSearch, _payload: UpdateStoreBillingType) -> RepoResultV2<StoreBillingType> {
+            Ok(store_billing_type())
+        }
     }
 
     #[derive(Clone, Default)]
@@ -538,6 +542,10 @@ pub mod tests {
         ) -> RepoResultV2<InternationalBillingInfo> {
             Ok(international_billing_info())
         }
+
+        fn delete(&self, _search_params: InternationalBillingInfoSearch) -> RepoResultV2<InternationalBillingInfo> {
+            Ok(international_billing_info())
+        }
     }
 
     #[derive(Clone, Default)]
@@ -557,6 +565,10 @@ pub mod tests {
         }
 
         fn update(&self, _search_params: RussiaBillingInfoSearch, _payload: UpdateRussiaBillingInfo) -> RepoResultV2<RussiaBillingInfo> {
+            Ok(russian_billing_info())
+        }
+
+        fn delete(&self, _search_params: RussiaBillingInfoSearch) -> RepoResultV2<RussiaBillingInfo> {
             Ok(russian_billing_info())
         }
     }

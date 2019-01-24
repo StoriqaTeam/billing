@@ -1,5 +1,5 @@
 use stq_router::RouteParser;
-use stq_types::{InvoiceId, OrderId, RoleId, SagaId, StoreId, UserId};
+use stq_types::{InternationalBillingId, InvoiceId, OrderId, RoleId, RussiaBillingId, SagaId, StoreId, UserId};
 
 use models::invoice_v2;
 use models::order_v2::OrderId as Orderv2Id;
@@ -37,6 +37,10 @@ pub enum Route {
     OrdersSetPaymentState { order_id: Orderv2Id },
     OrderSearch,
     OrderBillingInfo,
+    InternationalBillingInfos,
+    RussiaBillingInfos,
+    InternationalBillingInfo { id: InternationalBillingId },
+    RussiaBillingInfo { id: RussiaBillingId },
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -157,6 +161,20 @@ pub fn create_route_parser() -> RouteParser<Route> {
 
     route_parser.add_route(r"^/customers/with_source$", || Route::CustomersWithSource);
     route_parser.add_route(r"^/order_billing_info$", || Route::OrderBillingInfo);
+    route_parser.add_route(r"^/billing_info/international$", || Route::InternationalBillingInfos);
+    route_parser.add_route(r"^/billing_info/russia$", || Route::RussiaBillingInfos);
+    route_parser.add_route_with_params(r"^/billing_info/international/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::InternationalBillingInfo { id })
+    });
+    route_parser.add_route_with_params(r"^/billing_info/russia/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::RussiaBillingInfo { id })
+    });
 
     route_parser
 }
