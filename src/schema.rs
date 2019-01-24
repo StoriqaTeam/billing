@@ -39,6 +39,20 @@ table! {
 }
 
 table! {
+    fees (id) {
+        id -> Int4,
+        order_id -> Uuid,
+        amount -> Numeric,
+        status -> Varchar,
+        currency -> Varchar,
+        charge_id -> Nullable<Varchar>,
+        metadata -> Nullable<Jsonb>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+table! {
     international_billing_info (id) {
         id -> Int4,
         store_id -> Int4,
@@ -204,6 +218,7 @@ allow_tables_to_appear_in_same_query!(
     amounts_received,
     customers,
     event_store,
+    fees,
     international_billing_info,
     invoices,
     invoices_v2,
