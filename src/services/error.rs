@@ -34,6 +34,8 @@ pub enum ErrorContext {
     Unauthorized,
     #[fail(display = "service context - wrong order state")]
     OrderState,
+    #[fail(display = "service context - billing info error")]
+    BillingInfo,
 }
 
 derive_error_impls!();
