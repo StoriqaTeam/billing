@@ -22,7 +22,8 @@ use stq_http::{
     controller::{Controller, ControllerFuture},
     errors::ErrorMessageWrapper,
     request_util::{
-        self, parse_body, read_body, serialize_future, RequestTimeout as RequestTimeoutHeader, StripeSignature as StripeSignatureHeader,
+        self, parse_body, read_body, serialize_future, RequestTimeout as RequestTimeoutHeader, Sign as TureSign,
+        StripeSignature as StripeSignatureHeader,
     },
 };
 use stq_types::UserId;
@@ -182,8 +183,22 @@ impl<
                 serialize_future({ parse_body::<ExternalBillingInvoice>(req.body()).and_then(move |data| service.update_invoice(data)) })
             }
             (&Post, Some(Route::PaymentsInboundTx)) => serialize_future(
-                parse_body::<PaymentsCallback>(req.body())
-                    .and_then(move |data| service.handle_inbound_tx(data).map_err(Error::from).map_err(failure::Error::from)),
+                req.headers()
+                    .get::<TureSign>()
+                    .cloned()
+                    .ok_or(format_err!("Sign header not provided"))
+                    .into_future()
+                    .and_then(|signature_header| {
+                        parse_body::<PaymentsCallback>(req.body())
+                            .map(move |data| (signature_header, data))
+                            .map_err(failure::Error::from)
+                    })
+                    .and_then(move |(signature_header, data)| {
+                        service
+                            .handle_inbound_tx(signature_header, data)
+                            .map_err(Error::from)
+                            .map_err(failure::Error::from)
+                    }),
             ),
             (&Post, Some(Route::UserMerchants)) => {
                 serialize_future({ parse_body::<CreateUserMerchantPayload>(req.body()).and_then(move |data| service.create_user(data)) })
