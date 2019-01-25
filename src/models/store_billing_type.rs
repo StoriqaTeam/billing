@@ -1,4 +1,4 @@
-use stq_types::{BillingType, StoreBillingTypeId, StoreId};
+use stq_types::{Alpha3, BillingType, StoreBillingTypeId, StoreId};
 
 use schema::store_billing_type;
 
@@ -45,5 +45,12 @@ impl StoreBillingTypeSearch {
             store_ids: Some(store_ids),
             ..Default::default()
         }
+    }
+}
+
+pub fn country_to_billing_type(country: &Alpha3) -> BillingType {
+    match country.0.as_ref() {
+        "RUS" => BillingType::Russia,
+        _ => BillingType::International,
     }
 }

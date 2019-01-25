@@ -1471,7 +1471,10 @@ pub mod tests {
         let work = service.create_user(create_user);
         let _merchant = core.run(work).unwrap();
 
-        let create_store = CreateStoreMerchantPayload { id: StoreId(1) };
+        let create_store = CreateStoreMerchantPayload {
+            id: StoreId(1),
+            country_code: None,
+        };
         let work = service.create_store(create_store);
         let _store_merchant = core.run(work).unwrap();
 
