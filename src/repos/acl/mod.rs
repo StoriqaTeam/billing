@@ -79,7 +79,7 @@ impl ApplicationAcl {
                 permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
-                permission!(Resource::PaymentIntent, Action::Read, Scope::Owned),
+                permission!(Resource::PaymentIntent, Action::Read),
                 permission!(Resource::Customer, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Write, Scope::Owned),
                 permission!(Resource::Fee, Action::Read),

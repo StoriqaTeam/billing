@@ -149,7 +149,6 @@ table! {
 table! {
     payment_intent (id) {
         id -> Varchar,
-        invoice_id -> Uuid,
         amount -> Numeric,
         amount_received -> Numeric,
         client_secret -> Nullable<Varchar>,
@@ -158,6 +157,16 @@ table! {
         receipt_email -> Nullable<Varchar>,
         charge_id -> Nullable<Varchar>,
         status -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+table! {
+    payment_intents_invoices (id) {
+        id -> Int4,
+        invoice_id -> Uuid,
+        payment_intent_id -> Varchar,
         created_at -> Timestamp,
         updated_at -> Timestamp,
     }
@@ -211,7 +220,8 @@ joinable!(amounts_received -> invoices_v2 (invoice_id));
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(order_exchange_rates -> orders (order_id));
 joinable!(orders -> invoices_v2 (invoice_id));
-joinable!(payment_intent -> invoices_v2 (invoice_id));
+joinable!(payment_intents_invoices -> invoices_v2 (invoice_id));
+joinable!(payment_intents_invoices -> payment_intent (payment_intent_id));
 
 allow_tables_to_appear_in_same_query!(
     accounts,
@@ -227,6 +237,7 @@ allow_tables_to_appear_in_same_query!(
     orders,
     orders_info,
     payment_intent,
+    payment_intents_invoices,
     proxy_companies_billing_info,
     roles,
     russia_billing_info,

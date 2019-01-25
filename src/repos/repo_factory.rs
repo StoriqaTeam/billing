@@ -36,6 +36,8 @@ where
     fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a>;
     fn create_fees_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<FeeRepo + 'a>;
     fn create_fees_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<FeeRepo + 'a>;
+    fn create_payment_intent_invoices_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentInvoiceRepo + 'a>;
+    fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a>;
     fn create_store_billing_type_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_store_billing_type_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_international_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>)
@@ -284,6 +286,16 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(ProxyCompanyBillingInfoRepoImpl::new(db_conn, acl))
     }
+
+    fn create_payment_intent_invoices_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentInvoiceRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(PaymentIntentInvoiceRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(PaymentIntentInvoiceRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -474,6 +486,50 @@ pub mod tests {
 
         fn create_proxy_companies_billing_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<ProxyCompanyBillingInfoRepo + 'a> {
             Box::new(ProxyCompanyBillingInfoRepoMock::default())
+        }
+
+        fn create_payment_intent_invoices_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentInvoiceRepo + 'a> {
+            Box::new(PaymentIntentInvoiceRepoMock::default())
+        }
+
+        fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a> {
+            Box::new(PaymentIntentInvoiceRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct PaymentIntentInvoiceRepoMock;
+
+    impl PaymentIntentInvoiceRepo for PaymentIntentInvoiceRepoMock {
+        fn get(&self, search: SearchPaymentIntentInvoice) -> RepoResultV2<Option<PaymentIntentInvoice>> {
+            let res = match search {
+                SearchPaymentIntentInvoice::Id(id) => PaymentIntentInvoice {
+                    id,
+                    ..payment_intents_invoices()
+                },
+                SearchPaymentIntentInvoice::InvoiceId(invoice_id) => PaymentIntentInvoice {
+                    invoice_id,
+                    ..payment_intents_invoices()
+                },
+                SearchPaymentIntentInvoice::PaymentIntentId(payment_intent_id) => PaymentIntentInvoice {
+                    payment_intent_id,
+                    ..payment_intents_invoices()
+                },
+            };
+
+            Ok(Some(res))
+        }
+
+        fn create(&self, payload: NewPaymentIntentInvoice) -> RepoResultV2<PaymentIntentInvoice> {
+            Ok(PaymentIntentInvoice {
+                payment_intent_id: payload.payment_intent_id,
+                invoice_id: payload.invoice_id,
+                ..payment_intents_invoices()
+            })
+        }
+
+        fn delete(&self, _search: SearchPaymentIntentInvoice) -> RepoResultV2<()> {
+            Ok(())
         }
     }
 
@@ -1205,6 +1261,14 @@ pub mod tests {
             country: "country".to_string(),
             city: "city".to_string(),
             recipient_address: "recipient_address".to_string(),
+        }
+    }
+
+    fn payment_intent_invoice() {
+        PaymentIntentInvoice {
+            id: 0,
+            invoice_id: InvoiceV2Id::new(Uuid::new_v4()),
+            payment_intent_id: PaymentIntentId("PaymentIntentId".to_string()),
         }
     }
 

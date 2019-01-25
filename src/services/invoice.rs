@@ -34,7 +34,8 @@ use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
 use repos::{
-    AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentRepo, RepoResult, SearchPaymentIntent,
+    AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentInvoiceRepo, PaymentIntentRepo,
+    RepoResult, SearchPaymentIntentInvoice,
 };
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
@@ -297,6 +298,7 @@ impl<
                         let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                         let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
                         let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
+                        let payment_intent_invoices_repo = repo_factory.create_payment_intent_invoices_repo_with_sys_acl(&conn);
 
                         conn.transaction::<InvoiceDump, ServiceError, _>(move || {
                             let invoice = NewInvoice {
@@ -309,10 +311,14 @@ impl<
 
                             let invoice = invoices_repo.create(invoice.clone()).map_err(ectx!(try convert => invoice))?;
 
-                            if let Some(new_payment_intent) = new_payment_intent {
+                            if let Some((new_payment_intent, new_payment_intent_invoice)) = new_payment_intent {
                                 payment_intent_repo
                                     .create(new_payment_intent.clone())
                                     .map_err(ectx!(try convert => new_payment_intent))?;
+
+                                payment_intent_invoices_repo
+                                    .create(new_payment_intent_invoice.clone())
+                                    .map_err(ectx!(try convert => new_payment_intent_invoice))?;
                             }
 
                             let orders_with_rates = orders
@@ -749,15 +755,26 @@ impl<
                 let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
                 let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
                 let payment_intent_repo = repo_factory.create_payment_intent_repo(&conn, user_id);
+                let payment_intent_invoices_repo = repo_factory.create_payment_intent_invoices_repo_with_sys_acl(&conn);
 
                 let invoice_id = InvoiceV2Id::new(id.0);
                 conn.transaction::<_, FailureError, _>(move || {
                     debug!("Deleting invoice: {}", &id);
                     let deleted_orders = orders_repo.delete_by_invoice_id(invoice_id)?;
+
                     for order in deleted_orders {
                         order_exchange_rates_repo.delete_by_order_id(order.id)?;
                     }
-                    let deleted_payment_intent = payment_intent_repo.delete_by_invoice_id(invoice_id)?;
+
+                    let payment_intent_invoice = payment_intent_invoices_repo
+                        .get(SearchPaymentIntentInvoice::InvoiceId(invoice_id))?
+                        .ok_or({
+                            let e = format_err!("Record payment_intent_invoice by invoice id {} not found", invoice_id);
+                            ectx!(try err e, ErrorKind::Internal)
+                        })?;
+
+                    let deleted_payment_intent = payment_intent_repo.delete(payment_intent_invoice.payment_intent_id)?;
+
                     invoices_repo.delete(invoice_id)?;
                     Ok(deleted_payment_intent)
                 })
@@ -1093,7 +1110,7 @@ fn create_payment_intent(
     orders: &[(NewOrder, Option<ExchangeId>, BigDecimal)],
     invoice_id: InvoiceV2Id,
     buyer_currency: Currency,
-) -> ServiceFutureV2<NewPaymentIntent> {
+) -> ServiceFutureV2<(NewPaymentIntent, NewPaymentIntentInvoice)> {
     let fut = payment_intent_create_params(orders, invoice_id, buyer_currency)
         .into_future()
         .and_then(move |payment_intent_creation| {
@@ -1110,7 +1127,8 @@ pub fn payment_intent_success<C>(
     conn: &C,
     orders_repo: &OrdersRepo,
     invoice_repo: &InvoicesV2Repo,
-    payment_intent_repo: &PaymentIntentRepo,
+    _payment_intent_repo: &PaymentIntentRepo,
+    payment_intent_invoices_repo: &PaymentIntentInvoiceRepo,
     payment_intent_id: PaymentIntentId,
 ) -> Result<(InvoiceV2, Vec<RawOrder>), ServiceError>
 where
@@ -1118,14 +1136,14 @@ where
 {
     conn.transaction::<_, ServiceError, _>(move || {
         let payment_intent_id_cloned = payment_intent_id.clone();
-        let payment_intent = payment_intent_repo
-            .get(SearchPaymentIntent::Id(payment_intent_id.clone()))
+        let payment_intent_invoice = payment_intent_invoices_repo
+            .get(SearchPaymentIntentInvoice::PaymentIntentId(payment_intent_id.clone()))
             .map_err(ectx!(try convert => payment_intent_id_cloned))?
             .ok_or({
                 let e = format_err!("Payment intent {} not found", payment_intent_id);
                 ectx!(try err e, ErrorKind::Internal)
             })?;
-        let invoice_id = payment_intent.invoice_id;
+        let invoice_id = payment_intent_invoice.invoice_id;
         let invoice = invoice_repo
             .get(invoice_id.clone())
             .map_err(ectx!(try convert => invoice_id.clone()))?
@@ -1406,10 +1424,12 @@ fn payment_intent_create_params(
     })
 }
 
-fn new_payment_intent(invoice_id: InvoiceV2Id, stripe_payment_intent: stripe::PaymentIntent) -> Result<NewPaymentIntent, ServiceError> {
-    Ok(NewPaymentIntent {
-        id: PaymentIntentId(stripe_payment_intent.id),
-        invoice_id,
+fn new_payment_intent(
+    invoice_id: InvoiceV2Id,
+    stripe_payment_intent: stripe::PaymentIntent,
+) -> Result<(NewPaymentIntent, NewPaymentIntentInvoice), ServiceError> {
+    let payment_intent = NewPaymentIntent {
+        id: PaymentIntentId(stripe_payment_intent.id.clone()),
         amount: stripe_payment_intent.amount.into(),
         amount_received: stripe_payment_intent.amount_received.into(),
         client_secret: stripe_payment_intent.client_secret,
@@ -1430,7 +1450,14 @@ fn new_payment_intent(invoice_id: InvoiceV2Id, stripe_payment_intent: stripe::Pa
             .next()
             .map(|charge| ChargeId::new(charge.id)),
         status: stripe_payment_intent.status.into(),
-    })
+    };
+
+    let payment_intent_invoice = NewPaymentIntentInvoice {
+        invoice_id,
+        payment_intent_id: PaymentIntentId(stripe_payment_intent.id),
+    };
+
+    Ok((payment_intent, payment_intent_invoice))
 }
 
 pub fn to_ture_currency(currency: Currency) -> Box<Future<Item = TureCurrency, Error = ServiceError>> {

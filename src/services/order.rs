@@ -19,7 +19,7 @@ use client::payments::PaymentsClient;
 use client::stripe::StripeClient;
 use models::order_v2::{OrderId, OrderSearchResults, OrdersSearch, RawOrder};
 use models::PaymentState;
-use repos::{ReposFactory, SearchPaymentIntent};
+use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::Service;
@@ -202,7 +202,18 @@ where
 
     let fut = spawn_on_pool(db_pool_, cpu_pool_, move |conn| {
         let payment_intent_repo = repo_factory_.create_payment_intent_repo(&conn, user_id);
-        let search = SearchPaymentIntent::InvoiceId(order.invoice_id);
+        let payment_intent_invoices_repo = repo_factory_.create_payment_intent_invoices_repo(&conn, user_id);
+
+        let order_invoice_id_cloned = order.invoice_id.clone();
+        let payment_intent_invoice = payment_intent_invoices_repo
+            .get(SearchPaymentIntentInvoice::InvoiceId(order.invoice_id.clone()))
+            .map_err(ectx!(try convert => order_invoice_id_cloned))?
+            .ok_or({
+                let e = format_err!("Record payment_intent_invoice by invoice id {} not found", order.invoice_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+
+        let search = SearchPaymentIntent::Id(payment_intent_invoice.payment_intent_id);
         let search_clone = search.clone();
         let payment_intent = payment_intent_repo
             .get(search.clone())
@@ -276,7 +287,18 @@ where
 
     let fut = spawn_on_pool(db_pool_, cpu_pool_, move |conn| {
         let payment_intent_repo = repo_factory_.create_payment_intent_repo(&conn, user_id);
-        let search = SearchPaymentIntent::InvoiceId(order.invoice_id);
+        let payment_intent_invoices_repo = repo_factory_.create_payment_intent_invoices_repo(&conn, user_id);
+
+        let order_invoice_id_cloned = order.invoice_id.clone();
+        let payment_intent_invoice = payment_intent_invoices_repo
+            .get(SearchPaymentIntentInvoice::InvoiceId(order.invoice_id))
+            .map_err(ectx!(try convert => order_invoice_id_cloned))?
+            .ok_or({
+                let e = format_err!("Record payment_intent_invoice by invoice id {} not found", order.invoice_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+
+        let search = SearchPaymentIntent::Id(payment_intent_invoice.payment_intent_id);
         let search_clone = search.clone();
         let payment_intent = payment_intent_repo
             .get(search.clone())

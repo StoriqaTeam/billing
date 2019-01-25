@@ -4,9 +4,7 @@ use stripe::{Card as StripeCard, CardBrand as StripeCardBrand};
 
 use stq_types::{stripe::PaymentIntentId, UserId};
 
-use models::{
-    fee::FeeId, invoice_v2::InvoiceId, order_v2::OrderId, ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus,
-};
+use models::{fee::FeeId, order_v2::OrderId, ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus};
 use stq_static_resources::Currency as StqCurrency;
 
 use services::error::{Error, ErrorContext, ErrorKind};
@@ -14,7 +12,6 @@ use services::error::{Error, ErrorContext, ErrorKind};
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PaymentIntentResponse {
     pub id: PaymentIntentId,
-    pub invoice_id: InvoiceId,
     pub amount: f64,
     pub amount_received: f64,
     pub client_secret: Option<String>,
@@ -33,7 +30,6 @@ impl PaymentIntentResponse {
         match (other_amount, other_amount_received) {
             (Some(amount), Some(amount_received)) => Ok(Self {
                 id: other.id,
-                invoice_id: other.invoice_id,
                 amount,
                 amount_received,
                 client_secret: other.client_secret,
