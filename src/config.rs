@@ -76,6 +76,7 @@ pub struct Payments {
     pub device_id: String,
     pub min_pooled_accounts: u32,
     pub accounts: Accounts,
+    pub sign_public_key: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

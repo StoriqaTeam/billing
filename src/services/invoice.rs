@@ -14,12 +14,15 @@ use hyper::Post;
 use models::invoice_v2::InvoiceSetAmountPaid;
 use models::invoice_v2::RawInvoice;
 use r2d2::ManageConnection;
+use secp256k1::{Message, PublicKey, Secp256k1, Signature};
 use serde_json;
+use sha2::digest::Digest;
+use sha2::Sha256;
 use stripe::Webhook;
 use uuid::Uuid;
 
 use stq_http::client::HttpClient;
-use stq_http::request_util::StripeSignature;
+use stq_http::request_util::{Sign as TureSignature, StripeSignature};
 use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
@@ -40,7 +43,7 @@ use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::Service;
 
-use super::error::{Error as ServiceError, ErrorKind};
+use super::error::{Error as ServiceError, ErrorContext, ErrorKind};
 use super::types::{ServiceFuture, ServiceFutureV2};
 
 pub trait InvoiceService {
@@ -73,7 +76,7 @@ pub trait InvoiceService {
     /// Creates orders in billing system, returning url for payment
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
     /// Handles the callback from Payments gateway which carries a new inbound transaction
-    fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()>;
+    fn handle_inbound_tx(&self, signature_header: TureSignature, callback: PaymentsCallback) -> ServiceFutureV2<()>;
     /// Handles the callback from Stripe
     fn handle_stripe_event(&self, signature_header: StripeSignature, event_payload: String) -> ServiceFutureV2<()>;
     /// Get missing rates from Payments gateway and refresh existing rates
@@ -817,7 +820,7 @@ impl<
     }
 
     /// Handles the callback from Payments gateway which carries a new inbound transaction
-    fn handle_inbound_tx(&self, callback: PaymentsCallback) -> ServiceFutureV2<()> {
+    fn handle_inbound_tx(&self, signature_header: TureSignature, callback: PaymentsCallback) -> ServiceFutureV2<()> {
         let payments_client = if let Some(payments_client) = self.dynamic_context.payments_client.clone() {
             payments_client
         } else {
@@ -834,7 +837,17 @@ impl<
             account_id,
             amount_captured: amount_received,
             ..
-        } = callback;
+        } = callback.clone();
+
+        let signature_header = format!("{}", signature_header);
+        let sign_public_key = if let Some(payments) = self.static_context.config.payments.clone() {
+            payments.sign_public_key
+        } else {
+            let e = err_msg("sign public key not provided");
+            return Box::new(future::err::<_, ServiceError>(ectx!(err e, ErrorKind::Internal)));
+        };
+
+        let body = serde_json::to_string(&callback).unwrap_or_default();
 
         let fut =
             // Increase amount captured for the invoice
@@ -843,6 +856,7 @@ impl<
                 {
                     let repo_factory = repo_factory.clone();
                     move |conn| {
+                        check_ture_sign(sign_public_key, signature_header, body)?;
                         let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
                         let amount_received = Amount::from_str(&amount_received).map_err(move |e| {
                                 let e = format_err!("Amount has wrong format: {}", e);
@@ -1442,6 +1456,38 @@ pub fn to_ture_currency(currency: Currency) -> Box<Future<Item = TureCurrency, E
             })
             .into_future(),
     )
+}
+
+pub fn check_ture_sign(sign_public_key: String, signature: String, body: String) -> Result<(), ServiceError> {
+    let mut hasher = Sha256::new();
+    hasher.input(&body);
+    let bytes = hasher.result();
+    let message = Message::from_slice(&bytes).map_err(ectx!(try ErrorContext::WrongMessage, ErrorKind::Forbidden))?;
+    let secp = Secp256k1::new();
+    let public_key =
+        PublicKey::from_slice(&parse_hex(&sign_public_key)).map_err(ectx!(try ErrorContext::PublicKey, ErrorKind::Forbidden))?;
+    let sig = Signature::from_compact(&parse_hex(&signature)).map_err(ectx!(try ErrorContext::Sign, ErrorKind::Forbidden))?;
+    secp.verify(&message, &sig, &public_key)
+        .map_err(ectx!(ErrorContext::VerifySign, ErrorKind::Forbidden))
+}
+
+pub fn parse_hex(hex_asm: &str) -> Vec<u8> {
+    let mut hex_bytes = hex_asm
+        .as_bytes()
+        .iter()
+        .filter_map(|b| match b {
+            b'0'...b'9' => Some(b - b'0'),
+            b'a'...b'f' => Some(b - b'a' + 10),
+            b'A'...b'F' => Some(b - b'A' + 10),
+            _ => None,
+        })
+        .fuse();
+
+    let mut bytes = Vec::new();
+    while let (Some(h), Some(l)) = (hex_bytes.next(), hex_bytes.next()) {
+        bytes.push(h << 4 | l)
+    }
+    bytes
 }
 
 #[cfg(test)]

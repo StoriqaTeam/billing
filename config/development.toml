@@ -12,6 +12,7 @@ url = "http://billing:8000"
 # user_private_key = "a7190fcbbb97a08e0a0f39be542186efc3e59790b61b6338f83960f2519acb4d"
 # device_id = ""
 # min_pooled_accounts = 10
+# sign_public_key = ""
 
 # [payments.accounts]
 # main_stq = "f90d449f-a066-412e-835d-aca28d80d043"

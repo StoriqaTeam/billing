@@ -36,6 +36,14 @@ pub enum ErrorContext {
     OrderState,
     #[fail(display = "service context - billing info error")]
     BillingInfo,
+    #[fail(display = "service error context - public key has wrong format")]
+    PublicKey,
+    #[fail(display = "service error context - can not form sign")]
+    Sign,
+    #[fail(display = "service error context - can not form message to verify sign")]
+    WrongMessage,
+    #[fail(display = "service error context - can not verify sign")]
+    VerifySign,
 }
 
 derive_error_impls!();
