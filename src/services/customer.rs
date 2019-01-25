@@ -225,7 +225,7 @@ impl<
         let fut = user_id
             .ok_or_else(|| {
                 let e = format_err!("No user was provided");
-                ectx!(err e, ErrorKind::Internal)
+                ectx!(err e, ErrorKind::Forbidden)
             })
             .into_future()
             .and_then({
@@ -238,7 +238,7 @@ impl<
                             .map_err(ectx!(try convert => user_id))?
                             .ok_or_else(|| {
                                 let e = format_err!("Customer for user {} not found", user_id);
-                                ectx!(try err e, ErrorKind::Internal)
+                                ectx!(try err e, ErrorKind::NotFound)
                             })?;
                         let update_customer = customers_repo
                             .update(customer.id, payload.clone().into())
