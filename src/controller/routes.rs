@@ -41,6 +41,9 @@ pub enum Route {
     RussiaBillingInfos,
     InternationalBillingInfo { id: InternationalBillingId },
     RussiaBillingInfo { id: RussiaBillingId },
+    InternationalBillingInfoByStore { id: StoreId },
+    RussiaBillingInfoByStore { id: StoreId },
+    BillingTypeByStore { id: StoreId },
     FeesByOrder { id: Orderv2Id },
 }
 
@@ -171,6 +174,24 @@ pub fn create_route_parser() -> RouteParser<Route> {
     route_parser.add_route(r"^/order_billing_info$", || Route::OrderBillingInfo);
     route_parser.add_route(r"^/billing_info/international$", || Route::InternationalBillingInfos);
     route_parser.add_route(r"^/billing_info/russia$", || Route::RussiaBillingInfos);
+    route_parser.add_route_with_params(r"^/billing_type/by-store-id/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::BillingTypeByStore { id })
+    });
+    route_parser.add_route_with_params(r"^/billing_info/international/by-store-id/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::InternationalBillingInfoByStore { id })
+    });
+    route_parser.add_route_with_params(r"^/billing_info/russia/by-store-id/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::RussiaBillingInfoByStore { id })
+    });
     route_parser.add_route_with_params(r"^/billing_info/international/(\d+)$", |params| {
         params
             .get(0)

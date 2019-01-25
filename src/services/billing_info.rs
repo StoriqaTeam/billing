@@ -24,6 +24,8 @@ use controller::context::DynamicContext;
 use services::types::spawn_on_pool;
 
 pub trait BillingInfoService {
+    fn get_russia_billing_info_by_store(&self, store_id: StoreId) -> ServiceFutureV2<Option<RussiaBillingInfo>>;
+    fn get_international_billing_info_by_store(&self, store_id: StoreId) -> ServiceFutureV2<Option<InternationalBillingInfo>>;
     fn create_international_billing_info(&self, payload: NewInternationalBillingInfo) -> ServiceFutureV2<InternationalBillingInfo>;
     fn update_international_billing_info(
         &self,
@@ -57,6 +59,38 @@ impl<
         AS: AccountService + Clone,
     > BillingInfoService for BillingInfoServiceImpl<T, M, F, C, PC, AS>
 {
+    fn get_russia_billing_info_by_store(&self, store_id: StoreId) -> ServiceFutureV2<Option<RussiaBillingInfo>> {
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+
+        spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let russia_billing_info_repo = repo_factory.create_russia_billing_info_repo(&conn, user_id);
+
+            russia_billing_info_repo
+                .get(RussiaBillingInfoSearch::by_store_id(store_id))
+                .map_err(ectx!(convert))
+        })
+    }
+
+    fn get_international_billing_info_by_store(&self, store_id: StoreId) -> ServiceFutureV2<Option<InternationalBillingInfo>> {
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+
+        spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let international_billing_info_repo = repo_factory.create_international_billing_info_repo(&conn, user_id);
+
+            international_billing_info_repo
+                .get(InternationalBillingInfoSearch::by_store_id(store_id))
+                .map_err(ectx!(convert))
+        })
+    }
+
     fn create_international_billing_info(&self, payload: NewInternationalBillingInfo) -> ServiceFutureV2<InternationalBillingInfo> {
         let repo_factory = self.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;

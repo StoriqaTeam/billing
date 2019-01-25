@@ -38,6 +38,7 @@ use repos::repo_factory::*;
 use sentry_integration::log_and_capture_error;
 use services::accounts::AccountServiceImpl;
 use services::billing_info::{BillingInfoService, BillingInfoServiceImpl};
+use services::billing_type::{BillingTypeService, BillingTypeServiceImpl};
 use services::customer::CustomersService;
 use services::customer::CustomersServiceImpl;
 use services::fee::{FeesService, FeesServiceImpl};
@@ -151,6 +152,13 @@ impl<
         });
 
         let fees_service = Arc::new(FeesServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
+        });
+
+        let billing_type_service = Arc::new(BillingTypeServiceImpl {
             db_pool: self.static_context.db_pool.clone(),
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
@@ -303,6 +311,19 @@ impl<
             }),
 
             (Get, Some(Route::FeesByOrder { id })) => serialize_future({ fees_service.get_by_order_id(id).map_err(failure::Error::from) }),
+            (Get, Some(Route::RussiaBillingInfoByStore { id })) => serialize_future({
+                billing_info_service
+                    .get_russia_billing_info_by_store(id)
+                    .map_err(failure::Error::from)
+            }),
+            (Get, Some(Route::InternationalBillingInfoByStore { id })) => serialize_future({
+                billing_info_service
+                    .get_international_billing_info_by_store(id)
+                    .map_err(failure::Error::from)
+            }),
+            (Get, Some(Route::BillingTypeByStore { id })) => {
+                serialize_future({ billing_type_service.get_billing_type_by_store(id).map_err(failure::Error::from) })
+            }
 
             // Fallback
             (m, _) => not_found(m, path),

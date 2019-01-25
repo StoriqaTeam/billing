@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod billing_info;
+pub mod billing_type;
 pub mod customer;
 pub mod error;
 pub mod fee;
