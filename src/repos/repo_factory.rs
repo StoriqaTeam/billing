@@ -517,6 +517,10 @@ pub mod tests {
         fn update(&self, _search: StoreBillingTypeSearch, _payload: UpdateStoreBillingType) -> RepoResultV2<StoreBillingType> {
             Ok(store_billing_type())
         }
+
+        fn delete(&self, _search_params: StoreBillingTypeSearch) -> RepoResultV2<StoreBillingType> {
+            Ok(store_billing_type())
+        }
     }
 
     #[derive(Clone, Default)]

@@ -41,6 +41,7 @@ pub trait StoreBillingTypeRepo {
     fn get(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Option<StoreBillingType>>;
     fn search(&self, search: StoreBillingTypeSearch) -> RepoResultV2<Vec<StoreBillingType>>;
     fn update(&self, search: StoreBillingTypeSearch, payload: UpdateStoreBillingType) -> RepoResultV2<StoreBillingType>;
+    fn delete(&self, search: StoreBillingTypeSearch) -> RepoResultV2<StoreBillingType>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> StoreBillingTypeRepoImpl<'a, T> {
@@ -155,6 +156,28 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         })?;
 
         let query = diesel::update(crate::schema::store_billing_type::table.filter(query)).set(&payload);
+        query.get_result::<StoreBillingType>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
+    }
+
+    fn delete(&self, search_params: StoreBillingTypeSearch) -> RepoResultV2<StoreBillingType> {
+        debug!("delete store billing type {:?}.", search_params);
+        let updated_entry = self.get(search_params.clone())?;
+        let access = updated_entry
+            .as_ref()
+            .map(|entry| StoreBillingTypeAccess { store_id: entry.store_id });
+        acl::check(&*self.acl, Resource::StoreBillingType, Action::Write, self, access.as_ref())
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("store billing type search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let query = diesel::delete(crate::schema::store_billing_type::table.filter(query));
         query.get_result::<StoreBillingType>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
             ectx!(err e, ErrorSource::Diesel, error_kind)

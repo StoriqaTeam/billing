@@ -2,7 +2,7 @@ use std::fmt;
 
 use std::time::SystemTime;
 
-use stq_types::{MerchantId, MerchantType, StoreId, UserId};
+use stq_types::{Alpha3, MerchantId, MerchantType, StoreId, UserId};
 
 use schema::merchants;
 
@@ -115,6 +115,7 @@ pub struct CreateUserMerchantPayload {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateStoreMerchantPayload {
     pub id: StoreId,
+    pub country: Option<Alpha3>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -13,7 +13,7 @@ use r2d2::ManageConnection;
 use serde_json;
 
 use stq_http::client::HttpClient;
-use stq_types::{MerchantId, StoreId, UserId};
+use stq_types::{BillingType, MerchantId, StoreId, UserId};
 
 use super::types::ServiceFuture;
 use client::payments::PaymentsClient;
@@ -153,6 +153,8 @@ impl<
     /// Creates store merchant
     fn create_store(&self, store: CreateStoreMerchantPayload) -> ServiceFuture<Merchant> {
         let user_id = self.dynamic_context.user_id;
+        let store_id = store.id;
+        let country = store.country.clone();
         let repo_factory = self.static_context.repo_factory.clone();
         let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
@@ -166,6 +168,7 @@ impl<
 
         self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            let store_billing_type_repo = repo_factory.create_store_billing_type_repo(&conn, user_id);
             conn.transaction::<Merchant, FailureError, _>(move || {
                 debug!("Creating new store merchant: {:?}", &store);
                 let body = serde_json::to_string(&credentials)?;
@@ -199,6 +202,15 @@ impl<
                         let payload = NewStoreMerchant::new(merchant.id, store.id);
                         merchant_repo.create_store_merchant(payload)
                     })
+                    .and_then(|new_merchant| {
+                        store_billing_type_repo
+                            .create(NewStoreBillingType {
+                                store_id,
+                                billing_type: country.as_ref().map(country_to_billing_type).unwrap_or(BillingType::International),
+                            })
+                            .map_err(FailureError::from)
+                            .map(|_| new_merchant)
+                    })
             })
             .map_err(|e: FailureError| e.context("Service merchant, create_store endpoint error occured.").into())
         })
@@ -211,8 +223,15 @@ impl<
 
         self.spawn_on_pool(move |conn| {
             let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            let store_billing_type_repo = repo_factory.create_store_billing_type_repo(&conn, user_id);
             conn.transaction::<MerchantId, FailureError, _>(move || {
                 debug!("Deleting store merchant with store id {}", &store_id_arg);
+                if store_billing_type_repo
+                    .delete(StoreBillingTypeSearch::by_store_id(store_id_arg))
+                    .is_err()
+                {
+                    warn!("Could not delete store billing type {}", store_id_arg);
+                }
                 merchant_repo.delete_by_store_id(store_id_arg).map(|merchant| merchant.merchant_id)
             })
             .map_err(|e: FailureError| e.context("Service merchant, delete store endpoint error occured.").into())
@@ -353,7 +372,10 @@ pub mod tests {
         let mut core = Core::new().unwrap();
         let handle = Arc::new(core.handle());
         let service = create_service(Some(UserId(1)), handle);
-        let create_store = CreateStoreMerchantPayload { id: StoreId(1) };
+        let create_store = CreateStoreMerchantPayload {
+            id: StoreId(1),
+            country: None,
+        };
         let work = service.create_store(create_store);
         let _result = core.run(work).unwrap();
     }
