@@ -13,17 +13,17 @@ use stq_http::client::HttpClient;
 use client::payments::PaymentsClient;
 use services::accounts::AccountService;
 
-use models::{order_v2::OrderId, Fee};
+use models::order_v2::OrderId;
 use repos::{ReposFactory, SearchFee};
 
 use super::types::ServiceFutureV2;
-use controller::context::DynamicContext;
+use controller::{context::DynamicContext, responses::FeeResponse};
 
 use services::types::spawn_on_pool;
 
 pub trait FeesService {
     /// Getting fee by order id
-    fn get_by_order_id(&self, order_id: OrderId) -> ServiceFutureV2<Option<Fee>>;
+    fn get_by_order_id(&self, order_id: OrderId) -> ServiceFutureV2<Option<FeeResponse>>;
 }
 
 pub struct FeesServiceImpl<
@@ -49,7 +49,7 @@ impl<
         AS: AccountService + Clone,
     > FeesService for FeesServiceImpl<T, M, F, C, PC, AS>
 {
-    fn get_by_order_id(&self, order_id: OrderId) -> ServiceFutureV2<Option<Fee>> {
+    fn get_by_order_id(&self, order_id: OrderId) -> ServiceFutureV2<Option<FeeResponse>> {
         debug!("Requesting fee record by order id: {}", order_id);
 
         let repo_factory = self.repo_factory.clone();
@@ -60,7 +60,16 @@ impl<
         spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let customers_repo = repo_factory.create_fees_repo(&conn, user_id);
 
-            customers_repo.get(SearchFee::OrderId(order_id)).map_err(ectx!(convert => order_id))
+            customers_repo
+                .get(SearchFee::OrderId(order_id))
+                .map_err(ectx!(convert => order_id))
+                .and_then(|fee| {
+                    if let Some(fee) = fee {
+                        FeeResponse::try_from_fee(fee).map(|res| Some(res))
+                    } else {
+                        Ok(None)
+                    }
+                })
         })
     }
 }
