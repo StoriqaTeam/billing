@@ -1,7 +1,5 @@
-use stripe::CaptureMethod;
 use stripe::Currency as StripeCurrency;
-use stripe::PaymentIntentSourceType;
-use stripe::TokenId;
+use stripe::{CaptureMethod, PaymentIntentSourceType, TokenId};
 
 use super::{Error, ErrorContext, ErrorKind};
 use failure::Fail;
@@ -24,6 +22,12 @@ pub struct NewPaymentIntent {
 pub struct NewCustomerWithSource {
     pub email: Option<String>,
     pub token: TokenId,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateCustomer {
+    pub email: Option<String>,
+    pub token: Option<TokenId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

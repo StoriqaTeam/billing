@@ -25,6 +25,8 @@ pub trait StripeClient: Send + Sync + 'static {
 
     fn delete_customer(&self, customer_id: CustomerId) -> Box<Future<Item = Deleted, Error = Error> + Send>;
 
+    fn update_customer(&self, customer_id: CustomerId, input: UpdateCustomer) -> Box<Future<Item = Customer, Error = Error> + Send>;
+
     fn create_charge(&self, input: NewCharge) -> Box<Future<Item = Charge, Error = Error> + Send>;
 
     fn get_charge(&self, charge_id: ChargeId) -> Box<Future<Item = Charge, Error = Error> + Send>;
@@ -98,6 +100,15 @@ impl StripeClient for StripeClientImpl {
 
     fn delete_customer(&self, customer_id: CustomerId) -> Box<Future<Item = Deleted, Error = Error> + Send> {
         Box::new(Customer::delete(&self.client, &customer_id.inner()).map_err(From::from))
+    }
+
+    fn update_customer(&self, customer_id: CustomerId, input: UpdateCustomer) -> Box<Future<Item = Customer, Error = Error> + Send> {
+        let customer_params = CustomerParams {
+            email: input.email.as_ref().map(|e| e.as_ref()),
+            source: input.token.map(|token| PaymentSourceParams::Token(token)),
+            ..Default::default()
+        };
+        Box::new(Customer::update(&self.client, &customer_id.inner(), customer_params).map_err(From::from))
     }
 
     fn create_charge(&self, input: NewCharge) -> Box<Future<Item = Charge, Error = Error> + Send> {
