@@ -1,3 +1,9 @@
+clone:
+  git:
+    image: plugins/git
+    pull: true
+    recursive: true
+
 pipeline:
   restore-cache:
     image: plugins/s3-cache:1
@@ -16,16 +22,6 @@ pipeline:
 # Test PR
 ###
 
-  update_pr:
-    image: plugins/git
-    commands:
-    - export BRANCH_SRC=origin/${DRONE_COMMIT_REFSPEC%%:*} BRANCH_DST=origin/${DRONE_BRANCH}
-    - cp -rpf .git .git.bak
-    - git config --global user.email "service@storiqa.com" && git config --global user.name "Storiqa Common"
-    - git fetch && git checkout $BRANCH_SRC && git merge --no-commit $BRANCH_DST
-    - rm -rf .git && mv -f .git.bak .git
-    when:
-      event: pull_request
   test:
     image: rust:1.31-stretch
     environment:
@@ -74,6 +70,7 @@ pipeline:
     - cargo build --locked
     when:
       event: push
+      branch: master
   package:
     image: plugins/docker
     repo: storiqateam/stq-billing
@@ -85,6 +82,7 @@ pipeline:
     - docker_password
     when:
       event: push
+      branch: master
   package:
     image: plugins/docker
     repo: storiqateam/stq-billing
