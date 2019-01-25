@@ -154,7 +154,7 @@ impl<
     fn create_store(&self, store: CreateStoreMerchantPayload) -> ServiceFuture<Merchant> {
         let user_id = self.dynamic_context.user_id;
         let store_id = store.id;
-        let country = store.country.clone();
+        let country = store.country_code.clone();
         let repo_factory = self.static_context.repo_factory.clone();
         let client = self.dynamic_context.http_client.clone();
         let ExternalBilling {
@@ -202,7 +202,7 @@ impl<
                         let payload = NewStoreMerchant::new(merchant.id, store.id);
                         merchant_repo.create_store_merchant(payload)
                     })
-                    .and_then(|new_merchant| {
+                    .and_then(move |new_merchant| {
                         store_billing_type_repo
                             .create(NewStoreBillingType {
                                 store_id,
@@ -374,7 +374,7 @@ pub mod tests {
         let service = create_service(Some(UserId(1)), handle);
         let create_store = CreateStoreMerchantPayload {
             id: StoreId(1),
-            country: None,
+            country_code: None,
         };
         let work = service.create_store(create_store);
         let _result = core.run(work).unwrap();

@@ -1473,7 +1473,7 @@ pub mod tests {
 
         let create_store = CreateStoreMerchantPayload {
             id: StoreId(1),
-            country: None,
+            country_code: None,
         };
         let work = service.create_store(create_store);
         let _store_merchant = core.run(work).unwrap();

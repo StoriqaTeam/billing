@@ -115,7 +115,7 @@ pub struct CreateUserMerchantPayload {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CreateStoreMerchantPayload {
     pub id: StoreId,
-    pub country: Option<Alpha3>,
+    pub country_code: Option<Alpha3>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
