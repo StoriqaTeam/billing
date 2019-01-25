@@ -4,8 +4,9 @@ use stripe::{Card as StripeCard, CardBrand as StripeCardBrand};
 
 use stq_types::{stripe::PaymentIntentId, UserId};
 
-use models::{invoice_v2::InvoiceId, CustomerId};
-use models::{ChargeId, PaymentIntent, PaymentIntentStatus};
+use models::{
+    fee::FeeId, invoice_v2::InvoiceId, order_v2::OrderId, ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus,
+};
 use stq_static_resources::Currency as StqCurrency;
 
 use services::error::{Error, ErrorContext, ErrorKind};
@@ -106,6 +107,36 @@ impl From<StripeCardBrand> for CardBrand {
             StripeCardBrand::MasterCard => CardBrand::MasterCard,
             StripeCardBrand::UnionPay => CardBrand::UnionPay,
             StripeCardBrand::Unknown => CardBrand::Unknown,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FeeResponse {
+    pub id: FeeId,
+    pub order_id: OrderId,
+    pub amount: f64,
+    pub status: FeeStatus,
+    pub currency: StqCurrency,
+    pub charge_id: Option<ChargeId>,
+    pub metadata: Option<serde_json::Value>,
+}
+
+impl FeeResponse {
+    pub fn try_from_fee(other: Fee) -> Result<Self, Error> {
+        let other_amount = other.amount.to_super_unit(other.currency).to_f64();
+
+        match other_amount {
+            Some(amount) => Ok(Self {
+                id: other.id,
+                order_id: other.order_id,
+                amount,
+                status: other.status,
+                currency: other.currency.into(),
+                charge_id: other.charge_id,
+                metadata: other.metadata,
+            }),
+            _ => Err(ectx!(err ErrorContext::AmountConversion, ErrorKind::Internal)),
         }
     }
 }
