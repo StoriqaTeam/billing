@@ -15,6 +15,7 @@ pub enum Resource {
     StoreBillingType,
     Customer,
     Fee,
+    PaymentIntentInvoice,
 }
 
 impl fmt::Display for Resource {
@@ -32,6 +33,7 @@ impl fmt::Display for Resource {
             Resource::StoreBillingType => write!(f, "store billing type"),
             Resource::Customer => write!(f, "customer"),
             Resource::Fee => write!(f, "fee"),
+            Resource::PaymentIntentInvoice => write!(f, "payment_intent_invoice"),
         }
     }
 }

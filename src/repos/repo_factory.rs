@@ -36,6 +36,8 @@ where
     fn create_customers_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<CustomersRepo + 'a>;
     fn create_fees_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<FeeRepo + 'a>;
     fn create_fees_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<FeeRepo + 'a>;
+    fn create_payment_intent_invoices_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentInvoiceRepo + 'a>;
+    fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a>;
     fn create_store_billing_type_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_store_billing_type_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_international_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>)
@@ -284,6 +286,16 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(ProxyCompanyBillingInfoRepoImpl::new(db_conn, acl))
     }
+
+    fn create_payment_intent_invoices_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentInvoiceRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(PaymentIntentInvoiceRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(PaymentIntentInvoiceRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -474,6 +486,50 @@ pub mod tests {
 
         fn create_proxy_companies_billing_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<ProxyCompanyBillingInfoRepo + 'a> {
             Box::new(ProxyCompanyBillingInfoRepoMock::default())
+        }
+
+        fn create_payment_intent_invoices_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<PaymentIntentInvoiceRepo + 'a> {
+            Box::new(PaymentIntentInvoiceRepoMock::default())
+        }
+
+        fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a> {
+            Box::new(PaymentIntentInvoiceRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct PaymentIntentInvoiceRepoMock;
+
+    impl PaymentIntentInvoiceRepo for PaymentIntentInvoiceRepoMock {
+        fn get(&self, search: SearchPaymentIntentInvoice) -> RepoResultV2<Option<PaymentIntentInvoice>> {
+            let res = match search {
+                SearchPaymentIntentInvoice::Id(id) => PaymentIntentInvoice {
+                    id,
+                    ..create_payment_intent_invoice()
+                },
+                SearchPaymentIntentInvoice::InvoiceId(invoice_id) => PaymentIntentInvoice {
+                    invoice_id,
+                    ..create_payment_intent_invoice()
+                },
+                SearchPaymentIntentInvoice::PaymentIntentId(payment_intent_id) => PaymentIntentInvoice {
+                    payment_intent_id,
+                    ..create_payment_intent_invoice()
+                },
+            };
+
+            Ok(Some(res))
+        }
+
+        fn create(&self, payload: NewPaymentIntentInvoice) -> RepoResultV2<PaymentIntentInvoice> {
+            Ok(PaymentIntentInvoice {
+                payment_intent_id: payload.payment_intent_id,
+                invoice_id: payload.invoice_id,
+                ..create_payment_intent_invoice()
+            })
+        }
+
+        fn delete(&self, _search: SearchPaymentIntentInvoice) -> RepoResultV2<()> {
+            Ok(())
         }
     }
 
@@ -675,10 +731,6 @@ pub mod tests {
         }
 
         fn delete(&self, _payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>> {
-            Ok(Some(create_payment_intent()))
-        }
-
-        fn delete_by_invoice_id(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Option<PaymentIntent>> {
             Ok(Some(create_payment_intent()))
         }
     }
@@ -1212,6 +1264,17 @@ pub mod tests {
         }
     }
 
+    fn create_payment_intent_invoice() -> PaymentIntentInvoice {
+        let now = chrono::offset::Utc::now().naive_utc();
+        PaymentIntentInvoice {
+            id: 0,
+            invoice_id: InvoiceV2Id::new(Uuid::new_v4()),
+            payment_intent_id: PaymentIntentId("PaymentIntentId".to_string()),
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
     fn store_billing_type() -> StoreBillingType {
         StoreBillingType {
             id: StoreBillingTypeId(1),
@@ -1271,7 +1334,6 @@ pub mod tests {
         let now = chrono::offset::Utc::now().naive_utc();
         PaymentIntent {
             id: PaymentIntentId("PaymentIntentId".to_string()),
-            invoice_id: InvoiceV2Id::generate(),
             amount: Amount::new(200),
             amount_received: Amount::new(100),
             client_secret: None,

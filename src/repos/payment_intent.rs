@@ -12,12 +12,12 @@ use stq_types::stripe::PaymentIntentId;
 use repos::legacy_acl::*;
 
 use models::authorization::*;
-use models::invoice_v2::InvoiceId;
 use models::UserId;
 use models::{NewPaymentIntent, PaymentIntent, PaymentIntentAccess, UpdatePaymentIntent};
 
 use schema::invoices_v2::dsl as InvoicesDsl;
 use schema::payment_intent::dsl as PaymentIntentDsl;
+use schema::payment_intents_invoices as PaymentIntentsInvoicesDsl;
 
 use super::acl;
 use super::error::*;
@@ -28,7 +28,6 @@ type PaymentIntentRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, Payme
 #[derive(Debug, Clone)]
 pub enum SearchPaymentIntent {
     Id(PaymentIntentId),
-    InvoiceId(InvoiceId),
 }
 
 pub struct PaymentIntentRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
@@ -41,7 +40,6 @@ pub trait PaymentIntentRepo {
     fn create(&self, new_payment_intent: NewPaymentIntent) -> RepoResultV2<PaymentIntent>;
     fn update(&self, payment_intent_id: PaymentIntentId, update_payment_intent: UpdatePaymentIntent) -> RepoResultV2<PaymentIntent>;
     fn delete(&self, payment_intent_id: PaymentIntentId) -> RepoResultV2<Option<PaymentIntent>>;
-    fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Option<PaymentIntent>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> PaymentIntentRepoImpl<'a, T> {
@@ -58,7 +56,6 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
         let search_exp: Box<BoxableExpression<PaymentIntentDsl::payment_intent, _, SqlType = Bool>> = match search {
             SearchPaymentIntent::Id(payment_intent_id) => Box::new(PaymentIntentDsl::id.eq(payment_intent_id)),
-            SearchPaymentIntent::InvoiceId(invoice_id) => Box::new(PaymentIntentDsl::invoice_id.eq(invoice_id)),
         };
 
         let query = PaymentIntentDsl::payment_intent.filter(search_exp);
@@ -121,18 +118,6 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             ectx!(err e, ErrorSource::Diesel, error_kind)
         })
     }
-
-    fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Option<PaymentIntent>> {
-        debug!("Deleting a payment intent with invoice ID: {}", invoice_id);
-        acl::check(&*self.acl, Resource::PaymentIntent, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
-
-        let command = diesel::delete(PaymentIntentDsl::payment_intent.filter(PaymentIntentDsl::invoice_id.eq(invoice_id)));
-
-        command.get_result::<PaymentIntent>(self.db_conn).optional().map_err(|e| {
-            let error_kind = ErrorKind::from(&e);
-            ectx!(err e, ErrorSource::Diesel, error_kind)
-        })
-    }
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, PaymentIntentAccess>
@@ -142,9 +127,10 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         match *scope {
             Scope::All => true,
             Scope::Owned => {
-                if let Some(PaymentIntentAccess { invoice_id }) = obj {
-                    let query = InvoicesDsl::invoices_v2
-                        .filter(InvoicesDsl::id.eq(invoice_id))
+                if let Some(PaymentIntentAccess { id }) = obj {
+                    let query = PaymentIntentsInvoicesDsl::table
+                        .filter(PaymentIntentsInvoicesDsl::payment_intent_id.eq(id))
+                        .inner_join(InvoicesDsl::invoices_v2)
                         .select(InvoicesDsl::buyer_user_id);
 
                     match query.get_result::<UserId>(self.db_conn).optional() {

@@ -2,13 +2,12 @@ use chrono::NaiveDateTime;
 use stq_types::stripe::PaymentIntentId;
 
 use models::ChargeId;
-use models::{invoice_v2::InvoiceId, Amount, Currency};
+use models::{Amount, Currency};
 use schema::payment_intent;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Queryable)]
 pub struct PaymentIntent {
     pub id: PaymentIntentId,
-    pub invoice_id: InvoiceId,
     pub amount: Amount,
     pub amount_received: Amount,
     pub client_secret: Option<String>,
@@ -25,7 +24,6 @@ pub struct PaymentIntent {
 #[table_name = "payment_intent"]
 pub struct NewPaymentIntent {
     pub id: PaymentIntentId,
-    pub invoice_id: InvoiceId,
     pub amount: Amount,
     pub amount_received: Amount,
     pub client_secret: Option<String>,
@@ -57,13 +55,13 @@ pub enum PaymentIntentStatus {
 }
 
 pub struct PaymentIntentAccess {
-    pub invoice_id: InvoiceId,
+    pub id: PaymentIntentId,
 }
 
 impl<'r> From<&'r PaymentIntent> for PaymentIntentAccess {
     fn from(payment_intent: &PaymentIntent) -> PaymentIntentAccess {
         PaymentIntentAccess {
-            invoice_id: payment_intent.invoice_id.clone(),
+            id: payment_intent.id.clone(),
         }
     }
 }
