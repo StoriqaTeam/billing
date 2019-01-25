@@ -262,6 +262,10 @@ impl<
                 parse_body::<DeleteCustomerRequest>(req.body())
                     .and_then(move |payload| customer_service.delete(payload.customer_id).map_err(failure::Error::from))
             }),
+            (Put, Some(Route::Customers)) => serialize_future({
+                parse_body::<UpdateCustomerRequest>(req.body())
+                    .and_then(move |payload| customer_service.update(payload).map_err(failure::Error::from))
+            }),
             (Post, Some(Route::OrderBillingInfo)) => {
                 let (skip_opt, count_opt) = parse_query!(
                     req.query().unwrap_or_default(),

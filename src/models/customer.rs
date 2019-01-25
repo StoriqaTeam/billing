@@ -3,6 +3,7 @@ use chrono::NaiveDateTime;
 use models::CustomerId;
 use stq_types::UserId;
 
+use controller::requests::UpdateCustomerRequest;
 use schema::customers;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Queryable)]
@@ -37,5 +38,11 @@ impl<'r> From<&'r DbCustomer> for CustomersAccess {
         Self {
             user_id: other.user_id.clone(),
         }
+    }
+}
+
+impl From<UpdateCustomerRequest> for UpdateDbCustomer {
+    fn from(payload: UpdateCustomerRequest) -> UpdateDbCustomer {
+        UpdateDbCustomer { email: payload.email }
     }
 }

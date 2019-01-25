@@ -11,6 +11,12 @@ pub struct DeleteCustomerRequest {
     pub customer_id: CustomerId,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateCustomerRequest {
+    pub email: Option<String>,
+    pub card_token: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OrderPaymentStateRequest {
     pub state: PaymentState,
