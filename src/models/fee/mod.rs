@@ -33,7 +33,7 @@ pub struct NewFee {
     pub metadata: Option<serde_json::Value>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, AsChangeset)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, AsChangeset)]
 #[table_name = "fees"]
 pub struct UpdateFee {
     pub order_id: Option<OrderId>,

@@ -3,6 +3,7 @@ use stq_types::{InternationalBillingId, InvoiceId, OrderId, RoleId, RussiaBillin
 
 use models::invoice_v2;
 use models::order_v2::OrderId as Orderv2Id;
+use models::FeeId;
 
 pub const PAYMENTS_CALLBACK_ENDPOINT: &'static str = "/v2/callback/payments/inbound_tx";
 
@@ -45,6 +46,7 @@ pub enum Route {
     RussiaBillingInfoByStore { id: StoreId },
     BillingTypeByStore { id: StoreId },
     FeesByOrder { id: Orderv2Id },
+    FeesPay { id: FeeId },
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -168,6 +170,10 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::FeesByOrder { id })
+    });
+
+    route_parser.add_route_with_params(r"^/fees/(d+)$", |params| {
+        params.get(0).and_then(|id| id.parse().ok()).map(|id| Route::FeesPay { id })
     });
 
     route_parser.add_route(r"^/customers/with_source$", || Route::CustomersWithSource);

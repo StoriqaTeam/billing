@@ -156,6 +156,7 @@ impl<
             db_pool: self.static_context.db_pool.clone(),
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
+            stripe_client: self.static_context.stripe_client.clone(),
             dynamic_context: dynamic_context.clone(),
         });
 
@@ -330,6 +331,7 @@ impl<
             }),
 
             (Get, Some(Route::FeesByOrder { id })) => serialize_future({ fees_service.get_by_order_id(id).map_err(failure::Error::from) }),
+            (Post, Some(Route::FeesPay { id })) => serialize_future({ fees_service.create_charge(id) }),
             (Get, Some(Route::RussiaBillingInfoByStore { id })) => serialize_future({
                 billing_info_service
                     .get_russia_billing_info_by_store(id)

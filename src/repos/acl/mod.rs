@@ -115,10 +115,12 @@ impl ApplicationAcl {
                 permission!(Resource::StoreBillingType, Action::Read),
                 permission!(Resource::BillingInfo, Action::Read),
                 permission!(Resource::Fee, Action::Read),
+                permission!(Resource::Fee, Action::Write),
                 permission!(Resource::ProxyCompanyBillingInfo, Action::Read),
                 permission!(Resource::PaymentIntentFee, Action::Read),
                 permission!(Resource::PaymentIntentInvoice, Action::Read),
                 permission!(Resource::PaymentIntent, Action::Read),
+                permission!(Resource::Customer, Action::Read),
             ],
         );
         ApplicationAcl {
