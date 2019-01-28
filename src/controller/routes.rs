@@ -181,11 +181,11 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .map(|id| Route::FeesByOrder { id })
     });
 
-    route_parser.add_route_with_params(r"^/fees/(d+)$", |params| {
+    route_parser.add_route_with_params(r"^/fees/(d+)/pay$", |params| {
         params.get(0).and_then(|id| id.parse().ok()).map(|id| Route::FeesPay { id })
     });
 
-    route_parser.add_route_with_params(r"^/fees/by-order-id/([a-zA-Z0-9-]+)$", |params| {
+    route_parser.add_route_with_params(r"^/fees/by-order-id/([a-zA-Z0-9-]+)/pay$", |params| {
         params.get(0).and_then(|id| id.parse().ok()).map(|id| Route::FeesPayByOrder { id })
     });
 
