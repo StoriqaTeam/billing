@@ -1,3 +1,4 @@
+use stq_static_resources::Currency;
 use stq_types::{InternationalBillingId, StoreId, SwiftId};
 
 use schema::international_billing_info;
@@ -7,36 +8,51 @@ use schema::international_billing_info;
 pub struct InternationalBillingInfo {
     pub id: InternationalBillingId,
     pub store_id: StoreId,
-    pub swift_bic: SwiftId,
-    pub bank_name: String,
-    pub full_name: String,
-    pub iban: String,
+    pub account: String,
+    pub currency: Currency,
+    pub name: String,
+    pub bank: String,
+    pub swift: SwiftId,
+    pub bank_address: String,
+    pub country: String,
+    pub city: String,
+    pub recipient_address: String,
 }
 
 #[derive(Serialize, Deserialize, Insertable, AsChangeset, Debug, Clone)]
 #[table_name = "international_billing_info"]
 pub struct UpdateInternationalBillingInfo {
-    pub swift_bic: Option<SwiftId>,
-    pub bank_name: Option<String>,
-    pub full_name: Option<String>,
-    pub iban: Option<String>,
+    pub account: Option<String>,
+    pub currency: Option<Currency>,
+    pub name: Option<String>,
+    pub bank: Option<String>,
+    pub swift: Option<SwiftId>,
+    pub bank_address: Option<String>,
+    pub country: Option<String>,
+    pub city: Option<String>,
+    pub recipient_address: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
 #[table_name = "international_billing_info"]
 pub struct NewInternationalBillingInfo {
     pub store_id: StoreId,
-    pub swift_bic: SwiftId,
-    pub bank_name: String,
-    pub full_name: String,
-    pub iban: String,
+    pub account: String,
+    pub currency: Currency,
+    pub name: String,
+    pub bank: String,
+    pub swift: SwiftId,
+    pub bank_address: String,
+    pub country: String,
+    pub city: String,
+    pub recipient_address: String,
 }
 
 #[derive(Clone, Serialize, Debug, Default)]
 pub struct InternationalBillingInfoSearch {
     pub id: Option<InternationalBillingId>,
     pub store_id: Option<StoreId>,
-    pub swift_bic: Option<SwiftId>,
+    pub swift: Option<SwiftId>,
     pub store_ids: Option<Vec<StoreId>>,
 }
 
