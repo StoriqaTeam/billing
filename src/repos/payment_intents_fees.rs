@@ -14,7 +14,7 @@ use repos::legacy_acl::*;
 
 use models::authorization::*;
 use models::fee::FeeId;
-use models::{NewPaymentIntentFee, PaymentIntentFee};
+use models::{NewPaymentIntentFee, PaymentIntentFee, PaymentIntentFeeAccess};
 
 use schema::fees::dsl as FeesDsl;
 use schema::merchants::dsl as MerchantDsl;
@@ -25,7 +25,7 @@ use super::acl;
 use super::error::*;
 use super::types::RepoResultV2;
 
-type PaymentIntentFeeRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, PaymentIntentFee>>;
+type PaymentIntentFeeRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, PaymentIntentFeeAccess>>;
 type BoxedExpr = Box<BoxableExpression<crate::schema::payment_intents_fees::table, Pg, SqlType = Bool>>;
 
 #[derive(Debug, Clone)]
@@ -77,7 +77,9 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                         Resource::PaymentIntentFee,
                         Action::Read,
                         self,
-                        Some(&payment_intent_fee),
+                        Some(&PaymentIntentFeeAccess {
+                            fee_id: payment_intent_fee.fee_id,
+                        }),
                     )
                     .map_err(ectx!(try ErrorKind::Forbidden))?;
                 };
@@ -87,7 +89,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
     fn create(&self, payload: NewPaymentIntentFee) -> RepoResultV2<PaymentIntentFee> {
         debug!("Create a payment intent fee record: {:?}", payload);
-        acl::check(&*self.acl, Resource::PaymentIntentFee, Action::Write, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+        let access = PaymentIntentFeeAccess { fee_id: payload.fee_id };
+        acl::check(&*self.acl, Resource::PaymentIntentFee, Action::Write, self, Some(&access)).map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let command = diesel::insert_into(PaymentIntentsFeesDsl::table).values(&payload);
 
@@ -101,14 +104,11 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         debug!("Deleting a payment intent fee record by params: {:?}", search);
 
         let payment_intent_fee = self.get(search.clone())?;
-        acl::check(
-            &*self.acl,
-            Resource::PaymentIntentFee,
-            Action::Write,
-            self,
-            payment_intent_fee.as_ref(),
-        )
-        .map_err(ectx!(try ErrorKind::Forbidden))?;
+        let access = payment_intent_fee.as_ref().map(|payment_intent_fee| PaymentIntentFeeAccess {
+            fee_id: payment_intent_fee.fee_id,
+        });
+        acl::check(&*self.acl, Resource::PaymentIntentFee, Action::Write, self, access.as_ref())
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
 
         let search_exp = into_exp(search);
         let command = diesel::delete(PaymentIntentsFeesDsl::table.filter(search_exp));
@@ -124,10 +124,10 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 }
 
-impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, PaymentIntentFee>
+impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, PaymentIntentFeeAccess>
     for PaymentIntentFeeRepoImpl<'a, T>
 {
-    fn is_in_scope(&self, user_id: stq_types::UserId, scope: &Scope, obj: Option<&PaymentIntentFee>) -> bool {
+    fn is_in_scope(&self, user_id: stq_types::UserId, scope: &Scope, obj: Option<&PaymentIntentFeeAccess>) -> bool {
         match *scope {
             Scope::All => true,
             Scope::Owned => {
