@@ -212,6 +212,11 @@ fn into_expr(search: RussiaBillingInfoSearch) -> Option<BoxedExpr> {
         query = Some(and(query, Box::new(new_condition)));
     }
 
+    if let Some(store_ids_filter) = search.store_ids {
+        let new_condition = RussiaBillingInfoDsl::store_id.eq_any(store_ids_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
     query
 }
 
