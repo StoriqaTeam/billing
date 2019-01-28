@@ -82,8 +82,9 @@ impl ApplicationAcl {
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
                 permission!(Resource::PaymentIntent, Action::Read),
-                permission!(Resource::PaymentIntentFee, Action::Read),
-                permission!(Resource::PaymentIntentInvoice, Action::Read),
+                permission!(Resource::PaymentIntent, Action::Write),
+                permission!(Resource::PaymentIntentFee, Action::Read, Scope::Owned),
+                permission!(Resource::PaymentIntentInvoice, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Write, Scope::Owned),
                 permission!(Resource::Fee, Action::Read),
@@ -102,6 +103,10 @@ impl ApplicationAcl {
                 permission!(Resource::BillingInfo, Action::Write, Scope::Owned),
                 permission!(Resource::StoreBillingType, Action::Read, Scope::Owned),
                 permission!(Resource::StoreBillingType, Action::Write, Scope::Owned),
+                permission!(Resource::PaymentIntent, Action::Read),
+                permission!(Resource::PaymentIntent, Action::Write),
+                permission!(Resource::PaymentIntentFee, Action::Read, Scope::Owned),
+                permission!(Resource::PaymentIntentInvoice, Action::Read, Scope::Owned),
             ],
         );
         hash.insert(
@@ -113,6 +118,7 @@ impl ApplicationAcl {
                 permission!(Resource::ProxyCompanyBillingInfo, Action::Read),
                 permission!(Resource::PaymentIntentFee, Action::Read),
                 permission!(Resource::PaymentIntentInvoice, Action::Read),
+                permission!(Resource::PaymentIntent, Action::Read),
             ],
         );
         ApplicationAcl {

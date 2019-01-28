@@ -19,3 +19,8 @@ pub struct NewPaymentIntentFee {
     pub fee_id: FeeId,
     pub payment_intent_id: PaymentIntentId,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct PaymentIntentFeeAccess {
+    pub fee_id: FeeId,
+}
