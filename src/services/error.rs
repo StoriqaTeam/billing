@@ -34,6 +34,8 @@ pub enum ErrorContext {
     Unauthorized,
     #[fail(display = "service context - wrong order state")]
     OrderState,
+    #[fail(display = "service context - wrong fee state")]
+    FeeState,
     #[fail(display = "service context - billing info error")]
     BillingInfo,
     #[fail(display = "service error context - public key has wrong format")]

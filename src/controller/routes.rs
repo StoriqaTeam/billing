@@ -33,6 +33,7 @@ pub enum Route {
     RoleById { id: RoleId },
     RolesByUserId { user_id: UserId },
     PaymentIntentByInvoice { invoice_id: invoice_v2::InvoiceId },
+    PaymentIntentByFee { fee_id: FeeId },
     Customers,
     CustomersWithSource,
     OrdersSetPaymentState { order_id: Orderv2Id },
@@ -139,6 +140,13 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|invoice_id| Route::PaymentIntentByInvoice { invoice_id })
+    });
+
+    route_parser.add_route_with_params(r"^/payment_intents/fees/([a-zA-Z0-9-]+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|fee_id| Route::PaymentIntentByFee { fee_id })
     });
 
     route_parser.add_route_with_params(r"^/orders/([a-zA-Z0-9-]+)/capture$", |params| {
