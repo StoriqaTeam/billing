@@ -163,6 +163,16 @@ table! {
 }
 
 table! {
+    payment_intents_fees (id) {
+        id -> Int4,
+        fee_id -> Int4,
+        payment_intent_id -> Varchar,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+table! {
     payment_intents_invoices (id) {
         id -> Int4,
         invoice_id -> Uuid,
@@ -217,9 +227,12 @@ table! {
 }
 
 joinable!(amounts_received -> invoices_v2 (invoice_id));
+joinable!(fees -> orders (order_id));
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(order_exchange_rates -> orders (order_id));
 joinable!(orders -> invoices_v2 (invoice_id));
+joinable!(payment_intents_fees -> fees (fee_id));
+joinable!(payment_intents_fees -> payment_intent (payment_intent_id));
 joinable!(payment_intents_invoices -> invoices_v2 (invoice_id));
 joinable!(payment_intents_invoices -> payment_intent (payment_intent_id));
 
@@ -237,6 +250,7 @@ allow_tables_to_appear_in_same_query!(
     orders,
     orders_info,
     payment_intent,
+    payment_intents_fees,
     payment_intents_invoices,
     proxy_companies_billing_info,
     roles,

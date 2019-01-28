@@ -260,6 +260,11 @@ fn into_expr(search: OrdersSearch) -> Option<BoxedExpr> {
         query = Some(and(query, Box::new(new_condition)));
     }
 
+    if let Some(order_id_filter) = search.order_id {
+        let new_condition = Orders::id.eq(order_id_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
     query
 }
 
