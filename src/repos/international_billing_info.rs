@@ -227,8 +227,8 @@ fn into_expr(search: InternationalBillingInfoSearch) -> Option<BoxedExpr> {
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(swift_bic_filter) = search.swift_bic {
-        let new_condition = InternationalBillingInfoDsl::swift_bic.eq(swift_bic_filter);
+    if let Some(swift_filter) = search.swift {
+        let new_condition = InternationalBillingInfoDsl::swift.eq(swift_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 

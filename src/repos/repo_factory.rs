@@ -1277,10 +1277,14 @@ pub mod tests {
         RussiaBillingInfo {
             id: RussiaBillingId(1),
             store_id: StoreId(1),
-            kpp: "kpp".to_string(),
-            bic: "bic".to_string(),
-            inn: "inn".to_string(),
-            full_name: "full_name".to_string(),
+            swift_bic: SwiftId("swift_bic".to_string()),
+            branch_name: None,
+            personal_account: None,
+            bank_name: "bank_name".to_string(),
+            tax_id: "tax_id".to_string(),
+            correspondent_account: "correspondent_account".to_string(),
+            current_account: "current_account".to_string(),
+            beneficiary_full_name: "beneficiary_full_name".to_string(),
         }
     }
 
@@ -1288,10 +1292,15 @@ pub mod tests {
         InternationalBillingInfo {
             id: InternationalBillingId(1),
             store_id: StoreId(1),
-            swift_bic: SwiftId("swift_bic".to_string()),
-            bank_name: "bank_name".to_string(),
-            full_name: "full_name".to_string(),
-            iban: "iban".to_string(),
+            swift: SwiftId("swift_bic".to_string()),
+            currency: Currency::RUB,
+            account: "account".to_string(),
+            name: "name".to_string(),
+            bank: "bank".to_string(),
+            bank_address: "bank_address".to_string(),
+            country: "country".to_string(),
+            city: "city".to_string(),
+            recipient_address: "recipient_address".to_string(),
         }
     }
 

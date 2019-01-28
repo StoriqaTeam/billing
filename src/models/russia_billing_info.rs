@@ -1,4 +1,4 @@
-use stq_types::{RussiaBillingId, StoreId};
+use stq_types::{RussiaBillingId, StoreId, SwiftId};
 
 use schema::russia_billing_info;
 
@@ -7,29 +7,41 @@ use schema::russia_billing_info;
 pub struct RussiaBillingInfo {
     pub id: RussiaBillingId,
     pub store_id: StoreId,
-    pub kpp: String,
-    pub bic: String,
-    pub inn: String,
-    pub full_name: String,
+    pub bank_name: String,
+    pub branch_name: Option<String>,
+    pub swift_bic: SwiftId,
+    pub tax_id: String,
+    pub correspondent_account: String,
+    pub current_account: String,
+    pub personal_account: Option<String>,
+    pub beneficiary_full_name: String,
 }
 
 #[derive(Serialize, Deserialize, Insertable, AsChangeset, Debug, Clone)]
 #[table_name = "russia_billing_info"]
 pub struct UpdateRussiaBillingInfo {
-    pub kpp: Option<String>,
-    pub bic: Option<String>,
-    pub inn: Option<String>,
-    pub full_name: Option<String>,
+    pub branch_name: Option<String>,
+    pub personal_account: Option<String>,
+    pub bank_name: Option<String>,
+    pub swift_bic: Option<SwiftId>,
+    pub tax_id: Option<String>,
+    pub correspondent_account: Option<String>,
+    pub current_account: Option<String>,
+    pub beneficiary_full_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
 #[table_name = "russia_billing_info"]
 pub struct NewRussiaBillingInfo {
     pub store_id: StoreId,
-    pub kpp: String,
-    pub bic: String,
-    pub inn: String,
-    pub full_name: String,
+    pub bank_name: String,
+    pub branch_name: Option<String>,
+    pub swift_bic: SwiftId,
+    pub tax_id: String,
+    pub correspondent_account: String,
+    pub current_account: String,
+    pub personal_account: Option<String>,
+    pub beneficiary_full_name: String,
 }
 
 #[derive(Clone, Serialize, Debug, Default)]
