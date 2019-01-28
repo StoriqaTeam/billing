@@ -35,6 +35,7 @@ pub struct NewCharge {
     pub customer_id: CustomerId,
     pub amount: Amount,
     pub currency: Currency,
+    pub capture: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
