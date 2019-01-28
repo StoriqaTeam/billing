@@ -1,7 +1,6 @@
 use stq_router::RouteParser;
 use stq_types::{InternationalBillingId, InvoiceId, OrderId, RoleId, RussiaBillingId, SagaId, StoreId, UserId};
 
-use models::fee::FeeId;
 use models::invoice_v2;
 use models::order_v2::OrderId as Orderv2Id;
 use models::FeeId;
