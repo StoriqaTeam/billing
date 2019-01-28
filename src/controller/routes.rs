@@ -47,6 +47,7 @@ pub enum Route {
     BillingTypeByStore { id: StoreId },
     FeesByOrder { id: Orderv2Id },
     FeesPay { id: FeeId },
+    FeesPayByOrder { id: Orderv2Id },
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -174,6 +175,10 @@ pub fn create_route_parser() -> RouteParser<Route> {
 
     route_parser.add_route_with_params(r"^/fees/(d+)$", |params| {
         params.get(0).and_then(|id| id.parse().ok()).map(|id| Route::FeesPay { id })
+    });
+
+    route_parser.add_route_with_params(r"^/fees/by-order-id/([a-zA-Z0-9-]+)$", |params| {
+        params.get(0).and_then(|id| id.parse().ok()).map(|id| Route::FeesPayByOrder { id })
     });
 
     route_parser.add_route(r"^/customers/with_source$", || Route::CustomersWithSource);
