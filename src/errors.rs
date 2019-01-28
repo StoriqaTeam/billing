@@ -14,7 +14,7 @@ pub enum Error {
     Parse,
     #[fail(display = "Validation error")]
     Validate(ValidationErrors),
-    #[fail(display = "Server is refusing to fullfil the reqeust")]
+    #[fail(display = "Server is refusing to fullfil the request")]
     Forbidden,
     #[fail(display = "R2D2 connection error")]
     Connection,
