@@ -120,7 +120,10 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, PaymentIntentAccess>
     for PaymentIntentRepoImpl<'a, T>
 {
-    fn is_in_scope(&self, _user_id: stq_types::UserId, _scope: &Scope, _obj: Option<&PaymentIntentAccess>) -> bool {
-        false
+    fn is_in_scope(&self, _user_id: stq_types::UserId, scope: &Scope, _obj: Option<&PaymentIntentAccess>) -> bool {
+        match *scope {
+            Scope::All => true,
+            Scope::Owned => false,
+        }
     }
 }
