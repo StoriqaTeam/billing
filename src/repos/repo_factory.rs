@@ -38,6 +38,8 @@ where
     fn create_fees_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<FeeRepo + 'a>;
     fn create_payment_intent_invoices_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentInvoiceRepo + 'a>;
     fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a>;
+    fn create_payment_intent_fees_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentFeeRepo + 'a>;
+    fn create_payment_intent_fees_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentFeeRepo + 'a>;
     fn create_store_billing_type_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_store_billing_type_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreBillingTypeRepo + 'a>;
     fn create_international_billing_info_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>)
@@ -296,6 +298,16 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(PaymentIntentInvoiceRepoImpl::new(db_conn, acl))
     }
+
+    fn create_payment_intent_fees_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PaymentIntentFeeRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(PaymentIntentFeeRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_payment_intent_fees_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PaymentIntentFeeRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(PaymentIntentFeeRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -494,6 +506,31 @@ pub mod tests {
 
         fn create_payment_intent_invoices_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PaymentIntentInvoiceRepo + 'a> {
             Box::new(PaymentIntentInvoiceRepoMock::default())
+        }
+
+        fn create_payment_intent_fees_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<PaymentIntentFeeRepo + 'a> {
+            Box::new(PaymentIntentFeeRepoMock::default())
+        }
+
+        fn create_payment_intent_fees_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PaymentIntentFeeRepo + 'a> {
+            Box::new(PaymentIntentFeeRepoMock::default())
+        }
+    }
+
+    #[derive(Clone, Default)]
+    pub struct PaymentIntentFeeRepoMock;
+
+    impl PaymentIntentFeeRepo for PaymentIntentFeeRepoMock {
+        fn get(&self, _search: SearchPaymentIntentFee) -> RepoResultV2<Option<PaymentIntentFee>> {
+            Ok(Some(payment_intent_fee()))
+        }
+
+        fn create(&self, _payload: NewPaymentIntentFee) -> RepoResultV2<PaymentIntentFee> {
+            Ok(payment_intent_fee())
+        }
+
+        fn delete(&self, _search: SearchPaymentIntentFee) -> RepoResultV2<()> {
+            Ok(())
         }
     }
 
@@ -1223,6 +1260,16 @@ pub mod tests {
                 created_at: chrono::Utc::now().naive_utc(),
                 status_updated_at: chrono::Utc::now().naive_utc(),
             })
+        }
+    }
+
+    fn payment_intent_fee() -> PaymentIntentFee {
+        PaymentIntentFee {
+            id: 1,
+            fee_id: FeeId::new(1),
+            payment_intent_id: PaymentIntentId("PaymentIntentId".to_string()),
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: chrono::Utc::now().naive_utc(),
         }
     }
 

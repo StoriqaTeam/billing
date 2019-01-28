@@ -61,6 +61,7 @@ impl ApplicationAcl {
                 permission!(Resource::Account),
                 permission!(Resource::OrderExchangeRate),
                 permission!(Resource::PaymentIntent),
+                permission!(Resource::PaymentIntentFee),
                 permission!(Resource::PaymentIntentInvoice),
                 permission!(Resource::Customer),
                 permission!(Resource::Fee),
@@ -81,6 +82,7 @@ impl ApplicationAcl {
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
                 permission!(Resource::PaymentIntent, Action::Read),
+                permission!(Resource::PaymentIntentFee, Action::Read),
                 permission!(Resource::PaymentIntentInvoice, Action::Read),
                 permission!(Resource::Customer, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Write, Scope::Owned),
@@ -109,6 +111,8 @@ impl ApplicationAcl {
                 permission!(Resource::BillingInfo, Action::Read),
                 permission!(Resource::Fee, Action::Read),
                 permission!(Resource::ProxyCompanyBillingInfo, Action::Read),
+                permission!(Resource::PaymentIntentFee, Action::Read),
+                permission!(Resource::PaymentIntentInvoice, Action::Read),
             ],
         );
         ApplicationAcl {
