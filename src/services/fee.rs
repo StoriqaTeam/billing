@@ -18,7 +18,7 @@ use client::payments::PaymentsClient;
 use client::stripe::{NewCharge, StripeClient};
 use services::accounts::AccountService;
 
-use models::{fee::FeeId, order_v2::OrderId, ChargeId, FeeStatus, SubjectIdentifier, UpdateFee};
+use models::{order_v2::OrderId, ChargeId, FeeStatus, SubjectIdentifier, UpdateFee};
 use repos::{ReposFactory, SearchCustomer, SearchFee};
 
 use super::types::ServiceFutureV2;
@@ -31,7 +31,7 @@ pub trait FeesService {
     /// Getting fee by order id
     fn get_by_order_id(&self, order_id: OrderId) -> ServiceFutureV2<Option<FeeResponse>>;
     /// Create Charge object in Stripe
-    fn create_charge(&self, id_arg: FeeId) -> ServiceFutureV2<FeeResponse>;
+    fn create_charge(&self, search: SearchFee) -> ServiceFutureV2<FeeResponse>;
 }
 
 pub struct FeesServiceImpl<
@@ -82,8 +82,8 @@ impl<
         })
     }
 
-    fn create_charge(&self, id_arg: FeeId) -> ServiceFutureV2<FeeResponse> {
-        debug!("Create charge in stripe by fee id: {}", id_arg);
+    fn create_charge(&self, search: SearchFee) -> ServiceFutureV2<FeeResponse> {
+        debug!("Create charge in stripe by params: {:?}", search);
 
         let repo_factory = self.repo_factory.clone();
         let repo_factory2 = self.repo_factory.clone();
@@ -100,8 +100,9 @@ impl<
             let order_repo = repo_factory.create_orders_repo(&conn, user_id);
             let customers_repo = repo_factory.create_customers_repo(&conn, user_id);
 
-            let current_fee = fees_repo.get(SearchFee::Id(id_arg)).map_err(ectx!(try convert => id_arg))?.ok_or({
-                let e = format_err!("Fee by id {} not found", id_arg);
+            let search_cloned = search.clone();
+            let current_fee = fees_repo.get(search.clone()).map_err(ectx!(try convert => search_cloned))?.ok_or({
+                let e = format_err!("Fee by search params {:?} not found", search);
                 ectx!(try err e, ErrorKind::Internal)
             })?;
 

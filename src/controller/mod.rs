@@ -36,6 +36,7 @@ use errors::Error;
 use models::order_v2::OrdersSearch;
 use models::*;
 use repos::repo_factory::*;
+use repos::SearchFee;
 use sentry_integration::log_and_capture_error;
 use services::accounts::AccountServiceImpl;
 use services::billing_info::{BillingInfoService, BillingInfoServiceImpl};
@@ -331,7 +332,8 @@ impl<
             }),
 
             (Get, Some(Route::FeesByOrder { id })) => serialize_future({ fees_service.get_by_order_id(id).map_err(failure::Error::from) }),
-            (Post, Some(Route::FeesPay { id })) => serialize_future({ fees_service.create_charge(id) }),
+            (Post, Some(Route::FeesPay { id })) => serialize_future({ fees_service.create_charge(SearchFee::Id(id)) }),
+            (Post, Some(Route::FeesPayByOrder { id })) => serialize_future({ fees_service.create_charge(SearchFee::OrderId(id)) }),
             (Get, Some(Route::RussiaBillingInfoByStore { id })) => serialize_future({
                 billing_info_service
                     .get_russia_billing_info_by_store(id)
