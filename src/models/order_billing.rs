@@ -1,12 +1,13 @@
 use stq_types::{BillingType, StoreId};
 
-use models::order_v2::RawOrder;
+use models::order_v2::{OrderId, RawOrder};
 use models::{InternationalBillingInfo, PaymentState, ProxyCompanyBillingInfo, RussiaBillingInfo};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct OrderBillingSearchTerms {
     pub payment_state: Option<PaymentState>,
     pub store_id: Option<StoreId>,
+    pub order_id: Option<OrderId>,
 }
 
 #[derive(Serialize, Debug, Clone)]

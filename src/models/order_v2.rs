@@ -118,6 +118,7 @@ pub struct OrderAccess {
 pub struct OrdersSearch {
     pub store_id: Option<StoreId>,
     pub state: Option<PaymentState>,
+    pub order_id: Option<OrderId>,
 }
 
 #[derive(Debug, Clone, Serialize)]
