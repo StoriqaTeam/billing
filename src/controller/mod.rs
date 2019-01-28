@@ -48,7 +48,7 @@ use services::invoice::InvoiceService;
 use services::merchant::MerchantService;
 use services::order::OrderService;
 use services::order_billing::{OrderBillingService, OrderBillingServiceImpl};
-use services::payment_intent::PaymentIntentService;
+use services::payment_intent::{PaymentIntentService, PaymentIntentServiceImpl};
 use services::user_roles::UserRolesService;
 use services::Service;
 
@@ -168,6 +168,14 @@ impl<
             dynamic_context: dynamic_context.clone(),
         });
 
+        let payment_intent_service = Arc::new(PaymentIntentServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
+            stripe_client: self.static_context.stripe_client.clone(),
+        });
+
         let path = req.path().to_string();
 
         let fut = match (&req.method().clone(), self.static_context.route_parser.test(req.path())) {
@@ -245,7 +253,10 @@ impl<
             (Delete, Some(Route::RolesByUserId { user_id })) => serialize_future({ service.delete_user_role_by_user_id(user_id) }),
             (Delete, Some(Route::RoleById { id })) => serialize_future({ service.delete_user_role_by_id(id) }),
 
-            (Get, Some(Route::PaymentIntentByInvoice { invoice_id })) => serialize_future({ service.get_by_invoice(invoice_id) }),
+            (Get, Some(Route::PaymentIntentByInvoice { invoice_id })) => {
+                serialize_future({ payment_intent_service.get_by_invoice(invoice_id) })
+            }
+            (Post, Some(Route::PaymentIntentByFee { fee_id })) => serialize_future({ payment_intent_service.create_by_fee(fee_id) }),
             (Post, Some(Route::OrdersByIdCapture { id })) => serialize_future({ service.order_capture(id) }),
             (Post, Some(Route::OrdersByIdDecline { id })) => serialize_future({ service.order_decline(id) }),
 
