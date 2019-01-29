@@ -215,22 +215,29 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 fn into_expr(search: InternationalBillingInfoSearch) -> Option<BoxedExpr> {
     let mut query: Option<BoxedExpr> = None;
 
-    if let Some(id_filter) = search.id {
+    let InternationalBillingInfoSearch {
+        id,
+        store_id,
+        swift,
+        store_ids,
+    } = search;
+
+    if let Some(id_filter) = id {
         let new_condition = InternationalBillingInfoDsl::id.eq(id_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(store_id_filter) = search.store_id {
+    if let Some(store_id_filter) = store_id {
         let new_condition = InternationalBillingInfoDsl::store_id.eq(store_id_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(store_ids_filter) = search.store_ids {
+    if let Some(store_ids_filter) = store_ids {
         let new_condition = InternationalBillingInfoDsl::store_id.eq_any(store_ids_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(swift_filter) = search.swift {
+    if let Some(swift_filter) = swift {
         let new_condition = InternationalBillingInfoDsl::swift.eq(swift_filter);
         query = Some(and(query, Box::new(new_condition)));
     }

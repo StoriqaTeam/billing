@@ -246,17 +246,19 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 fn into_expr(search: OrdersSearch) -> Option<BoxedExpr> {
     let mut query: Option<BoxedExpr> = None;
 
-    if let Some(store_id_filter) = search.store_id {
+    let OrdersSearch { store_id, state, order_id } = search;
+
+    if let Some(store_id_filter) = store_id {
         let new_condition = Orders::store_id.eq(store_id_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(state_filter) = search.state {
+    if let Some(state_filter) = state {
         let new_condition = Orders::state.eq(state_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(order_id_filter) = search.order_id {
+    if let Some(order_id_filter) = order_id {
         let new_condition = Orders::id.eq(order_id_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
