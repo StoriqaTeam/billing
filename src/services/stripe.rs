@@ -27,7 +27,7 @@ use repos::{
 use models::invoice_v2::RawInvoice as InvoiceV2;
 use models::order_v2::RawOrder;
 
-use super::error::{Error as ServiceError, ErrorKind};
+use super::error::{Error as ServiceError, ErrorContext, ErrorKind};
 use super::types::ServiceFutureV2;
 use controller::context::DynamicContext;
 use controller::context::StaticContext;
@@ -79,7 +79,8 @@ impl<
         let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
             conn.transaction(move || {
-                let event = Webhook::construct_event(event_payload, signature_header, secret)?;
+                let event = Webhook::construct_event(event_payload, signature_header, secret)
+                    .map_err(ectx!(try ErrorContext::StripeClient, ErrorKind::Internal))?;
                 match (event.event_type, event.data.object) {
                     (PaymentIntentAmountCapturableUpdated, PaymentIntent(payment_intent)) => {
                         let payment_intent_id = payment_intent.id.clone();

@@ -46,6 +46,8 @@ pub enum ErrorContext {
     WrongMessage,
     #[fail(display = "service error context - can not verify sign")]
     VerifySign,
+    #[fail(display = "service error context - stripe error")]
+    StripeClient,
 }
 
 derive_error_impls!();
