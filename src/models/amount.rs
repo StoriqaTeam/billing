@@ -95,6 +95,12 @@ impl Amount {
     }
 }
 
+impl From<Amount> for BigDecimal {
+    fn from(val: Amount) -> Self {
+        BigDecimal::from_str(&val.0.to_string()).unwrap()
+    }
+}
+
 impl From<u64> for Amount {
     fn from(val: u64) -> Self {
         Amount(val as u128)
