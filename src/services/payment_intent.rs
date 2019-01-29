@@ -172,16 +172,9 @@ fn create_fee_payment_intent(stripe_client: Arc<dyn StripeClient>, fee: Fee) -> 
 }
 
 fn payment_intent_create_params(fee: Fee) -> Result<StripeClientNewPaymentIntent, ServiceError> {
-    use bigdecimal::ToPrimitive;
-
-    let amount = fee.amount.to_super_unit(fee.currency).to_u64().ok_or_else(|| {
-        let e = format_err!("Fee with id {} - could not convet amount {}", fee.id, fee.amount);
-        ectx!(try err e, ErrorKind::Internal)
-    })?;
-
     Ok(StripeClientNewPaymentIntent {
         allowed_source_types: vec![stripe::PaymentIntentSourceType::Card],
-        amount,
+        amount: fee.amount.into(),
         currency: fee.currency.try_into_stripe_currency().map_err(|_| {
             let e = format_err!("Fee with id {} - could not convet currency: {}", fee.id, fee.currency);
             ectx!(try err e, ErrorKind::Internal)

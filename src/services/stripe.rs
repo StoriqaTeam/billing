@@ -81,7 +81,7 @@ impl<
             conn.transaction(move || {
                 let event = Webhook::construct_event(event_payload, signature_header, secret)?;
                 match (event.event_type, event.data.object) {
-                    (PaymentIntentSucceeded, PaymentIntent(payment_intent)) => {
+                    (PaymentIntentAmountCapturableUpdated, PaymentIntent(payment_intent)) => {
                         let payment_intent_id = payment_intent.id.clone();
                         event_store_repo
                             .add_event(Event::new(EventPayload::PaymentIntentSucceeded { payment_intent }))

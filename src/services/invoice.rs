@@ -1371,7 +1371,7 @@ fn payment_intent_create_params(
     let exchanged_amount: BigDecimal = orders
         .iter()
         .map(|(order, _, exchange_rate)| {
-            let seller_price = order.total_amount.to_super_unit(order.seller_currency);
+            let seller_price: BigDecimal = order.total_amount.into();
             let exchanged_price = seller_price / exchange_rate;
             exchanged_price
         })
