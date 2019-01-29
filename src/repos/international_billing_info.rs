@@ -10,14 +10,16 @@ use diesel::Connection;
 use failure::Error as FailureError;
 use failure::Fail;
 
-use stq_types::{StoreId, UserId};
+use stq_types::StoreId;
 
 use models::authorization::*;
-use models::{InternationalBillingInfo, InternationalBillingInfoSearch, NewInternationalBillingInfo, UpdateInternationalBillingInfo};
+use models::{
+    InternationalBillingInfo, InternationalBillingInfoSearch, NewInternationalBillingInfo, UpdateInternationalBillingInfo, UserRole,
+};
 use repos::legacy_acl::*;
 
 use schema::international_billing_info::dsl as InternationalBillingInfoDsl;
-use schema::merchants::dsl as MerchantDsl;
+use schema::roles::dsl as UserRolesDsl;
 
 use super::acl;
 use super::error::*;
@@ -192,15 +194,16 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             Scope::All => true,
             Scope::Owned => {
                 if let Some(InternationalBillingInfoAccess { store_id }) = obj {
-                    let query = MerchantDsl::merchants
-                        .filter(MerchantDsl::store_id.eq(store_id))
-                        .select(MerchantDsl::user_id);
-
-                    match query.get_result::<Option<UserId>>(self.db_conn) {
-                        Ok(None) => false,
-                        Ok(Some(store_owner_id)) => store_owner_id == user_id,
-                        Err(_) => false,
-                    }
+                    UserRolesDsl::roles
+                        .filter(UserRolesDsl::user_id.eq(user_id))
+                        .get_results::<UserRole>(self.db_conn)
+                        .map_err(From::from)
+                        .map(|user_roles_arg| {
+                            user_roles_arg
+                                .iter()
+                                .any(|user_role_arg| user_role_arg.data.clone().map(|data| data == store_id.0).unwrap_or_default())
+                        })
+                        .unwrap_or_else(|_: FailureError| false)
                 } else {
                     false
                 }
