@@ -124,12 +124,14 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 fn into_expr(search: ProxyCompanyBillingInfoSearch) -> Option<BoxedExpr> {
     let mut query: Option<BoxedExpr> = None;
 
-    if let Some(id_filter) = search.id {
+    let ProxyCompanyBillingInfoSearch { id, country_alpha3 } = search;
+
+    if let Some(id_filter) = id {
         let new_condition = ProxyCompanyBillingInfoDsl::id.eq(id_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
-    if let Some(country_alpha3_filter) = search.country_alpha3 {
+    if let Some(country_alpha3_filter) = country_alpha3 {
         let new_condition = ProxyCompanyBillingInfoDsl::country_alpha3.eq(country_alpha3_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
