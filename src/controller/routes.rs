@@ -53,7 +53,7 @@ pub enum Route {
 
 pub fn create_route_parser() -> RouteParser<Route> {
     let mut route_parser = RouteParser::default();
-    route_parser.add_route(r"^/stripe_webhook$", || Route::StripeWebhook);
+    route_parser.add_route(r"^/v2/callback/stripe$", || Route::StripeWebhook);
     route_parser.add_route(r"^/external_billing_callback$", || Route::ExternalBillingCallback);
     route_parser.add_route(&format!(r"^{}$", PAYMENTS_CALLBACK_ENDPOINT), || Route::PaymentsInboundTx);
     route_parser.add_route(r"^/invoices$", || Route::Invoices);
