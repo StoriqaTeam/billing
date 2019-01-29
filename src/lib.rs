@@ -210,6 +210,7 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         payments_client: payments_ctx.as_ref().map(|(payments_client, _)| payments_client.clone()),
         account_service: payments_ctx.as_ref().map(|(_, account_service)| account_service.clone()),
         saga_client: SagaClientImpl::new(client_handle.clone(), config.saga_addr.url),
+        fee: config.fee,
     };
 
     thread::spawn(move || {

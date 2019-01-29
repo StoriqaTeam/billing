@@ -27,8 +27,9 @@ use repos::{
 use models::invoice_v2::RawInvoice as InvoiceV2;
 use models::order_v2::RawOrder;
 
-use super::error::{Error as ServiceError, ErrorKind};
+use super::error::{Error as ServiceError, ErrorContext, ErrorKind};
 use super::types::ServiceFutureV2;
+use config;
 use controller::context::DynamicContext;
 use controller::context::StaticContext;
 
@@ -72,7 +73,6 @@ impl<
         let cpu_pool = self.static_context.cpu_pool.clone();
         let repo_factory = self.static_context.repo_factory.clone();
 
-        //todo use actual values from config
         let signature_header = format!("{}", signature_header);
         let secret = self.static_context.config.stripe.secret_key.clone();
 
@@ -125,6 +125,7 @@ pub fn payment_intent_success<C>(
     payment_intent_invoices_repo: &PaymentIntentInvoiceRepo,
     payment_intent_fees_repo: &PaymentIntentFeeRepo,
     fees_repo: &FeeRepo,
+    fee_config: config::FeeValues,
     payment_intent_id: PaymentIntentId,
 ) -> Result<PaymentType, ServiceError>
 where
@@ -158,7 +159,7 @@ where
             Err(ectx!(err e, ErrorKind::Internal))
         }
         (Some(payment_intent_invoice), None) => {
-            payment_intent_success_invoice(conn, orders_repo, invoices_repo, payment_intent_invoice, fees_repo).map(|res| {
+            payment_intent_success_invoice(conn, orders_repo, invoices_repo, fees_repo, fee_config, payment_intent_invoice).map(|res| {
                 PaymentType::Invoice {
                     payment_intent,
                     invoice: res.0,
@@ -178,8 +179,9 @@ pub fn payment_intent_success_invoice<C>(
     conn: &C,
     orders_repo: &OrdersRepo,
     invoice_repo: &InvoicesV2Repo,
+    fees_repo: &FeeRepo,
+    fee_config: config::FeeValues,
     payment_intent_invoice: PaymentIntentInvoice,
-    _fees_repo: &FeeRepo,
 ) -> Result<(InvoiceV2, Vec<RawOrder>), ServiceError>
 where
     C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
@@ -198,8 +200,33 @@ where
             .get_many_by_invoice_id(invoice.id)
             .map_err(ectx!(try convert => invoice_id))?;
 
+        for order in orders.iter() {
+            let _ = create_fee(fees_repo, fee_config.fee_order_percent, order)?;
+        }
+
         Ok((invoice, orders))
     })
+}
+
+fn create_fee(fees_repo: &FeeRepo, fee_order_percent: u64, order: &RawOrder) -> Result<(), ServiceError> {
+    let hundred_percents = 100u64;
+
+    let amount = order
+        .total_amount
+        .checked_div(Amount::from(hundred_percents))
+        .and_then(|one_percent| one_percent.checked_mul(Amount::from(fee_order_percent)))
+        .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+
+    let new_fee = NewFee {
+        order_id: order.id,
+        amount,
+        status: FeeStatus::NotPaid,
+        currency: order.seller_currency.clone(),
+        charge_id: None,
+        metadata: None,
+    };
+
+    fees_repo.create(new_fee).map_err(ectx!(convert => order.id.clone())).map(|_| ())
 }
 
 pub fn payment_intent_success_fee<C>(conn: &C, fees_repo: &FeeRepo, payment_intent_fee: PaymentIntentFee) -> Result<(), ServiceError>

@@ -49,6 +49,7 @@ where
 
     pub fn handle_payment_intent_succeeded(self, payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
         let saga_client = self.saga_client.clone();
+        let fee_config = self.fee.clone();
 
         let payment_intent_id = PaymentIntentId(payment_intent.id);
         let payment_intent_id_cloned = payment_intent_id.clone();
@@ -74,6 +75,7 @@ where
                     &*payment_intent_invoices_repo,
                     &*payment_intent_fees_repo,
                     &*fees_repo,
+                    fee_config,
                     payment_intent_id.clone(),
                 )
                 .map_err(ectx!(ErrorKind::Internal => payment_intent_id))

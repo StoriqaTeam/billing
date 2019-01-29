@@ -24,7 +24,7 @@ const MAX_FIAT_PRECISION: i64 = 2;
 /// You have to be careful that it has a limited amount of 38 significant digits
 /// So make sure that total monetary supply of a coin (in satoshis, wei, etc) does not exceed that.
 /// It has json and postgres serialization / deserialization implemented.
-/// Numeric type from postgres has bigger precision, so you need to impose contraint
+/// Numeric type from postgres has bigger precision, so you need to impose constraint
 /// that your db contains only limited precision numbers, i.e. no floating point and limited by u128 values.
 ///
 /// As a monetary amount it only implements checked_add and checked_sub
@@ -44,9 +44,17 @@ impl Amount {
         self.0.checked_add(other.0).map(Amount)
     }
 
-    /// Make saubtraction, return None on overflow
+    /// Make subtraction, return None on overflow
     pub fn checked_sub(&self, other: Amount) -> Option<Self> {
         self.0.checked_sub(other.0).map(Amount)
+    }
+
+    pub fn checked_div(&self, other: Amount) -> Option<Self> {
+        self.0.checked_div(other.0).map(Amount)
+    }
+
+    pub fn checked_mul(&self, other: Amount) -> Option<Self> {
+        self.0.checked_mul(other.0).map(Amount)
     }
 
     pub fn new(v: u128) -> Self {
