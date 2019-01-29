@@ -97,18 +97,14 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn search(&self, skip: i64, count: i64, search_params: OrdersSearch) -> RepoResultV2<OrderSearchResults> {
-        debug!("Searching orders , skip={}, count={}, search {:?}", skip, count, search_params);
-        let query: Option<BoxedExpr> = into_expr(search_params);
-
-        let query = query.ok_or_else(|| {
-            let e = format_err!("orders search params is empty");
-            ectx!(try err e, ErrorKind::Internal)
-        })?;
+        debug!("Searching orders, skip={}, count={}, search {:?}", skip, count, search_params);
+        let query: BoxedExpr = into_expr(search_params).unwrap_or(Box::new(true.into_sql::<Bool>()));
 
         let orders = Orders::orders
             .filter(&query)
             .offset(skip)
             .limit(count)
+            .order_by(Orders::id.desc())
             .get_results::<RawOrder>(self.db_conn)
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
