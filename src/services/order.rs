@@ -17,10 +17,12 @@ use super::error::{ErrorContext, ErrorKind};
 use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
 use client::stripe::StripeClient;
-use models::order_v2::{OrderId, OrderSearchResults, OrdersSearch, RawOrder};
+use controller::responses::{OrderResponse, OrderSearchResultsResponse};
+use models::order_v2::{OrderId, OrdersSearch, RawOrder};
 use models::PaymentState;
 use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
 use services::accounts::AccountService;
+use services::error::Error as ServiceError;
 use services::types::spawn_on_pool;
 use services::Service;
 
@@ -32,7 +34,7 @@ pub trait OrderService {
     /// Update order payment state
     fn update_order_state(&self, order_id: OrderId, state: PaymentState) -> ServiceFutureV2<()>;
     // Search orders
-    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResults>;
+    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResultsResponse>;
 }
 
 impl<
@@ -165,7 +167,7 @@ impl<
         Box::new(fut)
     }
 
-    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResults> {
+    fn search_orders(&self, skip: i64, count: i64, payload: OrdersSearch) -> ServiceFutureV2<OrderSearchResultsResponse> {
         let repo_factory = self.static_context.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
 
@@ -176,8 +178,16 @@ impl<
             let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
             debug!("Requesting orders  {:?}", payload);
 
-            let orders = orders_repo.search(skip, count, payload).map_err(ectx!(try convert))?;
-            Ok(orders)
+            let search_result = orders_repo.search(skip, count, payload).map_err(ectx!(try convert))?;
+            let orders = search_result
+                .orders
+                .into_iter()
+                .map(OrderResponse::try_from_raw_order)
+                .collect::<Result<Vec<_>, ServiceError>>()?;
+            Ok(OrderSearchResultsResponse {
+                total_count: search_result.total_count,
+                orders,
+            })
         })
     }
 }
