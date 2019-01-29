@@ -104,7 +104,7 @@ pub struct EventStore {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct FeeValues {
-    pub fee_order_percent: u64,
+    pub order_percent: u64,
 }
 /// Creates new app config struct
 /// #Examples

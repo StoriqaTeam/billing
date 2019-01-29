@@ -201,20 +201,20 @@ where
             .map_err(ectx!(try convert => invoice_id))?;
 
         for order in orders.iter() {
-            let _ = create_fee(fees_repo, fee_config.fee_order_percent, order)?;
+            let _ = create_fee(fees_repo, fee_config.order_percent, order)?;
         }
 
         Ok((invoice, orders))
     })
 }
 
-fn create_fee(fees_repo: &FeeRepo, fee_order_percent: u64, order: &RawOrder) -> Result<(), ServiceError> {
+fn create_fee(fees_repo: &FeeRepo, order_percent: u64, order: &RawOrder) -> Result<(), ServiceError> {
     let hundred_percents = 100u64;
 
     let amount = order
         .total_amount
         .checked_div(Amount::from(hundred_percents))
-        .and_then(|one_percent| one_percent.checked_mul(Amount::from(fee_order_percent)))
+        .and_then(|one_percent| one_percent.checked_mul(Amount::from(order_percent)))
         .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
 
     let new_fee = NewFee {

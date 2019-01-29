@@ -39,3 +39,6 @@ secret_key = "sk_test_NZtkQf1xKGjkreVbKddipafS"
 max_processing_attempts = 1
 stuck_threshold_sec = 60
 polling_rate_sec = 5
+
+[fee]
+order_percent = 5
