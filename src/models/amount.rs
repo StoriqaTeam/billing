@@ -101,6 +101,12 @@ impl From<Amount> for BigDecimal {
     }
 }
 
+impl From<Amount> for u64 {
+    fn from(val: Amount) -> Self {
+        val.0 as u64
+    }
+}
+
 impl From<u64> for Amount {
     fn from(val: u64) -> Self {
         Amount(val as u128)
