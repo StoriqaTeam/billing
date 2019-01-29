@@ -49,6 +49,7 @@ use services::merchant::MerchantService;
 use services::order::OrderService;
 use services::order_billing::{OrderBillingService, OrderBillingServiceImpl};
 use services::payment_intent::{PaymentIntentService, PaymentIntentServiceImpl};
+use services::stripe::{StripeService, StripeServiceImpl};
 use services::user_roles::UserRolesService;
 use services::Service;
 
@@ -176,6 +177,15 @@ impl<
             stripe_client: self.static_context.stripe_client.clone(),
         });
 
+        let stripe_service = Arc::new(StripeServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            stripe_client: self.static_context.stripe_client.clone(),
+            dynamic_context: dynamic_context.clone(),
+            static_context: self.static_context.clone(),
+        });
+
         let path = req.path().to_string();
 
         let fut = match (&req.method().clone(), self.static_context.route_parser.test(req.path())) {
@@ -191,7 +201,7 @@ impl<
                             .map_err(failure::Error::from)
                     })
                     .and_then(move |(signature_header, data)| {
-                        service
+                        stripe_service
                             .handle_stripe_event(signature_header, data)
                             .map_err(Error::from)
                             .map_err(failure::Error::from)
