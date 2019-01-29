@@ -14,6 +14,7 @@ use stq_types::{Alpha3, BillingType, StoreId};
 use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
 use controller::context::DynamicContext;
+use controller::responses::OrderResponse;
 use models::order_v2::OrdersSearch;
 use models::order_v2::StoreId as StoreIdV2;
 use models::{
@@ -22,6 +23,7 @@ use models::{
 };
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
+use services::error::Error as ServiceError;
 use services::types::spawn_on_pool;
 
 pub trait OrderBillingService {
@@ -123,17 +125,17 @@ impl<
                         .get(&store_id)
                         .map(|store_billing| store_billing.billing_type)
                         .unwrap_or(BillingType::International);
-                    OrderBillingInfo {
+                    Ok(OrderBillingInfo {
                         russia_billing_info: russia_billings.get(&store_id).cloned(),
                         international_billing_info: international_billings.get(&store_id).cloned(),
                         billing_type,
                         proxy_company_billing_info: proxy_company_billing_info
                             .clone()
                             .filter(move |_| billing_type == BillingType::Russia),
-                        order,
-                    }
+                        order: OrderResponse::try_from_raw_order(order)?,
+                    })
                 })
-                .collect();
+                .collect::<Result<Vec<_>, ServiceError>>()?;
 
             Ok(OrderBillingInfoSearchResults { total_count, orders })
         })

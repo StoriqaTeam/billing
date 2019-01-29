@@ -1,10 +1,16 @@
 use bigdecimal::ToPrimitive;
+use chrono::NaiveDateTime;
 use failure::Fail;
 use stripe::{Card as StripeCard, CardBrand as StripeCardBrand};
 
 use stq_types::{stripe::PaymentIntentId, UserId};
 
-use models::{fee::FeeId, order_v2::OrderId, ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus};
+use models::{
+    fee::FeeId,
+    invoice_v2::InvoiceId,
+    order_v2::{OrderId, RawOrder, StoreId},
+    ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus, PaymentState,
+};
 use stq_static_resources::Currency as StqCurrency;
 
 use services::error::{Error, ErrorContext, ErrorKind};
@@ -42,6 +48,52 @@ impl PaymentIntentResponse {
             _ => Err(ectx!(err ErrorContext::AmountConversion, ErrorKind::Internal)),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OrderResponse {
+    pub id: OrderId,
+    pub seller_currency: StqCurrency,
+    pub total_amount: f64,
+    pub cashback_amount: f64,
+    pub invoice_id: InvoiceId,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub store_id: StoreId,
+    pub state: PaymentState,
+}
+
+impl OrderResponse {
+    pub fn try_from_raw_order(raw_order: RawOrder) -> Result<Self, Error> {
+        let total_amount = raw_order
+            .total_amount
+            .to_super_unit(raw_order.seller_currency)
+            .to_f64()
+            .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+        let cashback_amount = raw_order
+            .cashback_amount
+            .to_super_unit(raw_order.seller_currency)
+            .to_f64()
+            .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+
+        Ok(OrderResponse {
+            id: raw_order.id,
+            seller_currency: raw_order.seller_currency.into(),
+            total_amount,
+            cashback_amount,
+            invoice_id: raw_order.invoice_id,
+            created_at: raw_order.created_at,
+            updated_at: raw_order.updated_at,
+            store_id: raw_order.store_id,
+            state: raw_order.state,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OrderSearchResultsResponse {
+    pub total_count: i64,
+    pub orders: Vec<OrderResponse>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
