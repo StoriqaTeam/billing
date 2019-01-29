@@ -22,6 +22,7 @@ pub struct Config {
     pub sentry: Option<SentryConfig>,
     pub stripe: Stripe,
     pub event_store: EventStore,
+    pub fee: FeeValues,
 }
 
 /// Common server settings
@@ -101,6 +102,10 @@ pub struct EventStore {
     pub polling_rate_sec: u32,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct FeeValues {
+    pub order_percent: u64,
+}
 /// Creates new app config struct
 /// #Examples
 /// ```

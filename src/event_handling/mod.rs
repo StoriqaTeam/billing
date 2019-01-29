@@ -15,6 +15,7 @@ use stq_http::client::HttpClient;
 use tokio_timer::Interval;
 
 use client::{payments::PaymentsClient, saga::SagaClient};
+use config;
 use models::event_store::EventEntry;
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
@@ -41,6 +42,7 @@ where
     pub saga_client: SC,
     pub payments_client: Option<PC>,
     pub account_service: Option<AS>,
+    pub fee: config::FeeValues,
 }
 
 impl<T, M, F, HC, PC, SC, AS> Clone for EventHandler<T, M, F, HC, PC, SC, AS>
@@ -62,6 +64,7 @@ where
             saga_client: self.saga_client.clone(),
             payments_client: self.payments_client.clone(),
             account_service: self.account_service.clone(),
+            fee: self.fee.clone(),
         }
     }
 }
