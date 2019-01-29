@@ -196,6 +196,7 @@ impl<
                     .ok_or(format_err!("Stripe-Signature header not provided"))
                     .into_future()
                     .and_then(|signature_header| {
+                        info!("stripe controller signature_header: {}", signature_header);
                         read_body(req.body())
                             .map(move |data| (signature_header, data))
                             .map_err(failure::Error::from)

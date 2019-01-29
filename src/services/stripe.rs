@@ -66,6 +66,11 @@ impl<
     > StripeService for StripeServiceImpl<T, M, F, C, PC, AS>
 {
     fn handle_stripe_event(&self, signature_header: StripeSignature, event_payload: String) -> ServiceFutureV2<()> {
+        info!(
+            "stripe handle_stripe_event signature_header: {}, event_payload.len(): {}",
+            signature_header,
+            event_payload.len()
+        );
         use stripe::EventObject::*;
         use stripe::EventType::*;
 
@@ -81,6 +86,7 @@ impl<
             conn.transaction(move || {
                 let event = Webhook::construct_event(event_payload, signature_header, secret)
                     .map_err(ectx!(try ErrorContext::StripeClient, ErrorKind::Internal))?;
+                info!("stripe handle_stripe_event event: {:?}", event);
                 match (event.event_type, event.data.object) {
                     (PaymentIntentAmountCapturableUpdated, PaymentIntent(payment_intent)) => {
                         let payment_intent_id = payment_intent.id.clone();
