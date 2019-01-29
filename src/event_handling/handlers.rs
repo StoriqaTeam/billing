@@ -13,8 +13,10 @@ use client::{
     saga::{OrderStateUpdate, SagaClient},
 };
 use models::{invoice_v2::InvoiceId, AccountId, AccountWithBalance, Event, EventPayload};
+
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
+use services::stripe::PaymentType;
 
 use super::error::*;
 use super::{spawn_on_pool, EventHandler, EventHandlerFuture};
@@ -61,32 +63,41 @@ where
                 let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
                 let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
                 let payment_intent_invoices_repo = repo_factory.create_payment_intent_invoices_repo_with_sys_acl(&conn);
-                crate::services::invoice::payment_intent_success(
+                let payment_intent_fees_repo = repo_factory.create_payment_intent_fees_repo_with_sys_acl(&conn);
+                let fees_repo = repo_factory.create_fees_repo_with_sys_acl(&conn);
+
+                crate::services::stripe::payment_intent_success(
                     &*conn,
                     &*orders_repo,
                     &*invoices_repo,
                     &*payment_intent_repo,
                     &*payment_intent_invoices_repo,
+                    &*payment_intent_fees_repo,
+                    &*fees_repo,
                     payment_intent_id.clone(),
                 )
                 .map_err(ectx!(ErrorKind::Internal => payment_intent_id))
             }
         })
-        .map(move |(invoice, orders)| {
-            orders
-                .into_iter()
-                .map(|order| OrderStateUpdate {
-                    order_id: order.id,
-                    store_id: order.store_id,
-                    customer_id: invoice.buyer_user_id,
-                    status: new_status,
-                })
-                .collect()
-        })
-        .and_then(move |order_state_updates| {
-            saga_client
-                .update_order_states(order_state_updates)
-                .map_err(ectx!(ErrorKind::Internal => payment_intent_id_cloned))
+        .and_then(move |payment_type| match payment_type {
+            PaymentType::Invoice { invoice, orders, .. } => {
+                let order_state_updates = orders
+                    .into_iter()
+                    .map(|order| OrderStateUpdate {
+                        order_id: order.id,
+                        store_id: order.store_id,
+                        customer_id: invoice.buyer_user_id,
+                        status: new_status,
+                    })
+                    .collect();
+
+                future::Either::A(
+                    saga_client
+                        .update_order_states(order_state_updates)
+                        .map_err(ectx!(ErrorKind::Internal => payment_intent_id_cloned)),
+                )
+            }
+            PaymentType::Fee => future::Either::B(future::ok(())),
         });
 
         Box::new(fut)
