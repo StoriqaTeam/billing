@@ -208,14 +208,15 @@ where
             .map_err(ectx!(try convert => invoice_id))?;
 
         for order in orders.iter() {
-            let _ = create_fee(fees_repo, fee_config.order_percent, order)?;
+            let new_fee = create_fee(fee_config.order_percent, order)?;
+            let _ = fees_repo.create(new_fee).map_err(ectx!(try convert => order.id.clone()))?;
         }
 
         Ok((invoice, orders))
     })
 }
 
-fn create_fee(fees_repo: &FeeRepo, order_percent: u64, order: &RawOrder) -> Result<(), ServiceError> {
+fn create_fee(order_percent: u64, order: &RawOrder) -> Result<NewFee, ServiceError> {
     let hundred_percents = 100u64;
 
     let amount = order
@@ -224,7 +225,7 @@ fn create_fee(fees_repo: &FeeRepo, order_percent: u64, order: &RawOrder) -> Resu
         .and_then(|one_percent| one_percent.checked_mul(Amount::from(order_percent)))
         .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
 
-    let new_fee = NewFee {
+    Ok(NewFee {
         order_id: order.id,
         amount,
         status: FeeStatus::NotPaid,
@@ -233,9 +234,7 @@ fn create_fee(fees_repo: &FeeRepo, order_percent: u64, order: &RawOrder) -> Resu
         metadata: None,
         crypto_currency: None,
         crypto_amount: None,
-    };
-
-    fees_repo.create(new_fee).map_err(ectx!(convert => order.id.clone())).map(|_| ())
+    })
 }
 
 pub fn payment_intent_success_fee<C>(conn: &C, fees_repo: &FeeRepo, payment_intent_fee: PaymentIntentFee) -> Result<(), ServiceError>

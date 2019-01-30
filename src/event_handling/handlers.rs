@@ -301,14 +301,13 @@ where
                         let fees_repo = repo_factory.create_fees_repo_with_sys_acl(&conn);
 
                         for order in orders.iter() {
-                            let _ = crate::services::invoice::create_crypto_fee(
-                                &*fees_repo,
-                                order_percent,
-                                &fee_currency,
-                                &currency_exchange_info,
-                                order,
-                            )
-                            .map_err(ectx!(try ErrorKind::Internal => order.id))?;
+                            let new_fee =
+                                crate::services::invoice::create_crypto_fee(order_percent, &fee_currency, &currency_exchange_info, order)
+                                    .map_err(ectx!(try ErrorKind::Internal => order.id))?;
+
+                            let _ = fees_repo
+                                .create(new_fee)
+                                .map_err(ectx!(try ErrorKind::Internal => order.id.clone()))?;
                         }
 
                         Ok(())

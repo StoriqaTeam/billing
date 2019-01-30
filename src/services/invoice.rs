@@ -37,7 +37,7 @@ use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
 use repos::{
-    AccountsRepo, EventStoreRepo, FeeRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentInvoiceRepo, PaymentIntentRepo,
+    AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentInvoiceRepo, PaymentIntentRepo,
     RepoResult, SearchPaymentIntentInvoice,
 };
 use services::accounts::AccountService;
@@ -1472,13 +1472,15 @@ pub fn parse_hex(hex_asm: &str) -> Vec<u8> {
     bytes
 }
 
+/// The Commission for the services of the platform from sellers who trade in ' STQ ' is deducted in Fiat currency.
+/// Conversion rates from` Crypto `to` Fiat `are stored per 1` STQ',
+/// and the order stores the amount in cents, so the conversion from cents and back is used.
 pub fn create_crypto_fee(
-    fees_repo: &FeeRepo,
     order_percent: u64,
     fee_currency: &Currency,
     currency_exchange_info: &CurrencyExchangeInfo,
     order: &RawOrder,
-) -> Result<(), ServiceError> {
+) -> Result<NewFee, ServiceError> {
     let hundred_percents = 100u64;
 
     let exchange_rate = currency_exchange_info
@@ -1497,7 +1499,7 @@ pub fn create_crypto_fee(
         .and_then(|one_percent| one_percent.checked_mul(Amount::from(order_percent)))
         .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
 
-    let new_fee = NewFee {
+    Ok(NewFee {
         order_id: order.id,
         amount,
         status: FeeStatus::NotPaid,
@@ -1506,9 +1508,7 @@ pub fn create_crypto_fee(
         metadata: None,
         crypto_currency: None,
         crypto_amount: None,
-    };
-
-    fees_repo.create(new_fee).map_err(ectx!(convert => order.id.clone())).map(|_| ())
+    })
 }
 
 #[cfg(test)]
