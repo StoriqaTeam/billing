@@ -26,6 +26,7 @@ use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
 use client::payments::{GetRate, PaymentsClient, Rate, RateRefresh};
+use client::stores::CurrencyExchangeInfo;
 use client::stripe::{NewPaymentIntent as StripeClientNewPaymentIntent, StripeClient};
 use config::ExternalBilling;
 use controller::context::DynamicContext;
@@ -36,7 +37,7 @@ use models::*;
 use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
 use repos::{
-    AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentInvoiceRepo, PaymentIntentRepo,
+    AccountsRepo, EventStoreRepo, FeeRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentInvoiceRepo, PaymentIntentRepo,
     RepoResult, SearchPaymentIntentInvoice,
 };
 use services::accounts::AccountService;
@@ -1469,6 +1470,45 @@ pub fn parse_hex(hex_asm: &str) -> Vec<u8> {
         bytes.push(h << 4 | l)
     }
     bytes
+}
+
+pub fn create_crypto_fee(
+    fees_repo: &FeeRepo,
+    order_percent: u64,
+    fee_currency: &Currency,
+    currency_exchange_info: &CurrencyExchangeInfo,
+    order: &RawOrder,
+) -> Result<(), ServiceError> {
+    let hundred_percents = 100u64;
+
+    let exchange_rate = currency_exchange_info
+        .data
+        .get(&order.seller_currency)
+        .and_then(|exchanges| exchanges.get(&fee_currency).map(|c| c.0))
+        .unwrap_or(1.0);
+
+    let convert_total_amount = Amount::from_super_unit(
+        fee_currency.clone(),
+        order.total_amount.to_super_unit(order.seller_currency) / BigDecimal::from(exchange_rate),
+    );
+
+    let amount = convert_total_amount
+        .checked_div(Amount::from(hundred_percents))
+        .and_then(|one_percent| one_percent.checked_mul(Amount::from(order_percent)))
+        .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+
+    let new_fee = NewFee {
+        order_id: order.id,
+        amount,
+        status: FeeStatus::NotPaid,
+        currency: order.seller_currency.clone(),
+        charge_id: None,
+        metadata: None,
+        crypto_currency: None,
+        crypto_amount: None,
+    };
+
+    fees_repo.create(new_fee).map_err(ectx!(convert => order.id.clone())).map(|_| ())
 }
 
 #[cfg(test)]
