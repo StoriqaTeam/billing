@@ -97,10 +97,12 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         }
 
         let billing_info = billing_info_list.pop();
-        let access = billing_info
-            .as_ref()
-            .map(|info| RussiaBillingInfoAccess { store_id: info.store_id });
-        acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, access.as_ref()).map_err(ectx!(try ErrorKind::Forbidden))?;
+        if let Some(ref billing_info) = billing_info {
+            let access = RussiaBillingInfoAccess {
+                store_id: billing_info.store_id,
+            };
+            acl::check(&*self.acl, Resource::BillingInfo, Action::Read, self, Some(&access)).map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
         Ok(billing_info)
     }
 
