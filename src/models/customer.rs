@@ -23,7 +23,7 @@ pub struct NewDbCustomer {
     pub email: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, AsChangeset)]
+#[derive(Clone, Debug, Serialize, Deserialize, AsChangeset, Eq, PartialEq, Default)]
 #[table_name = "customers"]
 pub struct UpdateDbCustomer {
     pub email: Option<String>,
@@ -31,6 +31,12 @@ pub struct UpdateDbCustomer {
 
 pub struct CustomersAccess {
     pub user_id: UserId,
+}
+
+impl UpdateDbCustomer {
+    pub fn is_empty(&self) -> bool {
+        self == &UpdateDbCustomer::default()
+    }
 }
 
 impl<'r> From<&'r DbCustomer> for CustomersAccess {

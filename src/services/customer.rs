@@ -19,7 +19,7 @@ use client::payments::PaymentsClient;
 use client::stripe::StripeClient;
 use services::accounts::AccountService;
 
-use models::{CustomerId, DbCustomer, NewDbCustomer};
+use models::{CustomerId, DbCustomer, NewDbCustomer, UpdateDbCustomer};
 use repos::{ReposFactory, SearchCustomer};
 use services::error::{Error, ErrorContext, ErrorKind};
 
@@ -240,11 +240,16 @@ impl<
                                 let e = format_err!("Customer for user {} not found", user_id);
                                 ectx!(try err e, ErrorKind::NotFound)
                             })?;
-                        let update_customer = customers_repo
-                            .update(customer.id, payload.clone().into())
-                            .map_err(ectx!(try convert => user_id))?;
+                        let update_db_customer: UpdateDbCustomer = payload.clone().into();
+                        if update_db_customer.is_empty() {
+                            Ok(customer)
+                        } else {
+                            let update_customer = customers_repo
+                                .update(customer.id, update_db_customer)
+                                .map_err(ectx!(try convert => user_id))?;
 
-                        Ok(update_customer)
+                            Ok(update_customer)
+                        }
                     })
                 }
             })
