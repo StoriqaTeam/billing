@@ -5,7 +5,7 @@ use stq_types::{OrderId as StqOrderId, StoreId as StqStoreId, UserId as StqUserI
 
 use models::invoice_v2::InvoiceId;
 use models::order_v2::{OrderId, StoreId};
-use models::{Currency, UserId};
+use models::{currency::ConversionError as CurrencyConversionError, Currency, UserId};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Order {
@@ -69,7 +69,7 @@ impl fmt::Display for CreateOrderV2 {
 }
 
 impl CreateOrderV2 {
-    pub fn try_from_v1(order: Order) -> Result<Self, CreateInvoiceConversionError> {
+    pub fn try_from_v1(order: Order) -> Result<Self, CurrencyConversionError> {
         let Order {
             id,
             store_id,
@@ -79,8 +79,8 @@ impl CreateOrderV2 {
             ..
         } = order;
 
-        let currency = Currency::try_from_stq_currency(currency)
-            .map_err(|_| CreateInvoiceConversionError::UnsupportedCurrency(currency.to_string()))?;
+        let currency =
+            Currency::try_from_stq_currency(currency).map_err(|_| CurrencyConversionError::UnsupportedCurrency(currency.to_string()))?;
 
         Ok(Self {
             id: OrderId::new(id.0),
@@ -100,14 +100,8 @@ pub struct CreateInvoiceV2 {
     pub saga_id: InvoiceId,
 }
 
-#[derive(Debug, Clone, Fail)]
-pub enum CreateInvoiceConversionError {
-    #[fail(display = "unsupported currency: {}", _0)]
-    UnsupportedCurrency(String),
-}
-
 impl CreateInvoiceV2 {
-    pub fn try_from_v1(create_invoice: CreateInvoice) -> Result<Self, CreateInvoiceConversionError> {
+    pub fn try_from_v1(create_invoice: CreateInvoice) -> Result<Self, CurrencyConversionError> {
         let CreateInvoice {
             orders,
             customer_id,
@@ -117,8 +111,8 @@ impl CreateInvoiceV2 {
 
         let orders = orders.into_iter().map(CreateOrderV2::try_from_v1).collect::<Result<Vec<_>, _>>()?;
         let customer_id = UserId::new(customer_id.0);
-        let currency = Currency::try_from_stq_currency(currency)
-            .map_err(|_| CreateInvoiceConversionError::UnsupportedCurrency(currency.to_string()))?;
+        let currency =
+            Currency::try_from_stq_currency(currency).map_err(|_| CurrencyConversionError::UnsupportedCurrency(currency.to_string()))?;
         let saga_id = InvoiceId::new(saga_id.0);
 
         Ok(Self {

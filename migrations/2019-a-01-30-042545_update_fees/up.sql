@@ -1,0 +1,2 @@
+ALTER TABLE fees ADD COLUMN crypto_currency VARCHAR;
+ALTER TABLE fees ADD COLUMN crypto_amount NUMERIC;

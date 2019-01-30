@@ -20,3 +20,4 @@ polling_rate_sec = 10
 
 [fee]
 order_percent = 5
+currency_code = "eur"

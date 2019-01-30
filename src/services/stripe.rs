@@ -231,6 +231,8 @@ fn create_fee(fees_repo: &FeeRepo, order_percent: u64, order: &RawOrder) -> Resu
         currency: order.seller_currency.clone(),
         charge_id: None,
         metadata: None,
+        crypto_currency: None,
+        crypto_amount: None,
     };
 
     fees_repo.create(new_fee).map_err(ectx!(convert => order.id.clone())).map(|_| ())
