@@ -84,10 +84,12 @@ impl<
         let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
             conn.transaction(move || {
-                let event = Webhook::construct_event(event_payload, signature_header, secret).map_err(|e| {
-                    warn!("stripe Webhook::construct_event error: {:?}", e);
-                    ectx!(try err e, ErrorKind::Internal)
-                })?;
+                let event = Webhook::new()
+                    .construct_event(event_payload, signature_header, secret)
+                    .map_err(|e| {
+                        warn!("stripe Webhook::construct_event error: {:?}", e);
+                        ectx!(try err e, ErrorKind::Internal)
+                    })?;
                 info!("stripe handle_stripe_event event: {:?}", event);
                 match (event.event_type, event.data.object) {
                     (PaymentIntentAmountCapturableUpdated, PaymentIntent(payment_intent)) => {
