@@ -71,6 +71,7 @@ impl<
             signature_header,
             event_payload.len()
         );
+        use stripe::EventObject::*;
         use stripe::EventType::*;
 
         let db_pool = self.static_context.db_pool.clone();
@@ -88,18 +89,23 @@ impl<
                     ectx!(try err e, ErrorKind::Internal)
                 })?;
                 info!("stripe handle_stripe_event event: {:?}", event);
-
-                match extract_stripe_event(event)? {
-                    (PaymentIntentAmountCapturableUpdated, payment_intent) => {
+                match (event.event_type, event.data.object) {
+                    (PaymentIntentAmountCapturableUpdated, PaymentIntent(payment_intent)) => {
                         let payment_intent_id = payment_intent.id.clone();
                         event_store_repo
                             .add_event(Event::new(EventPayload::PaymentIntentSucceeded { payment_intent }))
                             .map_err(ectx!(try convert => payment_intent_id))?;
                     }
-                    (event_type, payment_intent) => {
+                    (PaymentIntentPaymentFailed, PaymentIntent(payment_intent)) => {
+                        let payment_intent_id = payment_intent.id.clone();
+                        event_store_repo
+                            .add_event(Event::new(EventPayload::PaymentIntentPaymentFailed { payment_intent }))
+                            .map_err(ectx!(try convert => payment_intent_id))?;
+                    }
+                    (event_type, event_object) => {
                         warn!(
                             "stripe handle_stripe_event unprocessable event - type: {:?}, object: {:?}",
-                            event_type, payment_intent
+                            event_type, event_object
                         );
                     }
                 };
@@ -118,24 +124,6 @@ pub enum PaymentType {
         orders: Vec<RawOrder>,
     },
     Fee,
-}
-
-pub fn extract_stripe_event(payload: serde_json::Value) -> Result<(stripe::EventType, stripe::PaymentIntent), ServiceError> {
-    let raw_event_type = payload.get("type").ok_or({
-        let e = format_err!("\"type\" field is missing");
-        ectx!(try err e, ErrorKind::Internal)
-    })?;
-    let event_type: stripe::EventType =
-        serde_json::from_value(raw_event_type.clone()).map_err(|e| ectx!(try err e, ErrorKind::Internal))?;
-
-    let raw_payment_intent = payload.pointer("/data/object").ok_or({
-        let e = format_err!("\"/data/object\" field is missing");
-        ectx!(try err e, ErrorKind::Internal)
-    })?;
-
-    let payment_intent: stripe::PaymentIntent =
-        serde_json::from_value(raw_payment_intent.clone()).map_err(|e| ectx!(try err e, ErrorKind::Internal))?;
-    Ok((event_type, payment_intent))
 }
 
 pub fn payment_intent_success<C>(
