@@ -26,6 +26,7 @@ use stq_types::stripe::PaymentIntentId;
 use stq_types::{InvoiceId, OrderId, SagaId};
 
 use client::payments::{GetRate, PaymentsClient, Rate, RateRefresh};
+use client::stores::CurrencyExchangeInfo;
 use client::stripe::{NewPaymentIntent as StripeClientNewPaymentIntent, StripeClient};
 use config::ExternalBilling;
 use controller::context::DynamicContext;
@@ -1471,18 +1472,63 @@ pub fn parse_hex(hex_asm: &str) -> Vec<u8> {
     bytes
 }
 
+/// The Commission for the services of the platform from sellers who trade in ' STQ ' is deducted in Fiat currency.
+/// Conversion rates from` Crypto `to` Fiat `are stored per 1` STQ',
+/// and the order stores the amount in cents, so the conversion from cents and back is used.
+pub fn create_crypto_fee(
+    order_percent: u64,
+    fee_currency: &Currency,
+    currency_exchange_info: &CurrencyExchangeInfo,
+    order: &RawOrder,
+) -> Result<NewFee, ServiceError> {
+    let hundred_percents = 100u64;
+
+    let exchange_rate = currency_exchange_info
+        .data
+        .get(&order.seller_currency)
+        .and_then(|exchanges| exchanges.get(&fee_currency).map(|c| c.0))
+        .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+
+    let total_amount_super_unit = order.total_amount.to_super_unit(order.seller_currency);
+    let convert_total_amount = Amount::from_super_unit(fee_currency.clone(), total_amount_super_unit / BigDecimal::from(exchange_rate));
+
+    let amount = convert_total_amount
+        .checked_div(Amount::from(hundred_percents))
+        .and_then(|one_percent| one_percent.checked_mul(Amount::from(order_percent)))
+        .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+
+    Ok(NewFee {
+        order_id: order.id,
+        amount,
+        status: FeeStatus::NotPaid,
+        currency: order.seller_currency.clone(),
+        charge_id: None,
+        metadata: None,
+        crypto_currency: Some(order.seller_currency.clone()),
+        crypto_amount: Some(order.total_amount.clone()),
+    })
+}
+
 #[cfg(test)]
 pub mod tests {
 
+    use bigdecimal::BigDecimal;
+    use chrono::NaiveDateTime;
     use std::sync::Arc;
     use std::time::SystemTime;
     use tokio_core::reactor::Core;
+    use uuid::Uuid;
 
+    use models::currency::Currency as StqCurrency;
     use stq_static_resources::Currency;
     use stq_types::*;
 
+    use client::stores::*;
+    use models::invoice_v2::InvoiceId as InvoiceIdv2;
+    use models::order_v2::{OrderId as OrderIdv2, RawOrder, StoreId as StoreIdv2};
     use models::*;
     use repos::repo_factory::tests::*;
+    use services::invoice::create_crypto_fee;
     use services::invoice::InvoiceService;
     use services::merchant::MerchantService;
 
@@ -1543,6 +1589,42 @@ pub mod tests {
         };
         let work = service.update_invoice(invoice);
         let _result = core.run(work).unwrap();
+    }
+
+    #[test]
+    fn check_conversion_currencies() {
+        // given
+        let order_percent = 5;
+        let fee_currency = StqCurrency::Eur;
+        let crypto_currency = StqCurrency::Stq;
+
+        let mut data = CurrencyExchangeData::new();
+        let mut exchange_rates = ExchangeRates::new();
+
+        exchange_rates.insert(fee_currency, ExchangeRate(5.0));
+        data.insert(crypto_currency, exchange_rates);
+
+        let currency_exchange_info = CurrencyExchangeInfo {
+            id: CurrencyExchangeId(Uuid::new_v4()),
+            data,
+        };
+
+        let order = RawOrder {
+            id: OrderIdv2::new(Uuid::new_v4()),
+            seller_currency: crypto_currency,
+            total_amount: Amount::from_super_unit(crypto_currency, BigDecimal::from(100)),
+            cashback_amount: Amount::new(0),
+            invoice_id: InvoiceIdv2::new(Uuid::new_v4()),
+            created_at: NaiveDateTime::from_timestamp(0, 0),
+            updated_at: NaiveDateTime::from_timestamp(0, 0),
+            store_id: StoreIdv2::new(1),
+            state: PaymentState::Initial,
+        };
+
+        // then
+        let new_fee = create_crypto_fee(order_percent, &fee_currency, &currency_exchange_info, &order).expect("cannot get new fee");
+
+        assert_eq!(new_fee.amount, Amount::from_super_unit(fee_currency, BigDecimal::from(1)));
     }
 
 }

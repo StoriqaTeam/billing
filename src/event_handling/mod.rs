@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 use stq_http::client::HttpClient;
 use tokio_timer::Interval;
 
-use client::{payments::PaymentsClient, saga::SagaClient};
+use client::{payments::PaymentsClient, saga::SagaClient, stores::StoresClient};
 use config;
 use models::event_store::EventEntry;
 use repos::repo_factory::ReposFactory;
@@ -25,7 +25,7 @@ use self::error::*;
 pub type EventHandlerResult<T> = Result<T, Error>;
 pub type EventHandlerFuture<T> = Box<Future<Item = T, Error = Error>>;
 
-pub struct EventHandler<T, M, F, HC, PC, SC, AS>
+pub struct EventHandler<T, M, F, HC, PC, SC, STC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
@@ -33,6 +33,7 @@ where
     HC: HttpClient,
     PC: PaymentsClient,
     SC: SagaClient,
+    STC: StoresClient,
     AS: AccountService + 'static,
 {
     pub cpu_pool: CpuPool,
@@ -40,12 +41,13 @@ where
     pub repo_factory: F,
     pub http_client: HC,
     pub saga_client: SC,
+    pub stores_client: STC,
     pub payments_client: Option<PC>,
     pub account_service: Option<AS>,
     pub fee: config::FeeValues,
 }
 
-impl<T, M, F, HC, PC, SC, AS> Clone for EventHandler<T, M, F, HC, PC, SC, AS>
+impl<T, M, F, HC, PC, SC, STC, AS> Clone for EventHandler<T, M, F, HC, PC, SC, STC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
@@ -53,6 +55,7 @@ where
     HC: HttpClient + Clone,
     PC: PaymentsClient + Clone,
     SC: SagaClient + Clone,
+    STC: StoresClient + Clone,
     AS: AccountService + Clone + 'static,
 {
     fn clone(&self) -> Self {
@@ -62,6 +65,7 @@ where
             repo_factory: self.repo_factory.clone(),
             http_client: self.http_client.clone(),
             saga_client: self.saga_client.clone(),
+            stores_client: self.stores_client.clone(),
             payments_client: self.payments_client.clone(),
             account_service: self.account_service.clone(),
             fee: self.fee.clone(),
@@ -69,7 +73,7 @@ where
     }
 }
 
-impl<T, M, F, HC, PC, SC, AS> EventHandler<T, M, F, HC, PC, SC, AS>
+impl<T, M, F, HC, PC, SC, STC, AS> EventHandler<T, M, F, HC, PC, SC, STC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
@@ -77,6 +81,7 @@ where
     HC: HttpClient + Clone,
     PC: PaymentsClient + Clone,
     SC: SagaClient + Clone,
+    STC: StoresClient + Clone,
     AS: AccountService + Clone + 'static,
 {
     pub fn run(self, interval: Duration) -> impl Future<Item = (), Error = FailureError> {

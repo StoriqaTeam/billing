@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use failure::{err_msg, Fail};
 use futures::{future, Future};
@@ -11,8 +13,9 @@ use uuid::Uuid;
 use client::{
     payments::{CreateInternalTransaction, PaymentsClient},
     saga::{OrderStateUpdate, SagaClient},
+    stores::{CurrencyExchangeInfo, StoresClient},
 };
-use models::{invoice_v2::InvoiceId, AccountId, AccountWithBalance, Event, EventPayload};
+use models::{invoice_v2::InvoiceId, AccountId, AccountWithBalance, Currency, Event, EventPayload};
 
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
@@ -21,7 +24,7 @@ use services::stripe::PaymentType;
 use super::error::*;
 use super::{spawn_on_pool, EventHandler, EventHandlerFuture};
 
-impl<T, M, F, HC, PC, SC, AS> EventHandler<T, M, F, HC, PC, SC, AS>
+impl<T, M, F, HC, PC, SC, STC, AS> EventHandler<T, M, F, HC, PC, SC, STC, AS>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
@@ -29,6 +32,7 @@ where
     HC: HttpClient + Clone,
     PC: PaymentsClient + Clone,
     SC: SagaClient + Clone,
+    STC: StoresClient + Clone,
     AS: AccountService + Clone + 'static,
 {
     pub fn handle_event(self, event: Event) -> EventHandlerFuture<()> {
@@ -109,9 +113,10 @@ where
     pub fn handle_invoice_paid(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
         match (self.payments_client.clone(), self.account_service.clone()) {
             (Some(payments_client), Some(account_service)) => {
-                let fut = Future::join(
+                let fut = Future::join3(
                     self.clone().drain_and_unlink_account(payments_client, account_service, invoice_id),
-                    self.mark_orders_as_paid_on_saga(invoice_id),
+                    self.clone().mark_orders_as_paid_on_saga(invoice_id.clone()),
+                    self.create_fee_for_orders(invoice_id),
                 )
                 .map(|_| ());
 
@@ -240,6 +245,74 @@ where
                 saga_client
                     .update_order_states(order_state_updates.clone())
                     .map_err(ectx!(ErrorKind::Internal => order_state_updates))
+            }
+        });
+
+        Box::new(fut)
+    }
+
+    fn create_fee_for_orders(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
+        let EventHandler { db_pool, cpu_pool, .. } = self.clone();
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, {
+            let repo_factory = self.repo_factory.clone();
+            move |conn| {
+                let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
+                let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
+
+                let invoice_id_clone = invoice_id.clone();
+                let _invoice = invoices_repo
+                    .get(invoice_id_clone)
+                    .map_err(ectx!(try convert => invoice_id_clone))?
+                    .ok_or({
+                        let e = format_err!("Invoice {} not found", invoice_id.clone());
+                        ectx!(try err e, ErrorKind::Internal)
+                    })?;
+
+                orders_repo.get_many_by_invoice_id(invoice_id).map_err(ectx!(convert => invoice_id))
+            }
+        })
+        .and_then({
+            let currency_code = self.fee.currency_code.clone();
+            move |orders| {
+                Currency::from_str(&currency_code)
+                    .map_err(ectx!(ErrorKind::CurrencyConversion))
+                    .map(|fee_currency| (fee_currency, orders))
+            }
+        })
+        .and_then({
+            let stores_client = self.stores_client.clone();
+            move |(fee_currency, orders)| {
+                stores_client
+                    .get_currency_exchange()
+                    .map_err(ectx!(convert))
+                    .and_then(|response| CurrencyExchangeInfo::try_from_request(response).map_err(ectx!(ErrorKind::CurrencyConversion)))
+                    .map(move |currency_exchange_info| (currency_exchange_info, fee_currency, orders))
+            }
+        })
+        .and_then({
+            let EventHandler { db_pool, cpu_pool, .. } = self.clone();
+            let order_percent = self.fee.order_percent.clone();
+
+            move |(currency_exchange_info, fee_currency, orders)| {
+                spawn_on_pool(db_pool, cpu_pool, {
+                    let repo_factory = self.repo_factory.clone();
+                    move |conn| {
+                        let fees_repo = repo_factory.create_fees_repo_with_sys_acl(&conn);
+
+                        for order in orders.iter() {
+                            let new_fee =
+                                crate::services::invoice::create_crypto_fee(order_percent, &fee_currency, &currency_exchange_info, order)
+                                    .map_err(ectx!(try ErrorKind::Internal => order.id))?;
+
+                            let _ = fees_repo
+                                .create(new_fee)
+                                .map_err(ectx!(try ErrorKind::Internal => order.id.clone()))?;
+                        }
+
+                        Ok(())
+                    }
+                })
             }
         });
 

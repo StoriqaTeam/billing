@@ -736,6 +736,8 @@ pub mod tests {
                 amount: payload.amount,
                 status: payload.status,
                 currency: payload.currency,
+                crypto_currency: payload.crypto_currency,
+                crypto_amount: payload.crypto_amount,
                 ..fee
             })
         }
@@ -1383,6 +1385,8 @@ pub mod tests {
             metadata: None,
             created_at: now,
             updated_at: now,
+            crypto_currency: None,
+            crypto_amount: None,
         }
     }
 

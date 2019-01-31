@@ -227,6 +227,12 @@ pub enum FiatCurrency {
     Rub,
 }
 
+#[derive(Debug, Clone, Fail)]
+pub enum ConversionError {
+    #[fail(display = "unsupported currency: {}", _0)]
+    UnsupportedCurrency(String),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

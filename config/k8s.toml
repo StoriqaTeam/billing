@@ -6,6 +6,9 @@ database = "postgresql://billing:billing@db-postgresql/billing"
 [saga_addr]
 url = "http://saga:8000"
 
+[stores_microservice]
+url="http://stores:8000"
+
 [callback]
 url = "http://billing:8000"
 
@@ -46,3 +49,4 @@ polling_rate_sec = 10
 
 [fee]
 order_percent = 5
+currency_code = "eur"

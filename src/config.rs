@@ -2,12 +2,11 @@
 use std::env;
 
 use config_crate::{Config as RawConfig, ConfigError, Environment, File};
-
 use sentry_integration::SentryConfig;
+use uuid::Uuid;
 
 use stq_http;
 use stq_logging::GrayLogConfig;
-use uuid::Uuid;
 
 /// Basic settings - HTTP binding, saga and external billing addresses
 #[derive(Debug, Deserialize, Clone)]
@@ -15,6 +14,7 @@ pub struct Config {
     pub server: Server,
     pub client: Client,
     pub saga_addr: SagaAddr,
+    pub stores_microservice: StoresMicroservice,
     pub callback: Callback,
     pub external_billing: ExternalBilling,
     pub payments: Option<Payments>,
@@ -49,6 +49,12 @@ pub struct Client {
 /// Saga microservice url
 #[derive(Debug, Deserialize, Clone)]
 pub struct SagaAddr {
+    pub url: String,
+}
+
+/// Stores microservice url
+#[derive(Debug, Deserialize, Clone)]
+pub struct StoresMicroservice {
     pub url: String,
 }
 
@@ -105,6 +111,7 @@ pub struct EventStore {
 #[derive(Debug, Deserialize, Clone)]
 pub struct FeeValues {
     pub order_percent: u64,
+    pub currency_code: String,
 }
 /// Creates new app config struct
 /// #Examples

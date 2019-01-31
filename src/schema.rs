@@ -49,6 +49,8 @@ table! {
         metadata -> Nullable<Jsonb>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        crypto_currency -> Nullable<Varchar>,
+        crypto_amount -> Nullable<Numeric>,
     }
 }
 

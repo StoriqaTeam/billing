@@ -20,6 +20,8 @@ pub struct Fee {
     pub metadata: Option<serde_json::Value>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub crypto_currency: Option<Currency>,
+    pub crypto_amount: Option<Amount>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Queryable, Insertable)]
@@ -31,6 +33,8 @@ pub struct NewFee {
     pub currency: Currency,
     pub charge_id: Option<ChargeId>,
     pub metadata: Option<serde_json::Value>,
+    pub crypto_currency: Option<Currency>,
+    pub crypto_amount: Option<Amount>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, AsChangeset)]
@@ -42,6 +46,8 @@ pub struct UpdateFee {
     pub currency: Option<Currency>,
     pub charge_id: Option<ChargeId>,
     pub metadata: Option<serde_json::Value>,
+    pub crypto_currency: Option<Currency>,
+    pub crypto_amount: Option<Amount>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, DieselTypes)]

@@ -5,6 +5,7 @@ use std::fmt;
 use stripe::WebhookError;
 
 use client::payments::ErrorKind as PaymentsClientErrorKind;
+use client::stores::ErrorKind as StoresErrorKind;
 use client::stripe::ErrorKind as StripeClientErrorKind;
 use repos::ErrorKind as RepoErrorKind;
 
@@ -30,6 +31,8 @@ pub enum ErrorKind {
 pub enum ErrorContext {
     #[fail(display = "service context - error amount conversion")]
     AmountConversion,
+    #[fail(display = "service context - error currency conversion")]
+    CurrencyConversion,
     #[fail(display = "service context - error unauthorized")]
     Unauthorized,
     #[fail(display = "service context - wrong order state")]
@@ -109,6 +112,17 @@ impl From<StripeClientErrorKind> for ErrorKind {
             StripeClientErrorKind::MalformedInput => ErrorKind::Internal,
             StripeClientErrorKind::Unauthorized => ErrorKind::Internal,
             StripeClientErrorKind::Validation(value) => ErrorKind::Validation(value),
+        }
+    }
+}
+
+impl From<StoresErrorKind> for ErrorKind {
+    fn from(e: StoresErrorKind) -> Self {
+        match e {
+            StoresErrorKind::Internal => ErrorKind::Internal,
+            StoresErrorKind::MalformedInput => ErrorKind::Internal,
+            StoresErrorKind::Unauthorized => ErrorKind::Internal,
+            StoresErrorKind::Validation(value) => ErrorKind::Validation(value),
         }
     }
 }

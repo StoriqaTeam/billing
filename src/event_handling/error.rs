@@ -2,6 +2,7 @@ use diesel::result::Error as DieselError;
 use failure::{Backtrace, Context, Fail};
 use std::fmt;
 
+use client::stores::ErrorKind as StoresErrorKind;
 use repos::error::ErrorKind as RepoErrorKind;
 
 #[derive(Debug)]
@@ -13,6 +14,8 @@ pub struct Error {
 pub enum ErrorKind {
     #[fail(display = "event handler error - internal")]
     Internal,
+    #[fail(display = "service context - error currency conversion")]
+    CurrencyConversion,
 }
 
 #[derive(Debug, Clone, Fail, PartialEq, Eq)]
@@ -35,6 +38,12 @@ impl<'a> From<&'a DieselError> for ErrorKind {
 
 impl From<RepoErrorKind> for ErrorKind {
     fn from(_e: RepoErrorKind) -> Self {
+        ErrorKind::Internal
+    }
+}
+
+impl From<StoresErrorKind> for ErrorKind {
+    fn from(_e: StoresErrorKind) -> Self {
         ErrorKind::Internal
     }
 }
