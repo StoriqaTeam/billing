@@ -1222,6 +1222,19 @@ pub mod tests {
                 attempt_count: 0,
                 created_at: chrono::Utc::now().naive_utc(),
                 status_updated_at: chrono::Utc::now().naive_utc(),
+                scheduled_on: None,
+            })
+        }
+
+        fn add_scheduled_event(&self, event: Event, scheduled_on: NaiveDateTime) -> RepoResultV2<EventEntry> {
+            Ok(EventEntry {
+                id: EventEntryId::new(1),
+                event,
+                status: EventStatus::Pending,
+                attempt_count: 0,
+                created_at: chrono::Utc::now().naive_utc(),
+                status_updated_at: chrono::Utc::now().naive_utc(),
+                scheduled_on: Some(scheduled_on),
             })
         }
 
@@ -1237,6 +1250,7 @@ pub mod tests {
                     attempt_count: 1,
                     created_at: chrono::Utc::now().naive_utc(),
                     status_updated_at: chrono::Utc::now().naive_utc(),
+                    scheduled_on: None,
                 })
                 .collect::<Vec<_>>())
         }
@@ -1256,6 +1270,7 @@ pub mod tests {
                 attempt_count: 1,
                 created_at: chrono::Utc::now().naive_utc(),
                 status_updated_at: chrono::Utc::now().naive_utc(),
+                scheduled_on: None,
             })
         }
 
@@ -1270,6 +1285,7 @@ pub mod tests {
                 attempt_count: 5,
                 created_at: chrono::Utc::now().naive_utc(),
                 status_updated_at: chrono::Utc::now().naive_utc(),
+                scheduled_on: None,
             })
         }
     }
