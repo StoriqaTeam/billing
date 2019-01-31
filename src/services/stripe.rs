@@ -179,15 +179,16 @@ where
                 Err(ectx!(err e, ErrorKind::Internal))
             }
             (Some(payment_intent_invoice), None) => {
-                payment_intent_success_invoice(orders_repo, invoices_repo, fees_repo, fee_config, payment_intent_invoice).map(|res| {
-                    PaymentType::Invoice {
+                payment_intent_amount_capturable_updated_invoice(orders_repo, invoices_repo, fees_repo, fee_config, payment_intent_invoice)
+                    .map(|res| PaymentType::Invoice {
                         payment_intent,
                         invoice: res.0,
                         orders: res.1,
-                    }
-                })
+                    })
             }
-            (None, Some(payment_intent_fee)) => payment_intent_success_fee(fees_repo, payment_intent_fee).map(|_| PaymentType::Fee),
+            (None, Some(payment_intent_fee)) => {
+                payment_intent_amount_capturable_updated_fee(fees_repo, payment_intent_fee).map(|_| PaymentType::Fee)
+            }
             _ => {
                 let e = format_err!("Payment intent relationship by id {} not found.", payment_intent_id);
                 Err(ectx!(err e, ErrorKind::Internal))
@@ -208,7 +209,7 @@ fn update_payment_intent(payment_intent: StripePaymentIntent) -> UpdatePaymentIn
     }
 }
 
-pub fn payment_intent_success_invoice(
+pub fn payment_intent_amount_capturable_updated_invoice(
     orders_repo: &OrdersRepo,
     invoice_repo: &InvoicesV2Repo,
     fees_repo: &FeeRepo,
@@ -257,7 +258,7 @@ fn create_fee(order_percent: u64, order: &RawOrder) -> Result<NewFee, ServiceErr
     })
 }
 
-pub fn payment_intent_success_fee(fees_repo: &FeeRepo, payment_intent_fee: PaymentIntentFee) -> Result<(), ServiceError> {
+pub fn payment_intent_amount_capturable_updated_fee(fees_repo: &FeeRepo, payment_intent_fee: PaymentIntentFee) -> Result<(), ServiceError> {
     let update_fee = UpdateFee {
         status: Some(FeeStatus::Paid),
         ..Default::default()

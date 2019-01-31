@@ -56,8 +56,8 @@ where
     pub fn handle_payment_intent_amount_capturable_updated(self, payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
         if payment_intent.amount != payment_intent.amount_capturable {
             info!(
-                "payment intent {} amount={}, amount_capturable={} are not equal",
-                payment_intent.id, payment_intent.amount, payment_intent.amount_capturable
+                "payment intent with id {} amount={}, amount_capturable={} are not equal. Payment intent: {:?}",
+                payment_intent.id, payment_intent.amount, payment_intent.amount_capturable, payment_intent
             );
             return Box::new(future::ok(()));
         }
