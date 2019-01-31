@@ -5,6 +5,7 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool};
+use stripe::PaymentIntent as StripePaymentIntent;
 
 use failure::Fail;
 
@@ -95,7 +96,7 @@ impl<
                     (PaymentIntentAmountCapturableUpdated, PaymentIntent(payment_intent)) => {
                         let payment_intent_id = payment_intent.id.clone();
                         event_store_repo
-                            .add_event(Event::new(EventPayload::PaymentIntentSucceeded { payment_intent }))
+                            .add_event(Event::new(EventPayload::PaymentIntentAmountCapturableUpdated { payment_intent }))
                             .map_err(ectx!(try convert => payment_intent_id))?;
                     }
                     (PaymentIntentPaymentFailed, PaymentIntent(payment_intent)) => {
@@ -128,7 +129,7 @@ pub enum PaymentType {
     Fee,
 }
 
-pub fn payment_intent_success<C>(
+pub fn payment_intent_amount_capturable_updated<C>(
     conn: &C,
     orders_repo: &OrdersRepo,
     invoices_repo: &InvoicesV2Repo,
@@ -137,12 +138,15 @@ pub fn payment_intent_success<C>(
     payment_intent_fees_repo: &PaymentIntentFeeRepo,
     fees_repo: &FeeRepo,
     fee_config: config::FeeValues,
-    payment_intent_id: PaymentIntentId,
+    payment_intent: StripePaymentIntent,
 ) -> Result<PaymentType, ServiceError>
 where
     C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
 {
+    let payment_intent_id = PaymentIntentId(payment_intent.id.clone());
     let payment_intent_id_cloned1 = payment_intent_id.clone();
+
+    let payment_intent_update = update_payment_intent(payment_intent);
     let payment_intent = payment_intent_repo
         .get(SearchPaymentIntent::Id(payment_intent_id.clone()))
         .map_err(ectx!(try convert => payment_intent_id_cloned1))?
@@ -160,64 +164,77 @@ where
     let payment_intent_fee = payment_intent_fees_repo
         .get(SearchPaymentIntentFee::PaymentIntentId(payment_intent_id.clone()))
         .map_err(ectx!(try convert => payment_intent_id_cloned3))?;
+    let payment_intent_id_cloned4 = payment_intent_id.clone();
 
-    match (payment_intent_invoice, payment_intent_fee) {
-        (Some(_), Some(_)) => {
-            let e = format_err!(
-                "Payment intent {} cannot be used for two payments at the same time.",
-                payment_intent_id
-            );
-            Err(ectx!(err e, ErrorKind::Internal))
+    conn.transaction::<_, ServiceError, _>(move || {
+        payment_intent_repo
+            .update(payment_intent_id.clone(), payment_intent_update)
+            .map_err(ectx!(try convert => payment_intent_id_cloned4))?;
+        match (payment_intent_invoice, payment_intent_fee) {
+            (Some(_), Some(_)) => {
+                let e = format_err!(
+                    "Payment intent {} cannot be used for two payments at the same time.",
+                    payment_intent_id
+                );
+                Err(ectx!(err e, ErrorKind::Internal))
+            }
+            (Some(payment_intent_invoice), None) => {
+                payment_intent_amount_capturable_updated_invoice(orders_repo, invoices_repo, fees_repo, fee_config, payment_intent_invoice)
+                    .map(|res| PaymentType::Invoice {
+                        payment_intent,
+                        invoice: res.0,
+                        orders: res.1,
+                    })
+            }
+            (None, Some(payment_intent_fee)) => {
+                payment_intent_amount_capturable_updated_fee(fees_repo, payment_intent_fee).map(|_| PaymentType::Fee)
+            }
+            _ => {
+                let e = format_err!("Payment intent relationship by id {} not found.", payment_intent_id);
+                Err(ectx!(err e, ErrorKind::Internal))
+            }
         }
-        (Some(payment_intent_invoice), None) => {
-            payment_intent_success_invoice(conn, orders_repo, invoices_repo, fees_repo, fee_config, payment_intent_invoice).map(|res| {
-                PaymentType::Invoice {
-                    payment_intent,
-                    invoice: res.0,
-                    orders: res.1,
-                }
-            })
-        }
-        (None, Some(payment_intent_fee)) => payment_intent_success_fee(conn, fees_repo, payment_intent_fee).map(|_| PaymentType::Fee),
-        _ => {
-            let e = format_err!("Payment intent relationship by id {} not found.", payment_intent_id);
-            Err(ectx!(err e, ErrorKind::Internal))
-        }
+    })
+}
+
+fn update_payment_intent(payment_intent: StripePaymentIntent) -> UpdatePaymentIntent {
+    UpdatePaymentIntent {
+        charge_id: payment_intent
+            .charges
+            .data
+            .into_iter()
+            .find(|charge| charge.paid)
+            .map(|charge| ChargeId::new(charge.id)),
+        ..Default::default()
     }
 }
 
-pub fn payment_intent_success_invoice<C>(
-    conn: &C,
+pub fn payment_intent_amount_capturable_updated_invoice(
     orders_repo: &OrdersRepo,
     invoice_repo: &InvoicesV2Repo,
     fees_repo: &FeeRepo,
     fee_config: config::FeeValues,
     payment_intent_invoice: PaymentIntentInvoice,
-) -> Result<(InvoiceV2, Vec<RawOrder>), ServiceError>
-where
-    C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-{
-    conn.transaction::<_, ServiceError, _>(move || {
-        let invoice_id = payment_intent_invoice.invoice_id;
-        let invoice = invoice_repo
-            .get(invoice_id.clone())
-            .map_err(ectx!(try convert => invoice_id.clone()))?
-            .ok_or({
-                let e = format_err!("Invoice {} not found", invoice_id.clone());
-                ectx!(try err e, ErrorKind::Internal)
-            })?;
+) -> Result<(InvoiceV2, Vec<RawOrder>), ServiceError> {
+    let invoice_id = payment_intent_invoice.invoice_id;
+    let invoice = invoice_repo
+        .get(invoice_id.clone())
+        .map_err(ectx!(try convert => invoice_id.clone()))?
+        .ok_or({
+            let e = format_err!("Invoice {} not found", invoice_id.clone());
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
 
-        let orders = orders_repo
-            .get_many_by_invoice_id(invoice.id)
-            .map_err(ectx!(try convert => invoice_id))?;
+    let orders = orders_repo
+        .get_many_by_invoice_id(invoice.id)
+        .map_err(ectx!(try convert => invoice_id))?;
 
-        for order in orders.iter() {
-            let new_fee = create_fee(fee_config.order_percent, order)?;
-            let _ = fees_repo.create(new_fee).map_err(ectx!(try convert => order.id.clone()))?;
-        }
+    for order in orders.iter() {
+        let new_fee = create_fee(fee_config.order_percent, order)?;
+        let _ = fees_repo.create(new_fee).map_err(ectx!(try convert => order.id.clone()))?;
+    }
 
-        Ok((invoice, orders))
-    })
+    Ok((invoice, orders))
 }
 
 fn create_fee(order_percent: u64, order: &RawOrder) -> Result<NewFee, ServiceError> {
@@ -241,19 +258,14 @@ fn create_fee(order_percent: u64, order: &RawOrder) -> Result<NewFee, ServiceErr
     })
 }
 
-pub fn payment_intent_success_fee<C>(conn: &C, fees_repo: &FeeRepo, payment_intent_fee: PaymentIntentFee) -> Result<(), ServiceError>
-where
-    C: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
-{
-    conn.transaction::<_, ServiceError, _>(move || {
-        let update_fee = UpdateFee {
-            status: Some(FeeStatus::Paid),
-            ..Default::default()
-        };
+pub fn payment_intent_amount_capturable_updated_fee(fees_repo: &FeeRepo, payment_intent_fee: PaymentIntentFee) -> Result<(), ServiceError> {
+    let update_fee = UpdateFee {
+        status: Some(FeeStatus::Paid),
+        ..Default::default()
+    };
 
-        fees_repo
-            .update(payment_intent_fee.fee_id.clone(), update_fee)
-            .map_err(ectx!(convert => payment_intent_fee.fee_id.clone()))
-            .map(|_| ())
-    })
+    fees_repo
+        .update(payment_intent_fee.fee_id.clone(), update_fee)
+        .map_err(ectx!(convert => payment_intent_fee.fee_id.clone()))
+        .map(|_| ())
 }

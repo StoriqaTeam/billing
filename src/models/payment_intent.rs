@@ -34,10 +34,17 @@ pub struct NewPaymentIntent {
     pub status: PaymentIntentStatus,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, AsChangeset)]
+#[derive(Clone, Debug, Serialize, Deserialize, AsChangeset, Default)]
 #[table_name = "payment_intent"]
 pub struct UpdatePaymentIntent {
-    status: Option<PaymentIntentStatus>,
+    pub status: Option<PaymentIntentStatus>,
+    pub amount: Option<Amount>,
+    pub amount_received: Option<Amount>,
+    pub client_secret: Option<String>,
+    pub currency: Option<Currency>,
+    pub last_payment_error_message: Option<String>,
+    pub receipt_email: Option<String>,
+    pub charge_id: Option<ChargeId>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, DieselTypes)]
