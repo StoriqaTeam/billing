@@ -6,7 +6,7 @@ use futures::Future;
 use futures::IntoFuture;
 use stripe::{
     CaptureParams, Charge, ChargeParams, Currency as StripeCurrency, Customer, CustomerParams, Deleted, Metadata, PaymentIntent,
-    PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
+    PaymentIntentCaptureParams, PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
 };
 
 use config;
@@ -32,6 +32,12 @@ pub trait StripeClient: Send + Sync + 'static {
     fn get_charge(&self, charge_id: ChargeId) -> Box<Future<Item = Charge, Error = Error> + Send>;
 
     fn capture_charge(&self, charge_id: ChargeId, amount: Amount) -> Box<Future<Item = Charge, Error = Error> + Send>;
+
+    fn capture_payment_intent(
+        &self,
+        payment_intent_id: PaymentIntentId,
+        amount: Amount,
+    ) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
 
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send>;
 
@@ -140,6 +146,23 @@ impl StripeClient for StripeClientImpl {
                 &charge_id.inner(),
                 CaptureParams {
                     amount: Some(amount.inner() as u64),
+                    ..Default::default()
+                },
+            )
+            .map_err(From::from),
+        )
+    }
+    fn capture_payment_intent(
+        &self,
+        payment_intent_id: PaymentIntentId,
+        amount: Amount,
+    ) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
+        Box::new(
+            PaymentIntent::capture(
+                &self.client,
+                &payment_intent_id.0,
+                PaymentIntentCaptureParams {
+                    amount_to_capture: Some(amount.inner() as u64),
                     ..Default::default()
                 },
             )

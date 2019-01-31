@@ -225,24 +225,16 @@ where
 
         let search = SearchPaymentIntent::Id(payment_intent_invoice.payment_intent_id);
         let search_clone = search.clone();
-        let payment_intent = payment_intent_repo
+        payment_intent_repo
             .get(search.clone())
             .map_err(ectx!(try convert => search))?
             .ok_or({
                 let e = format_err!("payment intent {:?} not found", search_clone);
-                ectx!(try err e, ErrorKind::Internal)
-            })?;
-
-        let payment_intent_id = payment_intent.id;
-        payment_intent
-            .charge_id
-            .ok_or({
-                let e = format_err!("charge is absent in payment intent {:?}", payment_intent_id);
                 ectx!(err e, ErrorKind::Internal)
             })
-            .map(|charge_id| (charge_id, order.total_amount, order.seller_currency))
+            .map(|payment_intent| (payment_intent.id, order.total_amount, order.seller_currency))
     })
-    .and_then(move |(charge_id, total_amount, currency)| {
+    .and_then(move |(payment_intent_id, total_amount, currency)| {
         currency
             .convert()
             .map_err(ectx!(convert => currency))
@@ -250,8 +242,8 @@ where
             .and_then(move |currency| {
                 let stripe_client_clone = stripe_client.clone();
                 stripe_client
-                    .capture_charge(charge_id.clone(), total_amount)
-                    .map_err(ectx!(convert => charge_id, total_amount))
+                    .capture_payment_intent(payment_intent_id.clone(), total_amount)
+                    .map_err(ectx!(convert => payment_intent_id, total_amount))
                     .and_then(move |_| {
                         stripe_client_clone
                             .create_payout(total_amount, currency, order_id)
