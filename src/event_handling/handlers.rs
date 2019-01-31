@@ -42,7 +42,9 @@ where
             EventPayload::NoOp => Box::new(future::ok(())),
             EventPayload::InvoicePaid { invoice_id } => self.handle_invoice_paid(invoice_id),
             EventPayload::PaymentIntentPaymentFailed { payment_intent } => self.handle_payment_intent_payment_failed(payment_intent),
-            EventPayload::PaymentIntentSucceeded { payment_intent } => self.handle_payment_intent_succeeded(payment_intent),
+            EventPayload::PaymentIntentAmountCapturableUpdated { payment_intent } => {
+                self.handle_payment_intent_amount_capturable_updated(payment_intent)
+            }
         }
     }
 
@@ -51,11 +53,19 @@ where
         Box::new(future::ok(()))
     }
 
-    pub fn handle_payment_intent_succeeded(self, payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
+    pub fn handle_payment_intent_amount_capturable_updated(self, payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
+        if payment_intent.amount != payment_intent.amount_capturable {
+            info!(
+                "payment intent {} amount={}, amount_capturable={} are not equal",
+                payment_intent.id, payment_intent.amount, payment_intent.amount_capturable
+            );
+            return Box::new(future::ok(()));
+        }
+
         let saga_client = self.saga_client.clone();
         let fee_config = self.fee.clone();
 
-        let payment_intent_id = PaymentIntentId(payment_intent.id);
+        let payment_intent_id = PaymentIntentId(payment_intent.id.clone());
         let payment_intent_id_cloned = payment_intent_id.clone();
         let new_status = OrderState::Paid;
 
@@ -71,7 +81,7 @@ where
                 let payment_intent_fees_repo = repo_factory.create_payment_intent_fees_repo_with_sys_acl(&conn);
                 let fees_repo = repo_factory.create_fees_repo_with_sys_acl(&conn);
 
-                crate::services::stripe::payment_intent_success(
+                crate::services::stripe::payment_intent_amount_capturable_updated(
                     &*conn,
                     &*orders_repo,
                     &*invoices_repo,
@@ -80,13 +90,14 @@ where
                     &*payment_intent_fees_repo,
                     &*fees_repo,
                     fee_config,
-                    payment_intent_id.clone(),
+                    payment_intent,
                 )
                 .map_err(ectx!(ErrorKind::Internal => payment_intent_id))
+                .map(Some)
             }
         })
         .and_then(move |payment_type| match payment_type {
-            PaymentType::Invoice { invoice, orders, .. } => {
+            Some(PaymentType::Invoice { invoice, orders, .. }) => {
                 let order_state_updates = orders
                     .into_iter()
                     .map(|order| OrderStateUpdate {
@@ -103,7 +114,8 @@ where
                         .map_err(ectx!(ErrorKind::Internal => payment_intent_id_cloned)),
                 )
             }
-            PaymentType::Fee => future::Either::B(future::ok(())),
+            Some(PaymentType::Fee) => future::Either::B(future::ok(())),
+            None => future::Either::B(future::ok(())),
         });
 
         Box::new(fut)
