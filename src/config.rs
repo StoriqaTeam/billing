@@ -98,6 +98,7 @@ pub struct Accounts {
 pub struct Stripe {
     pub public_key: String,
     pub secret_key: String,
+    pub signing_secret: String,
 }
 
 /// Event store processing settings

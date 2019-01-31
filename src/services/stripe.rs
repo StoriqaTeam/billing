@@ -80,13 +80,13 @@ impl<
         let repo_factory = self.static_context.repo_factory.clone();
 
         let signature_header = format!("{}", signature_header);
-        let secret = self.static_context.config.stripe.secret_key.clone();
+        let signing_secret = self.static_context.config.stripe.signing_secret.clone();
 
         let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
             conn.transaction(move || {
                 let event = Webhook::new()
-                    .construct_event(event_payload, signature_header, secret)
+                    .construct_event(event_payload, signature_header, signing_secret)
                     .map_err(|e| {
                         warn!("stripe Webhook::construct_event error: {:?}", e);
                         ectx!(try err e, ErrorKind::Internal)
