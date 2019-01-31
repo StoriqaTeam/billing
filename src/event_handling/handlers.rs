@@ -47,6 +47,7 @@ where
                 self.handle_payment_intent_amount_capturable_updated(payment_intent)
             }
             EventPayload::PaymentIntentCapture { order } => self.handle_payment_intent_capture(order),
+            EventPayload::PaymentExpired { invoice_id: _ } => Box::new(future::ok(())),
         }
     }
 

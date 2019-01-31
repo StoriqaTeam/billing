@@ -47,3 +47,7 @@ polling_rate_sec = 5
 [fee]
 order_percent = 5
 currency_code = "eur"
+
+[payment_expiry]
+crypto_timeout_min = 1
+fiat_timeout_min = 1
