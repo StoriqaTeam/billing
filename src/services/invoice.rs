@@ -1512,15 +1512,23 @@ pub fn create_crypto_fee(
 #[cfg(test)]
 pub mod tests {
 
+    use bigdecimal::BigDecimal;
+    use chrono::NaiveDateTime;
     use std::sync::Arc;
     use std::time::SystemTime;
     use tokio_core::reactor::Core;
+    use uuid::Uuid;
 
+    use models::currency::Currency as StqCurrency;
     use stq_static_resources::Currency;
     use stq_types::*;
 
+    use client::stores::*;
+    use models::invoice_v2::InvoiceId as InvoiceIdv2;
+    use models::order_v2::{OrderId as OrderIdv2, RawOrder, StoreId as StoreIdv2};
     use models::*;
     use repos::repo_factory::tests::*;
+    use services::invoice::create_crypto_fee;
     use services::invoice::InvoiceService;
     use services::merchant::MerchantService;
 
@@ -1581,6 +1589,42 @@ pub mod tests {
         };
         let work = service.update_invoice(invoice);
         let _result = core.run(work).unwrap();
+    }
+
+    #[test]
+    fn check_conversion_currencies() {
+        // given
+        let order_percent = 5;
+        let fee_currency = StqCurrency::Eur;
+        let crypto_currency = StqCurrency::Stq;
+
+        let mut data = CurrencyExchangeData::new();
+        let mut exchange_rates = ExchangeRates::new();
+
+        exchange_rates.insert(fee_currency, ExchangeRate(5.0));
+        data.insert(crypto_currency, exchange_rates);
+
+        let currency_exchange_info = CurrencyExchangeInfo {
+            id: CurrencyExchangeId(Uuid::new_v4()),
+            data,
+        };
+
+        let order = RawOrder {
+            id: OrderIdv2::new(Uuid::new_v4()),
+            seller_currency: crypto_currency,
+            total_amount: Amount::from_super_unit(crypto_currency, BigDecimal::from(100)),
+            cashback_amount: Amount::new(0),
+            invoice_id: InvoiceIdv2::new(Uuid::new_v4()),
+            created_at: NaiveDateTime::from_timestamp(0, 0),
+            updated_at: NaiveDateTime::from_timestamp(0, 0),
+            store_id: StoreIdv2::new(1),
+            state: PaymentState::Initial,
+        };
+
+        // then
+        let new_fee = create_crypto_fee(order_percent, &fee_currency, &currency_exchange_info, &order).expect("cannot get new fee");
+
+        assert_eq!(new_fee.amount, Amount::from_super_unit(fee_currency, BigDecimal::from(1)));
     }
 
 }
