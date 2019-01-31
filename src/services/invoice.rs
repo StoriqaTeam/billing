@@ -1487,12 +1487,10 @@ pub fn create_crypto_fee(
         .data
         .get(&order.seller_currency)
         .and_then(|exchanges| exchanges.get(&fee_currency).map(|c| c.0))
-        .unwrap_or(1.0);
+        .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
 
-    let convert_total_amount = Amount::from_super_unit(
-        fee_currency.clone(),
-        order.total_amount.to_super_unit(order.seller_currency) / BigDecimal::from(exchange_rate),
-    );
+    let total_amount_super_unit = order.total_amount.to_super_unit(order.seller_currency);
+    let convert_total_amount = Amount::from_super_unit(fee_currency.clone(), total_amount_super_unit / BigDecimal::from(exchange_rate));
 
     let amount = convert_total_amount
         .checked_div(Amount::from(hundred_percents))
@@ -1506,8 +1504,8 @@ pub fn create_crypto_fee(
         currency: order.seller_currency.clone(),
         charge_id: None,
         metadata: None,
-        crypto_currency: None,
-        crypto_amount: None,
+        crypto_currency: Some(order.seller_currency.clone()),
+        crypto_amount: Some(order.total_amount.clone()),
     })
 }
 
