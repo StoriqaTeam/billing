@@ -75,22 +75,22 @@ impl<
 
             let payment_intent_invoice = payment_intent_invoices_repo
                 .get(SearchPaymentIntentInvoice::InvoiceId(invoice_id))
-                .map_err(ectx!(try convert => invoice_id))?
-                .ok_or({
-                    let e = format_err!("Record payment_intent_invoice by invoice id {} not found", invoice_id);
-                    ectx!(try err e, ErrorKind::Internal)
-                })?;
+                .map_err(ectx!(try convert => invoice_id))?;
 
-            payment_intent_repo
-                .get(SearchPaymentIntent::Id(payment_intent_invoice.payment_intent_id))
-                .map_err(ectx!(convert => invoice_id))
-                .and_then(|payment_intent| {
-                    if let Some(value) = payment_intent {
-                        PaymentIntentResponse::try_from_payment_intent(value).map(|res| Some(res))
-                    } else {
-                        Ok(None)
-                    }
-                })
+            if let Some(payment_intent_invoice) = payment_intent_invoice {
+                payment_intent_repo
+                    .get(SearchPaymentIntent::Id(payment_intent_invoice.payment_intent_id))
+                    .map_err(ectx!(convert => invoice_id))
+                    .and_then(|payment_intent| {
+                        if let Some(value) = payment_intent {
+                            PaymentIntentResponse::try_from_payment_intent(value).map(|res| Some(res))
+                        } else {
+                            Ok(None)
+                        }
+                    })
+            } else {
+                Ok(None)
+            }
         })
     }
 
