@@ -50,7 +50,10 @@ where
             EventPayload::InvoicePaid { invoice_id } => self.handle_invoice_paid(invoice_id),
             EventPayload::PaymentIntentPaymentFailed { payment_intent } => self.handle_payment_intent_payment_failed(payment_intent),
             EventPayload::PaymentIntentAmountCapturableUpdated { payment_intent } => {
-                self.handle_payment_intent_amount_capturable_updated(payment_intent)
+                self.handle_payment_intent_succeeded_or_amount_capturable_updated(payment_intent)
+            }
+            EventPayload::PaymentIntentSucceeded { payment_intent } => {
+                self.handle_payment_intent_succeeded_or_amount_capturable_updated(payment_intent)
             }
             EventPayload::PaymentIntentCapture { order } => self.handle_payment_intent_capture(order),
             EventPayload::PaymentExpired { invoice_id } => self.handle_payment_expired(invoice_id),
@@ -62,7 +65,10 @@ where
         Box::new(future::ok(()))
     }
 
-    pub fn handle_payment_intent_amount_capturable_updated(self, payment_intent: StripePaymentIntent) -> EventHandlerFuture<()> {
+    pub fn handle_payment_intent_succeeded_or_amount_capturable_updated(
+        self,
+        payment_intent: StripePaymentIntent,
+    ) -> EventHandlerFuture<()> {
         if payment_intent.amount != payment_intent.amount_capturable {
             info!(
                 "payment intent with id {} amount={}, amount_capturable={} are not equal. Payment intent: {:?}",
@@ -90,7 +96,7 @@ where
                 let payment_intent_fees_repo = repo_factory.create_payment_intent_fees_repo_with_sys_acl(&conn);
                 let fees_repo = repo_factory.create_fees_repo_with_sys_acl(&conn);
 
-                crate::services::stripe::payment_intent_amount_capturable_updated(
+                crate::services::stripe::payment_intent_succeeded_or_amount_capturable_updated(
                     &*conn,
                     &*orders_repo,
                     &*invoices_repo,

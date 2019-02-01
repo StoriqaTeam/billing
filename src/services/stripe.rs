@@ -99,6 +99,12 @@ impl<
                             .add_event(Event::new(EventPayload::PaymentIntentAmountCapturableUpdated { payment_intent }))
                             .map_err(ectx!(try convert => payment_intent_id))?;
                     }
+                    (PaymentIntentSucceeded, PaymentIntent(payment_intent)) => {
+                        let payment_intent_id = payment_intent.id.clone();
+                        event_store_repo
+                            .add_event(Event::new(EventPayload::PaymentIntentSucceeded { payment_intent }))
+                            .map_err(ectx!(try convert => payment_intent_id))?;
+                    }
                     (PaymentIntentPaymentFailed, PaymentIntent(payment_intent)) => {
                         let payment_intent_id = payment_intent.id.clone();
                         event_store_repo
@@ -129,7 +135,7 @@ pub enum PaymentType {
     Fee,
 }
 
-pub fn payment_intent_amount_capturable_updated<C>(
+pub fn payment_intent_succeeded_or_amount_capturable_updated<C>(
     conn: &C,
     orders_repo: &OrdersRepo,
     invoices_repo: &InvoicesV2Repo,
@@ -178,16 +184,20 @@ where
                 );
                 Err(ectx!(err e, ErrorKind::Internal))
             }
-            (Some(payment_intent_invoice), None) => {
-                payment_intent_amount_capturable_updated_invoice(orders_repo, invoices_repo, fees_repo, fee_config, payment_intent_invoice)
-                    .map(|res| PaymentType::Invoice {
-                        payment_intent,
-                        invoice: res.0,
-                        orders: res.1,
-                    })
-            }
+            (Some(payment_intent_invoice), None) => payment_intent_succeeded_or_amount_capturable_updated_invoice(
+                orders_repo,
+                invoices_repo,
+                fees_repo,
+                fee_config,
+                payment_intent_invoice,
+            )
+            .map(|res| PaymentType::Invoice {
+                payment_intent,
+                invoice: res.0,
+                orders: res.1,
+            }),
             (None, Some(payment_intent_fee)) => {
-                payment_intent_amount_capturable_updated_fee(fees_repo, payment_intent_fee).map(|_| PaymentType::Fee)
+                payment_intent_succeeded_or_amount_capturable_updated_fee(fees_repo, payment_intent_fee).map(|_| PaymentType::Fee)
             }
             _ => {
                 let e = format_err!("Payment intent relationship by id {} not found.", payment_intent_id);
@@ -209,7 +219,7 @@ fn update_payment_intent(payment_intent: StripePaymentIntent) -> UpdatePaymentIn
     }
 }
 
-pub fn payment_intent_amount_capturable_updated_invoice(
+pub fn payment_intent_succeeded_or_amount_capturable_updated_invoice(
     orders_repo: &OrdersRepo,
     invoice_repo: &InvoicesV2Repo,
     fees_repo: &FeeRepo,
@@ -258,7 +268,10 @@ fn create_fee(order_percent: u64, order: &RawOrder) -> Result<NewFee, ServiceErr
     })
 }
 
-pub fn payment_intent_amount_capturable_updated_fee(fees_repo: &FeeRepo, payment_intent_fee: PaymentIntentFee) -> Result<(), ServiceError> {
+pub fn payment_intent_succeeded_or_amount_capturable_updated_fee(
+    fees_repo: &FeeRepo,
+    payment_intent_fee: PaymentIntentFee,
+) -> Result<(), ServiceError> {
     let update_fee = UpdateFee {
         status: Some(FeeStatus::Paid),
         ..Default::default()

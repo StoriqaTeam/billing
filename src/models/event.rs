@@ -52,6 +52,7 @@ pub enum EventPayload {
     InvoicePaid { invoice_id: InvoiceId },
     PaymentIntentPaymentFailed { payment_intent: PaymentIntent },
     PaymentIntentAmountCapturableUpdated { payment_intent: PaymentIntent },
+    PaymentIntentSucceeded { payment_intent: PaymentIntent },
     PaymentIntentCapture { order: RawOrder },
     PaymentExpired { invoice_id: InvoiceId },
 }
@@ -70,6 +71,7 @@ impl fmt::Display for EventPayload {
             EventPayload::InvoicePaid { .. } => "InvoicePaid",
             EventPayload::PaymentIntentPaymentFailed { .. } => "PaymentIntentPaymentFailed",
             EventPayload::PaymentIntentAmountCapturableUpdated { .. } => "PaymentIntentAmountCapturableUpdated",
+            EventPayload::PaymentIntentSucceeded { .. } => "PaymentIntentSucceeded",
             EventPayload::PaymentIntentCapture { .. } => "PaymentIntentCapture",
             EventPayload::PaymentExpired { .. } => "PaymentExpired",
         };
