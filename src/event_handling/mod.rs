@@ -5,7 +5,7 @@ use diesel::{
     connection::{AnsiTransactionManager, Connection},
     pg::Pg,
 };
-use failure::{Error as FailureError, Fail};
+use failure::{err_msg, Error as FailureError, Fail};
 use futures::{future, Future, Stream};
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool, PooledConnection};
@@ -110,6 +110,16 @@ where
                 })
             })
             .map(|_| ())
+    }
+
+    fn get_ture_context(self) -> EventHandlerResult<(PC, AS)> {
+        match (self.payments_client.clone(), self.account_service.clone()) {
+            (Some(payments_client), Some(account_service)) => Ok((payments_client, account_service)),
+            _ => {
+                let e = err_msg("Ture integration was expected to be enabled");
+                Err(ectx!(err e, ErrorKind::Internal))
+            }
+        }
     }
 
     fn process_events(self) -> EventHandlerFuture<()> {

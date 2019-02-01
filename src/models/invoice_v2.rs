@@ -51,6 +51,12 @@ impl Display for InvoiceId {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum PaymentFlow {
+    Crypto,
+    Fiat,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "invoices_v2"]
 pub struct RawInvoice {
@@ -65,6 +71,16 @@ pub struct RawInvoice {
     pub updated_at: NaiveDateTime,
     pub buyer_user_id: UserId,
     pub status: OrderState,
+}
+
+impl RawInvoice {
+    pub fn payment_flow(&self) -> PaymentFlow {
+        if self.buyer_currency.is_fiat() {
+            PaymentFlow::Fiat
+        } else {
+            PaymentFlow::Crypto
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Queryable, Insertable)]

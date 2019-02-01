@@ -1,3 +1,4 @@
+use chrono::{NaiveDateTime, Utc};
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::query_dsl::RunQueryDsl;
@@ -14,6 +15,8 @@ use super::types::RepoResultV2;
 
 pub trait EventStoreRepo {
     fn add_event(&self, event: Event) -> RepoResultV2<EventEntry>;
+
+    fn add_scheduled_event(&self, event: Event, scheduled_on: NaiveDateTime) -> RepoResultV2<EventEntry>;
 
     fn get_events_for_processing(&self, limit: u32) -> RepoResultV2<Vec<EventEntry>>;
 
@@ -59,8 +62,28 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .map_err(ectx!(ErrorSource::SerdeJson, ErrorKind::Internal => raw_event_entry))
     }
 
+    fn add_scheduled_event(&self, event: Event, scheduled_on: NaiveDateTime) -> RepoResultV2<EventEntry> {
+        debug!("Adding an event with ID: {} scheduled on {}", event.id, scheduled_on.format("%+"));
+
+        let new_event_entry = RawNewEventEntry::try_from_event_scheduled_on(event.clone(), scheduled_on)
+            .map_err(ectx!(try ErrorSource::SerdeJson, ErrorKind::Internal => event))?;
+
+        let raw_event_entry = diesel::insert_into(EventStore::event_store)
+            .values(&new_event_entry)
+            .get_result::<RawEventEntry>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        RawEventEntry::try_into_event_entry(raw_event_entry.clone())
+            .map_err(ectx!(ErrorSource::SerdeJson, ErrorKind::Internal => raw_event_entry))
+    }
+
     fn get_events_for_processing(&self, limit: u32) -> RepoResultV2<Vec<EventEntry>> {
         debug!("Getting events for processing (limit: {})", limit);
+
+        let now = Utc::now().naive_utc();
 
         let command = sql_query(
             "
@@ -72,17 +95,18 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             WHERE id IN (
                 SELECT id
                 FROM event_store
-                WHERE status = $3
+                WHERE status = $3 AND (scheduled_on is null OR scheduled_on <= $4)
                 ORDER BY id
-                LIMIT $4
+                LIMIT $5
                 FOR UPDATE SKIP LOCKED
             )
             RETURNING *
         ",
         )
         .bind::<sql_types::VarChar, _>(EventStatus::InProgress.to_string())
-        .bind::<sql_types::Timestamp, _>(chrono::Utc::now().naive_utc())
+        .bind::<sql_types::Timestamp, _>(now)
         .bind::<sql_types::VarChar, _>(EventStatus::Pending.to_string())
+        .bind::<sql_types::Timestamp, _>(now)
         .bind::<sql_types::BigInt, _>(limit as i64);
 
         let raw_event_entries = command.get_results::<RawEventEntry>(self.db_conn).map_err(|e| {

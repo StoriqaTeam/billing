@@ -35,6 +35,7 @@ table! {
         attempt_count -> Int4,
         created_at -> Timestamp,
         status_updated_at -> Timestamp,
+        scheduled_on -> Nullable<Timestamp>,
     }
 }
 

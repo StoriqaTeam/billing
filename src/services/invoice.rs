@@ -3,6 +3,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use bigdecimal::BigDecimal;
+use chrono::{Duration, Utc};
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
@@ -292,61 +293,80 @@ impl<
                     }))
                 }
             })
-            .and_then(move |(account_id, wallet_address, new_payment_intent, orders)| {
-                cpu_pool.spawn_fn(move || {
-                    db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
-                        let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
-                        let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
-                        let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
-                        let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
-                        let payment_intent_invoices_repo = repo_factory.create_payment_intent_invoices_repo_with_sys_acl(&conn);
-
-                        conn.transaction::<InvoiceDump, ServiceError, _>(move || {
-                            let invoice = NewInvoice {
-                                id: invoice_id,
-                                account_id,
-                                buyer_currency,
-                                amount_captured: Amount::new(0u128),
-                                buyer_user_id,
+            .and_then({
+                let payment_expiry = self.static_context.config.payment_expiry.clone();
+                move |(account_id, wallet_address, new_payment_intent, orders)| {
+                    cpu_pool.spawn_fn(move || {
+                        db_pool.get().map_err(ectx!(ErrorKind::Internal)).and_then(move |conn| {
+                            // Add scheduled PaymentExpired event
+                            let payment_expired_event = Event::new(EventPayload::PaymentExpired { invoice_id });
+                            let expiry_timeout = match new_payment_intent {
+                                // use timeout crypto flow
+                                None => Duration::minutes(payment_expiry.crypto_timeout_min as i64),
+                                // use timeout for fiat flow
+                                Some(_) => Duration::minutes(payment_expiry.fiat_timeout_min as i64),
                             };
+                            let expires_on = Utc::now().naive_utc() + expiry_timeout;
 
-                            let invoice = invoices_repo.create(invoice.clone()).map_err(ectx!(try convert => invoice))?;
+                            let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
+                            event_store_repo
+                                .add_scheduled_event(payment_expired_event.clone(), expires_on.clone())
+                                .map_err(ectx!(try convert => payment_expired_event, expires_on))?;
 
-                            if let Some((new_payment_intent, new_payment_intent_invoice)) = new_payment_intent {
-                                payment_intent_repo
-                                    .create(new_payment_intent.clone())
-                                    .map_err(ectx!(try convert => new_payment_intent))?;
+                            // Save invoice data to database
+                            let invoices_repo = repo_factory.create_invoices_v2_repo(&conn, user_id);
+                            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+                            let order_exchange_rates_repo = repo_factory.create_order_exchange_rates_repo(&conn, user_id);
+                            let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
+                            let payment_intent_invoices_repo = repo_factory.create_payment_intent_invoices_repo_with_sys_acl(&conn);
 
-                                payment_intent_invoices_repo
-                                    .create(new_payment_intent_invoice.clone())
-                                    .map_err(ectx!(try convert => new_payment_intent_invoice))?;
-                            }
+                            conn.transaction::<InvoiceDump, ServiceError, _>(move || {
+                                let invoice = NewInvoice {
+                                    id: invoice_id,
+                                    account_id,
+                                    buyer_currency,
+                                    amount_captured: Amount::new(0u128),
+                                    buyer_user_id,
+                                };
 
-                            let orders_with_rates = orders
-                                .into_iter()
-                                .map(|(new_order, exchange_id, exchange_rate)| {
-                                    let order_id = new_order.id;
+                                let invoice = invoices_repo.create(invoice.clone()).map_err(ectx!(try convert => invoice))?;
 
-                                    let order = orders_repo.create(new_order.clone()).map_err(ectx!(try convert => new_order))?;
+                                if let Some((new_payment_intent, new_payment_intent_invoice)) = new_payment_intent {
+                                    payment_intent_repo
+                                        .create(new_payment_intent.clone())
+                                        .map_err(ectx!(try convert => new_payment_intent))?;
 
-                                    let new_rate = NewOrderExchangeRate {
-                                        order_id,
-                                        exchange_id,
-                                        exchange_rate,
-                                    };
+                                    payment_intent_invoices_repo
+                                        .create(new_payment_intent_invoice.clone())
+                                        .map_err(ectx!(try convert => new_payment_intent_invoice))?;
+                                }
 
-                                    let rate = order_exchange_rates_repo
-                                        .add_new_active_rate(new_rate.clone())
-                                        .map_err(ectx!(try convert => new_rate))?;
+                                let orders_with_rates = orders
+                                    .into_iter()
+                                    .map(|(new_order, exchange_id, exchange_rate)| {
+                                        let order_id = new_order.id;
 
-                                    Ok((order, vec![rate.active_rate]))
-                                })
-                                .collect::<Result<Vec<_>, ServiceError>>()?;
+                                        let order = orders_repo.create(new_order.clone()).map_err(ectx!(try convert => new_order))?;
 
-                            Ok(calculate_invoice_price(invoice, orders_with_rates, wallet_address))
+                                        let new_rate = NewOrderExchangeRate {
+                                            order_id,
+                                            exchange_id,
+                                            exchange_rate,
+                                        };
+
+                                        let rate = order_exchange_rates_repo
+                                            .add_new_active_rate(new_rate.clone())
+                                            .map_err(ectx!(try convert => new_rate))?;
+
+                                        Ok((order, vec![rate.active_rate]))
+                                    })
+                                    .collect::<Result<Vec<_>, ServiceError>>()?;
+
+                                Ok(calculate_invoice_price(invoice, orders_with_rates, wallet_address))
+                            })
                         })
                     })
-                })
+                }
             });
 
         Box::new(fut)

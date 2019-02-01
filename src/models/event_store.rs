@@ -33,6 +33,7 @@ pub struct EventEntry {
     pub attempt_count: u32,
     pub created_at: NaiveDateTime,
     pub status_updated_at: NaiveDateTime,
+    pub scheduled_on: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -83,6 +84,7 @@ pub struct RawEventEntry {
     pub attempt_count: i32,
     pub created_at: NaiveDateTime,
     pub status_updated_at: NaiveDateTime,
+    pub scheduled_on: Option<NaiveDateTime>,
 }
 
 #[derive(Debug, Fail)]
@@ -102,6 +104,7 @@ impl RawEventEntry {
             attempt_count,
             created_at,
             status_updated_at,
+            scheduled_on,
         } = self;
 
         let event = match serde_json::from_value::<Event>(event) {
@@ -125,6 +128,7 @@ impl RawEventEntry {
             attempt_count: attempt_count as u32,
             created_at,
             status_updated_at,
+            scheduled_on,
         })
     }
 }
@@ -135,6 +139,7 @@ pub struct RawNewEventEntry {
     pub event: serde_json::Value,
     pub status: String,
     pub attempt_count: i32,
+    pub scheduled_on: Option<NaiveDateTime>,
 }
 
 impl RawNewEventEntry {
@@ -143,6 +148,16 @@ impl RawNewEventEntry {
             event,
             status: EventStatus::Pending.to_string(),
             attempt_count: 0,
+            scheduled_on: None,
+        })
+    }
+
+    pub fn try_from_event_scheduled_on(event: Event, scheduled_on: NaiveDateTime) -> Result<Self, serde_json::Error> {
+        serde_json::to_value(&event).map(|event| Self {
+            event,
+            status: EventStatus::Pending.to_string(),
+            attempt_count: 0,
+            scheduled_on: Some(scheduled_on),
         })
     }
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
-use futures::{Future, IntoFuture};
+use futures::{future, Future, IntoFuture};
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool};
 use validator::{ValidationError, ValidationErrors};
@@ -138,6 +138,86 @@ impl<
 
         Box::new(fut)
     }
+}
+
+pub fn cancel_payment_intent<T, M, F, STRC>(
+    db_pool: Pool<M>,
+    cpu_pool: CpuPool,
+    stripe_client: STRC,
+    repo_factory: F,
+    invoice_id: InvoiceId,
+) -> ServiceFutureV2<()>
+where
+    T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
+    M: ManageConnection<Connection = T>,
+    F: ReposFactory<T>,
+    STRC: StripeClient + Clone,
+{
+    debug!("Cancelling payment intent for invoice with id: {}", invoice_id);
+
+    let repo_factory_clone = repo_factory.clone();
+    let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), move |conn| {
+        let payment_intent_invoices_repo = repo_factory_clone.create_payment_intent_invoices_repo_with_sys_acl(&conn);
+
+        let payment_intent_invoice = payment_intent_invoices_repo
+            .get(SearchPaymentIntentInvoice::InvoiceId(invoice_id.clone()))
+            .map_err(ectx!(try convert => invoice_id))?
+            .ok_or({
+                let e = format_err!("Record payment_intent_invoice by invoice id {} not found", invoice_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+
+        Ok(payment_intent_invoice.payment_intent_id)
+    })
+    .and_then(move |payment_intent_id| {
+        let payment_intent_id_ = payment_intent_id.clone();
+
+        stripe_client
+            .clone()
+            .get_payment_intent(payment_intent_id_.clone())
+            .map_err(ectx!(convert => payment_intent_id_))
+            .and_then(move |stripe::PaymentIntent { id, status, .. }| {
+                let id = PaymentIntentId(id);
+                let status = PaymentIntentStatus::from(status);
+                let fut: Box<Future<Item = _, Error = _>> = if status.is_cancellable() {
+                    Box::new(
+                        stripe_client
+                            .cancel_payment_intent(payment_intent_id.clone())
+                            .map_err(ectx!(convert => payment_intent_id))
+                            .map(|stripe::PaymentIntent { id, status, .. }| {
+                                let id = PaymentIntentId(id);
+                                let status = PaymentIntentStatus::from(status);
+                                Some((id, status))
+                            }),
+                    )
+                } else if status == PaymentIntentStatus::Canceled {
+                    Box::new(future::ok(Some((id, status))))
+                } else {
+                    Box::new(future::ok(None))
+                };
+                fut
+            })
+    })
+    // mark the payment intent as "Cancelled" in the DB if it has just been cancelled or if it was cancelled at some time earlier
+    // otherwise do nothing
+    .and_then(move |payment_intent| match payment_intent {
+        None => Box::new(future::ok(())),
+        Some((id, status)) => spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let payment_intent_repo = repo_factory.create_payment_intent_repo_with_sys_acl(&conn);
+
+            let update_payment_intent = UpdatePaymentIntent {
+                status: Some(status),
+                ..UpdatePaymentIntent::default()
+            };
+
+            payment_intent_repo
+                .update(id.clone(), update_payment_intent.clone())
+                .map_err(ectx!(convert => id, update_payment_intent))
+                .map(|_| ())
+        }),
+    });
+
+    Box::new(fut)
 }
 
 fn validate_payment_intent_create_fee(fee: &Fee) -> Result<(), ServiceError> {

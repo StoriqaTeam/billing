@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
-use failure::{err_msg, Fail};
+use failure::Fail;
 use futures::{future, Future, IntoFuture};
 use r2d2::ManageConnection;
 use stq_http::client::HttpClient;
@@ -16,9 +16,15 @@ use client::{
     stores::{CurrencyExchangeInfo, StoresClient},
     stripe::StripeClient,
 };
-use models::{invoice_v2::InvoiceId, order_v2::RawOrder, AccountId, AccountWithBalance, Currency, Event, EventPayload, PaymentState};
+use models::{
+    invoice_v2::{InvoiceId, PaymentFlow, RawInvoice},
+    order_v2::RawOrder,
+    AccountId, AccountWithBalance, Currency, Event, EventPayload, PaymentState,
+};
 use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
+
 use services::accounts::AccountService;
+use services::payment_intent::cancel_payment_intent;
 use services::stripe::PaymentType;
 
 use super::error::*;
@@ -47,6 +53,7 @@ where
                 self.handle_payment_intent_amount_capturable_updated(payment_intent)
             }
             EventPayload::PaymentIntentCapture { order } => self.handle_payment_intent_capture(order),
+            EventPayload::PaymentExpired { invoice_id } => self.handle_payment_expired(invoice_id),
         }
     }
 
@@ -123,47 +130,73 @@ where
         Box::new(fut)
     }
 
-    // TODO: handle this event properly
     pub fn handle_invoice_paid(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
-        match (self.payments_client.clone(), self.account_service.clone()) {
-            (Some(payments_client), Some(account_service)) => {
-                let fut = Future::join3(
-                    self.clone().drain_and_unlink_account(payments_client, account_service, invoice_id),
-                    self.clone().mark_orders_as_paid_on_saga(invoice_id.clone()),
-                    self.create_fee_for_orders(invoice_id),
+        let fut = self
+            .clone()
+            .get_ture_context()
+            .into_future()
+            .and_then(move |(payments_client, account_service)| {
+                Box::new(
+                    Future::join3(
+                        self.clone().drain_and_unlink_account(payments_client, account_service, invoice_id),
+                        self.clone().set_orders_status(invoice_id.clone(), OrderState::Paid),
+                        self.create_fee_for_orders(invoice_id),
+                    )
+                    .map(|_| ()),
                 )
-                .map(|_| ());
+            });
 
-                Box::new(fut)
-            }
-            _ => {
-                let e = err_msg("Payments integration must be configured for the InvoicePaid event to be processed");
-                Box::new(future::err(ectx!(err e, ErrorKind::Internal)))
-            }
+        Box::new(fut)
+    }
+
+    pub fn handle_payment_expired(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
+        let fut = self.clone().get_invoice(invoice_id).and_then(move |invoice| match invoice.paid_at {
+            Some(_) => future::Either::A(future::ok(())), // do nothing if the invoice has already been paid
+            None => future::Either::B(future::lazy(move || self.process_payment_expired(invoice))),
+        });
+
+        Box::new(fut)
+    }
+
+    fn process_payment_expired(self, invoice: RawInvoice) -> EventHandlerFuture<()> {
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let stripe_client = self.stripe_client.clone();
+        let repo_factory = self.repo_factory.clone();
+
+        let fut = match invoice.payment_flow() {
+            PaymentFlow::Crypto => future::Either::A(future::lazy(move || {
+                self.clone()
+                    .get_ture_context()
+                    .into_future()
+                    .and_then(move |(payments_client, account_service)| {
+                        Future::join(
+                            self.clone().drain_and_unlink_account(payments_client, account_service, invoice.id),
+                            self.set_orders_status(invoice.id.clone(), OrderState::AmountExpired),
+                        )
+                    })
+            })),
+            PaymentFlow::Fiat => future::Either::B(future::lazy(move || {
+                Future::join(
+                    self.set_orders_status(invoice.id.clone(), OrderState::AmountExpired),
+                    cancel_payment_intent(db_pool, cpu_pool, stripe_client, repo_factory, invoice.id.clone())
+                        .map_err(ectx!(ErrorKind::Internal => invoice.id)),
+                )
+            })),
         }
+        .map(|_| ());
+
+        Box::new(fut)
     }
 
     fn drain_and_unlink_account(self, payments_client: PC, account_service: AS, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
-        let EventHandler { db_pool, cpu_pool, .. } = self.clone();
-
-        let fut = spawn_on_pool(db_pool, cpu_pool, {
-            let repo_factory = self.repo_factory.clone();
-            move |conn| {
-                let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
-                let invoice_id_clone = invoice_id.clone();
-                invoices_repo
-                    .get(invoice_id_clone)
-                    .map_err(ectx!(try convert => invoice_id_clone))?
-                    .ok_or({
-                        let e = format_err!("Invoice {} not found", invoice_id);
-                        ectx!(err e, ErrorKind::Internal)
-                    })
-                    .map(|invoice| (invoice.id, invoice.account_id))
-            }
-        })
-        .and_then({
+        let fut = self.clone().get_invoice(invoice_id).and_then({
             let self_ = self.clone();
-            move |(invoice_id, account_id)| match account_id {
+            move |RawInvoice {
+                      id: invoice_id,
+                      account_id,
+                      ..
+                  }| match account_id {
                 // Don't do anything if the account is already unlinked
                 None => future::Either::A(future::ok(())),
                 // Drain and unlink the account
@@ -220,7 +253,25 @@ where
         Box::new(fut)
     }
 
-    fn mark_orders_as_paid_on_saga(self, invoice_id: InvoiceId) -> EventHandlerFuture<()> {
+    fn get_invoice(self, invoice_id: InvoiceId) -> EventHandlerFuture<RawInvoice> {
+        let EventHandler { db_pool, cpu_pool, .. } = self.clone();
+        spawn_on_pool(db_pool, cpu_pool, {
+            let repo_factory = self.repo_factory.clone();
+            move |conn| {
+                let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
+                let invoice_id_clone = invoice_id.clone();
+                invoices_repo
+                    .get(invoice_id_clone)
+                    .map_err(ectx!(try convert => invoice_id_clone))?
+                    .ok_or({
+                        let e = format_err!("Invoice {} not found", invoice_id);
+                        ectx!(err e, ErrorKind::Internal)
+                    })
+            }
+        })
+    }
+
+    fn set_orders_status(self, invoice_id: InvoiceId, status: OrderState) -> EventHandlerFuture<()> {
         let EventHandler { db_pool, cpu_pool, .. } = self.clone();
 
         let fut = spawn_on_pool(db_pool, cpu_pool, {
@@ -248,7 +299,7 @@ where
                         order_id: order.id,
                         store_id: order.store_id,
                         customer_id: invoice.buyer_user_id.clone(),
-                        status: OrderState::Paid,
+                        status: status.clone(),
                     })
                     .collect::<Vec<_>>())
             }

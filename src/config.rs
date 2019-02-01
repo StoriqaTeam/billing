@@ -23,6 +23,7 @@ pub struct Config {
     pub stripe: Stripe,
     pub event_store: EventStore,
     pub fee: FeeValues,
+    pub payment_expiry: PaymentExpiry,
 }
 
 /// Common server settings
@@ -114,6 +115,13 @@ pub struct FeeValues {
     pub order_percent: u64,
     pub currency_code: String,
 }
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct PaymentExpiry {
+    pub crypto_timeout_min: u32,
+    pub fiat_timeout_min: u32,
+}
+
 /// Creates new app config struct
 /// #Examples
 /// ```
@@ -125,10 +133,12 @@ impl Config {
     pub fn new() -> Result<Self, ConfigError> {
         let mut s = RawConfig::new();
 
-        s.set_default("server.processing_timeout_ms", 1000 as i64).unwrap();
-        s.set_default("event_store.max_processing_attempts", 3 as i64).unwrap();
-        s.set_default("event_store.stuck_threshold_sec", 300 as i64).unwrap();
-        s.set_default("event_store.polling_rate_sec", 10 as i64).unwrap();
+        s.set_default("server.processing_timeout_ms", 1000i64).unwrap();
+        s.set_default("event_store.max_processing_attempts", 3i64).unwrap();
+        s.set_default("event_store.stuck_threshold_sec", 300i64).unwrap();
+        s.set_default("event_store.polling_rate_sec", 10i64).unwrap();
+        s.set_default("payment_expiry.crypto_timeout_min", 4320i64).unwrap();
+        s.set_default("payment_expiry.fiat_timeout_min", 60i64).unwrap();
 
         s.merge(File::with_name("config/base"))?;
 
