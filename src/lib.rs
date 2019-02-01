@@ -91,6 +91,7 @@ use client::{
     payments::{self, PaymentsClientImpl},
     saga::SagaClientImpl,
     stores::StoresClientImpl,
+    stripe::StripeClientImpl,
 };
 use config::Config;
 use controller::context::StaticContext;
@@ -210,8 +211,9 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
         http_client: client_handle.clone(),
         payments_client: payments_ctx.as_ref().map(|(payments_client, _)| payments_client.clone()),
         account_service: payments_ctx.as_ref().map(|(_, account_service)| account_service.clone()),
-        saga_client: SagaClientImpl::new(client_handle.clone(), config.saga_addr.url),
-        stores_client: StoresClientImpl::new(client_handle.clone(), config.stores_microservice.url),
+        saga_client: SagaClientImpl::new(client_handle.clone(), config.saga_addr.url.clone()),
+        stores_client: StoresClientImpl::new(client_handle.clone(), config.stores_microservice.url.clone()),
+        stripe_client: StripeClientImpl::create_from_config(&config),
         fee: config.fee,
     };
 

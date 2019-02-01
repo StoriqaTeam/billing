@@ -3,6 +3,7 @@ use failure::{Backtrace, Context, Fail};
 use std::fmt;
 
 use client::stores::ErrorKind as StoresErrorKind;
+use client::stripe::ErrorKind as StripeErrorKind;
 use repos::error::ErrorKind as RepoErrorKind;
 
 #[derive(Debug)]
@@ -44,6 +45,12 @@ impl From<RepoErrorKind> for ErrorKind {
 
 impl From<StoresErrorKind> for ErrorKind {
     fn from(_e: StoresErrorKind) -> Self {
+        ErrorKind::Internal
+    }
+}
+
+impl From<StripeErrorKind> for ErrorKind {
+    fn from(_e: StripeErrorKind) -> Self {
         ErrorKind::Internal
     }
 }
