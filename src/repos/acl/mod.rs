@@ -87,8 +87,6 @@ impl ApplicationAcl {
                 permission!(Resource::PaymentIntentInvoice, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Read, Scope::Owned),
                 permission!(Resource::Customer, Action::Write, Scope::Owned),
-                permission!(Resource::Fee, Action::Read),
-                permission!(Resource::Fee, Action::Write),
             ],
         );
         hash.insert(
@@ -107,6 +105,8 @@ impl ApplicationAcl {
                 permission!(Resource::PaymentIntent, Action::Write),
                 permission!(Resource::PaymentIntentFee, Action::Read, Scope::Owned),
                 permission!(Resource::PaymentIntentInvoice, Action::Read, Scope::Owned),
+                permission!(Resource::Fee, Action::Read, Scope::Owned),
+                permission!(Resource::Fee, Action::Write, Scope::Owned),
             ],
         );
         hash.insert(

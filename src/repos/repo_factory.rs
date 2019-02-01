@@ -935,6 +935,15 @@ pub mod tests {
     pub struct UserRolesRepoMock;
 
     impl UserRolesRepo for UserRolesRepoMock {
+        fn get_by_store_id(&self, store_id: StoreId) -> RepoResultV2<Option<UserRole>> {
+            Ok(Some(UserRole {
+                id: RoleId::new(),
+                user_id: UserId(1),
+                name: BillingRole::User,
+                data: Some(serde_json::json!(store_id.0)),
+            }))
+        }
+
         fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<BillingRole>> {
             Ok(match user_id_value.0 {
                 1 => vec![BillingRole::Superuser],

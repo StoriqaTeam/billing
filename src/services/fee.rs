@@ -18,7 +18,7 @@ use client::payments::PaymentsClient;
 use client::stripe::{NewCharge, StripeClient};
 use services::accounts::AccountService;
 
-use models::{order_v2::OrderId, ChargeId, FeeStatus, SubjectIdentifier, UpdateFee};
+use models::{order_v2::OrderId, ChargeId, FeeStatus, UpdateFee};
 use repos::{ReposFactory, SearchCustomer, SearchFee};
 
 use super::types::ServiceFutureV2;
@@ -96,7 +96,7 @@ impl<
 
         let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let fees_repo = repo_factory.create_fees_repo(&conn, user_id);
-            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
+            let user_roles_repo = repo_factory.create_user_roles_repo(&conn, user_id);
             let order_repo = repo_factory.create_orders_repo(&conn, user_id);
             let customers_repo = repo_factory.create_customers_repo(&conn, user_id);
 
@@ -116,21 +116,21 @@ impl<
                 })?;
 
             let store_id_cloned = current_order.store_id;
-            let current_merchant = merchant_repo
-                .get_by_subject_id(SubjectIdentifier::Store(StqStoreId(current_order.store_id.inner())))
-                .map_err(|e| ectx!(try err e, ErrorKind::Internal => store_id_cloned))?;
 
-            let merchant_owner = current_merchant.user_id.ok_or({
-                let e = format_err!("Merchant owner by store id {} not found", current_order.store_id);
-                ectx!(try err e, ErrorKind::Internal)
-            })?;
-
-            let merchant_owner_cloned = merchant_owner.clone();
-            let stripe_customer = customers_repo
-                .get(SearchCustomer::UserId(merchant_owner))
-                .map_err(ectx!(try convert => merchant_owner_cloned))?
+            let store_owner_user_role = user_roles_repo
+                .get_by_store_id(StqStoreId(store_id_cloned.inner()))
+                .map_err(|e| ectx!(try err e, ErrorKind::Internal => store_id_cloned))?
                 .ok_or({
-                    let e = format_err!("Customer by user id {} not found", merchant_owner);
+                    let e = format_err!("Store owner for store id {} not found", store_id_cloned);
+                    ectx!(try err e, ErrorKind::Internal)
+                })?;
+            let store_owner = store_owner_user_role.user_id;
+
+            let stripe_customer = customers_repo
+                .get(SearchCustomer::UserId(store_owner))
+                .map_err(ectx!(try convert => store_owner))?
+                .ok_or({
+                    let e = format_err!("Customer by user id {} not found", store_owner);
                     ectx!(try err e, ErrorKind::Internal)
                 })?;
 
