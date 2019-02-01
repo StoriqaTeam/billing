@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use bigdecimal::BigDecimal;
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use failure::Fail;
 use futures::{future, Future, IntoFuture};
@@ -19,7 +20,7 @@ use client::{
 use models::{
     invoice_v2::{InvoiceId, PaymentFlow, RawInvoice},
     order_v2::RawOrder,
-    AccountId, AccountWithBalance, Currency, Event, EventPayload, PaymentState,
+    AccountId, AccountWithBalance, Amount, Currency, Event, EventPayload, PaymentState,
 };
 use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
 
@@ -419,22 +420,45 @@ where
                     let e = format_err!("payment intent {:?} not found", search_clone);
                     ectx!(err e, ErrorKind::Internal)
                 })
-                .map(|payment_intent| (payment_intent.id, order.total_amount, order.seller_currency))
+                .map(|payment_intent| (payment_intent, order.total_amount, order.seller_currency))
         })
-        .and_then(move |(payment_intent_id, total_amount, currency)| {
+        .and_then(move |(payment_intent, total_amount, currency)| {
             currency
                 .convert()
                 .map_err(ectx!(convert => currency))
                 .into_future()
-                .and_then(move |currency| {
+                .and_then(move |stripe_currency| {
                     let stripe_client_clone = stripe_client.clone();
-                    stripe_client
-                        .capture_payment_intent(payment_intent_id.clone(), total_amount)
-                        .map_err(ectx!(convert => payment_intent_id, total_amount))
-                        .and_then(move |_| {
-                            stripe_client_clone
-                                .create_payout(total_amount, currency, order_id)
-                                .map_err(ectx!(convert => total_amount, currency, order_id))
+                    payment_intent
+                        .charge_id
+                        .ok_or({
+                            let e = format_err!("payment intent charge paid not found");
+                            ectx!(err e, ErrorKind::Internal)
+                        })
+                        .into_future()
+                        .and_then(move |charge_id| {
+                            stripe_client
+                                .retrieve_balance_transaction(charge_id.clone())
+                                .map_err(ectx!(convert => charge_id))
+                        })
+                        .and_then(move |balance_transaction| {
+                            // wee need to payout the raw amount without stripe fee
+                            let total_amount_super_unit = total_amount.to_super_unit(currency);
+                            let fee_procent = balance_transaction.fee as f64 / balance_transaction.amount as f64;
+                            let stripe_fee = Amount::from_super_unit(currency, total_amount_super_unit * BigDecimal::from(fee_procent));
+                            total_amount
+                                .checked_sub(stripe_fee)
+                                .ok_or({
+                                    let e = format_err!("Calculation of total amount without fee is overflow");
+                                    ectx!(err e, ErrorKind::Internal)
+                                })
+                                .into_future()
+                                .and_then(move |amount_without_fee| {
+                                    stripe_client_clone
+                                        .create_payout(amount_without_fee, stripe_currency, order_id)
+                                        .map_err(ectx!(convert => total_amount, stripe_currency, order_id))
+                                        .map(move |_| stripe_fee)
+                                })
                         })
                 })
         })
@@ -442,13 +466,16 @@ where
             let db_pool = self.db_pool.clone();
             let cpu_pool = self.cpu_pool.clone();
             let repo_factory = self.repo_factory.clone();
-            move |_| {
+            move |stripe_fee| {
                 spawn_on_pool(db_pool, cpu_pool, move |conn| {
                     let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
                     info!("Setting order {} state \'Captured\'", order_id);
                     orders_repo
                         .update_state(order_id, PaymentState::Captured)
-                        .map_err(ectx!(convert => order_id))
+                        .map_err(ectx!(try convert => order_id))?;
+                    orders_repo
+                        .update_stripe_fee(order_id, stripe_fee)
+                        .map_err(ectx!(convert => order_id, stripe_fee))
                         .map(|_| ())
                 })
             }

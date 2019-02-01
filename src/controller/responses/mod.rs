@@ -61,6 +61,7 @@ pub struct OrderResponse {
     pub updated_at: NaiveDateTime,
     pub store_id: StoreId,
     pub state: PaymentState,
+    pub stripe_fee: Option<f64>,
 }
 
 impl OrderResponse {
@@ -75,6 +76,15 @@ impl OrderResponse {
             .to_super_unit(raw_order.seller_currency)
             .to_f64()
             .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+        let stripe_fee = if let Some(s) = raw_order.stripe_fee {
+            let s = s
+                .to_super_unit(raw_order.seller_currency)
+                .to_f64()
+                .ok_or(ectx!(try err ErrorContext::AmountConversion, ErrorKind::Internal))?;
+            Some(s)
+        } else {
+            None
+        };
 
         Ok(OrderResponse {
             id: raw_order.id,
@@ -86,6 +96,7 @@ impl OrderResponse {
             updated_at: raw_order.updated_at,
             store_id: raw_order.store_id,
             state: raw_order.state,
+            stripe_fee,
         })
     }
 }

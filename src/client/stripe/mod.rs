@@ -5,8 +5,8 @@ pub use self::types::{NewPaymentIntent, *};
 use futures::Future;
 use futures::IntoFuture;
 use stripe::{
-    CaptureParams, Charge, ChargeParams, Currency as StripeCurrency, Customer, CustomerParams, Deleted, Metadata, PaymentIntent,
-    PaymentIntentCaptureParams, PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
+    BalanceTransaction, CaptureParams, Charge, ChargeParams, Currency as StripeCurrency, Customer, CustomerParams, Deleted, Metadata,
+    PaymentIntent, PaymentIntentCaptureParams, PaymentIntentCreateParams, PaymentSourceParams, Payout, PayoutParams, Refund, RefundParams,
 };
 
 use config;
@@ -40,6 +40,11 @@ pub trait StripeClient: Send + Sync + 'static {
         payment_intent_id: PaymentIntentId,
         amount: Amount,
     ) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
+
+    fn retrieve_balance_transaction(
+        &self,
+        balance_transaction_id: ChargeId,
+    ) -> Box<Future<Item = BalanceTransaction, Error = Error> + Send>;
 
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send>;
 
@@ -177,6 +182,12 @@ impl StripeClient for StripeClientImpl {
             )
             .map_err(From::from),
         )
+    }
+    fn retrieve_balance_transaction(
+        &self,
+        balance_transaction_id: ChargeId,
+    ) -> Box<Future<Item = BalanceTransaction, Error = Error> + Send> {
+        Box::new(BalanceTransaction::retrieve(&self.client, &balance_transaction_id.inner()).map_err(From::from))
     }
 
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send> {

@@ -96,6 +96,7 @@ pub struct RawOrder {
     pub updated_at: NaiveDateTime,
     pub store_id: StoreId,
     pub state: PaymentState,
+    pub stripe_fee: Option<Amount>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]

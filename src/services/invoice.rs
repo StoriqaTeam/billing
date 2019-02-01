@@ -1639,6 +1639,7 @@ pub mod tests {
             updated_at: NaiveDateTime::from_timestamp(0, 0),
             store_id: StoreIdv2::new(1),
             state: PaymentState::Initial,
+            stripe_fee: None,
         };
 
         // then
