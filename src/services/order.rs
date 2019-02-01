@@ -5,7 +5,7 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use failure::Fail;
 use future::Either;
-use futures::{Future, IntoFuture};
+use futures::Future;
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool};
 use validator::{ValidationError, ValidationErrors};
@@ -20,6 +20,7 @@ use client::stripe::StripeClient;
 use controller::responses::{OrderResponse, OrderSearchResultsResponse};
 use models::order_v2::{OrderId, OrdersSearch, RawOrder};
 use models::PaymentState;
+use models::{Event, EventPayload};
 use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
 use services::accounts::AccountService;
 use services::error::Error as ServiceError;
@@ -48,7 +49,6 @@ impl<
 {
     fn order_capture(&self, order_id: OrderId) -> ServiceFutureV2<()> {
         let repo_factory = self.static_context.repo_factory.clone();
-        let stripe_client = self.static_context.stripe_client.clone();
         let user_id = self.dynamic_context.user_id;
 
         let db_pool = self.static_context.db_pool.clone();
@@ -81,7 +81,7 @@ impl<
                 let cpu_pool = self.static_context.cpu_pool.clone();
                 move |order| {
                     if order.seller_currency.is_fiat() {
-                        Either::A(order_capture_fiat(cpu_pool, db_pool, repo_factory, user_id, stripe_client, order))
+                        Either::A(order_capture_fiat(cpu_pool, db_pool, repo_factory, order))
                     } else {
                         Either::B(order_capture_crypto(cpu_pool, db_pool, repo_factory, user_id, order))
                     }
@@ -192,79 +192,17 @@ impl<
     }
 }
 
-fn order_capture_fiat<T, F, M>(
-    cpu_pool: CpuPool,
-    db_pool: Pool<M>,
-    repo_factory: F,
-    user_id: Option<UserId>,
-    stripe_client: std::sync::Arc<dyn StripeClient>,
-    order: RawOrder,
-) -> ServiceFutureV2<()>
+fn order_capture_fiat<T, F, M>(cpu_pool: CpuPool, db_pool: Pool<M>, repo_factory: F, order: RawOrder) -> ServiceFutureV2<()>
 where
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     F: ReposFactory<T>,
     M: ManageConnection<Connection = T>,
 {
-    let db_pool_ = db_pool.clone();
-    let cpu_pool_ = cpu_pool.clone();
-    let repo_factory_ = repo_factory.clone();
-    let order_id = order.id;
-
-    let fut = spawn_on_pool(db_pool_, cpu_pool_, move |conn| {
-        let payment_intent_repo = repo_factory_.create_payment_intent_repo(&conn, user_id);
-        let payment_intent_invoices_repo = repo_factory_.create_payment_intent_invoices_repo(&conn, user_id);
-
-        let order_invoice_id_cloned = order.invoice_id.clone();
-        let payment_intent_invoice = payment_intent_invoices_repo
-            .get(SearchPaymentIntentInvoice::InvoiceId(order.invoice_id.clone()))
-            .map_err(ectx!(try convert => order_invoice_id_cloned))?
-            .ok_or({
-                let e = format_err!("Record payment_intent_invoice by invoice id {} not found", order.invoice_id);
-                ectx!(try err e, ErrorKind::Internal)
-            })?;
-
-        let search = SearchPaymentIntent::Id(payment_intent_invoice.payment_intent_id);
-        let search_clone = search.clone();
-        payment_intent_repo
-            .get(search.clone())
-            .map_err(ectx!(try convert => search))?
-            .ok_or({
-                let e = format_err!("payment intent {:?} not found", search_clone);
-                ectx!(err e, ErrorKind::Internal)
-            })
-            .map(|payment_intent| (payment_intent.id, order.total_amount, order.seller_currency))
-    })
-    .and_then(move |(payment_intent_id, total_amount, currency)| {
-        currency
-            .convert()
-            .map_err(ectx!(convert => currency))
-            .into_future()
-            .and_then(move |currency| {
-                let stripe_client_clone = stripe_client.clone();
-                stripe_client
-                    .capture_payment_intent(payment_intent_id.clone(), total_amount)
-                    .map_err(ectx!(convert => payment_intent_id, total_amount))
-                    .and_then(move |_| {
-                        stripe_client_clone
-                            .create_payout(total_amount, currency, order_id)
-                            .map_err(ectx!(convert => total_amount, currency, order_id))
-                    })
-            })
-    })
-    .and_then({
-        let db_pool = db_pool.clone();
-        let cpu_pool = cpu_pool.clone();
-        let repo_factory = repo_factory.clone();
-        move |_| {
-            spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
-                info!("Setting order {} state \'Captured\'", order_id);
-                orders_repo
-                    .update_state(order_id, PaymentState::Captured)
-                    .map_err(ectx!(convert => order_id))
-                    .map(|_| ())
-            })
-        }
+    let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
+        let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
+        let event = Event::new(EventPayload::PaymentIntentCapture { order });
+        event_store_repo.add_event(event.clone()).map_err(ectx!(try convert => event))?;
+        Ok(())
     });
     Box::new(fut)
 }

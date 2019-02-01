@@ -4,6 +4,7 @@ use stripe::PaymentIntent;
 use uuid::Uuid;
 
 use models::invoice_v2::InvoiceId;
+use models::order_v2::RawOrder;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq, Eq, FromStr)]
 #[sql_type = "SqlUuid"]
@@ -51,6 +52,7 @@ pub enum EventPayload {
     InvoicePaid { invoice_id: InvoiceId },
     PaymentIntentPaymentFailed { payment_intent: PaymentIntent },
     PaymentIntentAmountCapturableUpdated { payment_intent: PaymentIntent },
+    PaymentIntentCapture { order: RawOrder },
 }
 
 impl fmt::Debug for EventPayload {
@@ -67,6 +69,7 @@ impl fmt::Display for EventPayload {
             EventPayload::InvoicePaid { .. } => "InvoicePaid",
             EventPayload::PaymentIntentPaymentFailed { .. } => "PaymentIntentPaymentFailed",
             EventPayload::PaymentIntentAmountCapturableUpdated { .. } => "PaymentIntentAmountCapturableUpdated",
+            EventPayload::PaymentIntentCapture { .. } => "PaymentIntentCapture",
         };
 
         f.write_str(&s)
