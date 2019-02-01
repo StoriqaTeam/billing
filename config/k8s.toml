@@ -41,6 +41,7 @@ addr = "udplog.stq.cloud:32303"
 [stripe]
 public_key = "pk_test_hH0fg7QCeCIE7ZmVN19h6l9C"
 secret_key = "sk_test_NZtkQf1xKGjkreVbKddipafS"
+signing_secret = "whsec_JUD38zIxOWtFEJYgBucio65J4xoZ057O"
 
 [event_store]
 max_processing_attempts = 3
