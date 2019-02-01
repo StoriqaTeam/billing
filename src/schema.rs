@@ -137,6 +137,7 @@ table! {
         updated_at -> Timestamp,
         store_id -> Int4,
         state -> Varchar,
+        stripe_fee -> Nullable<Numeric>,
     }
 }
 

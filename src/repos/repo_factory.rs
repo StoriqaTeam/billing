@@ -1135,6 +1135,7 @@ pub mod tests {
                 updated_at: NaiveDateTime::from_timestamp(0, 0),
                 store_id,
                 state: PaymentState::Initial,
+                stripe_fee: None,
             })
         }
 
@@ -1156,6 +1157,21 @@ pub mod tests {
                 updated_at: NaiveDateTime::from_timestamp(0, 0),
                 store_id: StoreV2Id::new(1),
                 state: PaymentState::Initial,
+                stripe_fee: None,
+            })
+        }
+        fn update_stripe_fee(&self, order_id: OrderV2Id, stripe_fee: Amount) -> RepoResultV2<RawOrder> {
+            Ok(RawOrder {
+                id: order_id,
+                seller_currency: BillingCurrency::Btc,
+                total_amount: Amount::new(0),
+                cashback_amount: Amount::new(0),
+                invoice_id: InvoiceV2Id::generate(),
+                created_at: NaiveDateTime::from_timestamp(0, 0),
+                updated_at: NaiveDateTime::from_timestamp(0, 0),
+                store_id: StoreV2Id::new(1),
+                state: PaymentState::Initial,
+                stripe_fee: Some(stripe_fee),
             })
         }
     }
