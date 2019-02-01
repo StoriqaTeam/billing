@@ -33,6 +33,8 @@ pub trait StripeClient: Send + Sync + 'static {
 
     fn capture_charge(&self, charge_id: ChargeId, amount: Amount) -> Box<Future<Item = Charge, Error = Error> + Send>;
 
+    fn get_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
+
     fn capture_payment_intent(
         &self,
         payment_intent_id: PaymentIntentId,
@@ -136,9 +138,11 @@ impl StripeClient for StripeClientImpl {
         });
         Box::new(fut)
     }
+
     fn get_charge(&self, charge_id: ChargeId) -> Box<Future<Item = Charge, Error = Error> + Send> {
         Box::new(Charge::retrieve(&self.client, &charge_id.inner()).map_err(From::from))
     }
+
     fn capture_charge(&self, charge_id: ChargeId, amount: Amount) -> Box<Future<Item = Charge, Error = Error> + Send> {
         Box::new(
             Charge::capture(
@@ -152,6 +156,11 @@ impl StripeClient for StripeClientImpl {
             .map_err(From::from),
         )
     }
+
+    fn get_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send> {
+        Box::new(PaymentIntent::retrieve(&self.client, &payment_intent_id.0).map_err(From::from))
+    }
+
     fn capture_payment_intent(
         &self,
         payment_intent_id: PaymentIntentId,
@@ -169,6 +178,7 @@ impl StripeClient for StripeClientImpl {
             .map_err(From::from),
         )
     }
+
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send> {
         let mut metadata = Metadata::new();
         metadata.insert("order_id".to_string(), format!("{}", order_id));
@@ -187,6 +197,7 @@ impl StripeClient for StripeClientImpl {
             .map_err(From::from),
         )
     }
+
     fn create_payout(
         &self,
         amount: Amount,

@@ -47,7 +47,7 @@ pub struct UpdatePaymentIntent {
     pub charge_id: Option<ChargeId>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, DieselTypes)]
+#[derive(Clone, Debug, Deserialize, Serialize, DieselTypes, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum PaymentIntentStatus {
     RequiresSource,
@@ -59,6 +59,18 @@ pub enum PaymentIntentStatus {
     Succeeded,
     #[serde(other)]
     Other,
+}
+
+impl PaymentIntentStatus {
+    pub fn is_cancellable(&self) -> bool {
+        match self {
+            PaymentIntentStatus::RequiresSource
+            | PaymentIntentStatus::RequiresConfirmation
+            | PaymentIntentStatus::RequiresSourceAction
+            | PaymentIntentStatus::RequiresCapture => true,
+            _ => false,
+        }
+    }
 }
 
 pub struct PaymentIntentAccess {
