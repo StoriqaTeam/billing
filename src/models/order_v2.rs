@@ -112,6 +112,7 @@ pub struct NewOrder {
 #[derive(Debug, Clone)]
 pub struct OrderAccess {
     pub invoice_id: InvoiceId,
+    pub store_id: StoreId,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -131,6 +132,7 @@ impl From<NewOrder> for OrderAccess {
     fn from(new_order: NewOrder) -> OrderAccess {
         OrderAccess {
             invoice_id: new_order.invoice_id.clone(),
+            store_id: new_order.store_id.clone(),
         }
     }
 }
@@ -139,6 +141,7 @@ impl From<RawOrder> for OrderAccess {
     fn from(raw_order: RawOrder) -> OrderAccess {
         OrderAccess {
             invoice_id: raw_order.invoice_id.clone(),
+            store_id: raw_order.store_id.clone(),
         }
     }
 }

@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use diesel;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
@@ -14,9 +12,9 @@ use repos::legacy_acl::*;
 
 use models::authorization::*;
 use models::invoice_v2::InvoiceId;
-use models::order_v2::{NewOrder, OrderAccess, OrderId, OrderSearchResults, OrdersSearch, RawOrder};
-use models::PaymentState;
-use models::UserId;
+use models::order_v2::{NewOrder, OrderAccess, OrderId, OrderSearchResults, OrdersSearch, RawOrder, StoreId};
+use models::{PaymentState, UserId, UserRole};
+use schema::roles::dsl as UserRolesDsl;
 use schema::{invoices_v2::dsl as InvoicesV2, orders::dsl as Orders};
 
 use super::acl;
@@ -79,21 +77,28 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     fn get_many_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>> {
         debug!("Getting orders with invoice ID: {}", invoice_id);
 
-        acl::check(
-            &*self.acl,
-            Resource::OrderInfo,
-            Action::Read,
-            self,
-            Some(&OrderAccess { invoice_id }),
-        )
-        .map_err(ectx!(try ErrorKind::Forbidden))?;
-
         let query = Orders::orders.filter(Orders::invoice_id.eq(invoice_id));
 
-        query.get_results::<RawOrder>(self.db_conn).map_err(|e| {
+        let results = query.get_results::<RawOrder>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
-            ectx!(err e, ErrorSource::Diesel, error_kind)
-        })
+            ectx!(try err e, ErrorSource::Diesel, error_kind)
+        })?;
+
+        for result in &results {
+            acl::check(
+                &*self.acl,
+                Resource::OrderInfo,
+                Action::Read,
+                self,
+                Some(&OrderAccess {
+                    invoice_id,
+                    store_id: result.store_id,
+                }),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(results)
     }
 
     fn search(&self, skip: i64, count: i64, search_params: OrdersSearch) -> RepoResultV2<OrderSearchResults> {
@@ -116,15 +121,16 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             ectx!(try err e, ErrorSource::Diesel, error_kind)
         })?;
 
-        let invoices: HashSet<InvoiceId> = orders.iter().map(|order| order.invoice_id).collect();
-
-        for invoice_id in invoices {
+        for order in &orders {
             acl::check(
                 &*self.acl,
                 Resource::OrderInfo,
                 Action::Read,
                 self,
-                Some(&OrderAccess { invoice_id }),
+                Some(&OrderAccess {
+                    invoice_id: order.invoice_id,
+                    store_id: order.store_id,
+                }),
             )
             .map_err(ectx!(try ErrorKind::Forbidden))?;
         }
@@ -166,41 +172,55 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             Some(invoice_id) => invoice_id,
         };
 
-        acl::check(
-            &*self.acl,
-            Resource::OrderInfo,
-            Action::Write,
-            self,
-            Some(&OrderAccess { invoice_id }),
-        )
-        .map_err(ectx!(try ErrorKind::Forbidden))?;
-
         let command = diesel::delete(Orders::orders.filter(Orders::id.eq(order_id)));
 
-        command.get_result::<RawOrder>(self.db_conn).optional().map_err(|e| {
+        let deleted_order = command.get_result::<RawOrder>(self.db_conn).optional().map_err(|e| {
             let error_kind = ErrorKind::from(&e);
-            ectx!(err e, ErrorSource::Diesel, error_kind)
-        })
+            ectx!(try err e, ErrorSource::Diesel, error_kind)
+        })?;
+
+        if let Some(ref deleted_order) = deleted_order {
+            acl::check(
+                &*self.acl,
+                Resource::OrderInfo,
+                Action::Write,
+                self,
+                Some(&OrderAccess {
+                    invoice_id,
+                    store_id: deleted_order.store_id,
+                }),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(deleted_order)
     }
 
     fn delete_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>> {
         debug!("Deleting orders with invoice ID: {}", invoice_id);
 
-        acl::check(
-            &*self.acl,
-            Resource::OrderInfo,
-            Action::Write,
-            self,
-            Some(&OrderAccess { invoice_id }),
-        )
-        .map_err(ectx!(try ErrorKind::Forbidden))?;
-
         let command = diesel::delete(Orders::orders.filter(Orders::invoice_id.eq(invoice_id)));
 
-        command.get_results::<RawOrder>(self.db_conn).map_err(|e| {
+        let deleted_orders = command.get_results::<RawOrder>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
-            ectx!(err e, ErrorSource::Diesel, error_kind)
-        })
+            ectx!(try err e, ErrorSource::Diesel, error_kind)
+        })?;
+
+        for deleted_order in &deleted_orders {
+            acl::check(
+                &*self.acl,
+                Resource::OrderInfo,
+                Action::Write,
+                self,
+                Some(&OrderAccess {
+                    invoice_id,
+                    store_id: deleted_order.store_id,
+                }),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(deleted_orders)
     }
 
     fn update_state(&self, order_id: OrderId, state: PaymentState) -> RepoResultV2<RawOrder> {
@@ -225,22 +245,48 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         match *scope {
             Scope::All => true,
             Scope::Owned => {
-                if let Some(OrderAccess { invoice_id }) = obj {
-                    let query = InvoicesV2::invoices_v2
-                        .filter(InvoicesV2::id.eq(invoice_id))
-                        .select(InvoicesV2::buyer_user_id);
-
-                    match query.get_result::<UserId>(self.db_conn).optional() {
-                        Ok(None) => true,
-                        Ok(Some(invoice_user_id)) => invoice_user_id.inner() == &user_id.0,
-                        Err(_) => false,
-                    }
+                if let Some(OrderAccess { invoice_id, store_id }) = obj {
+                    user_is_buyer(self.db_conn, user_id, invoice_id.clone())
+                        || user_is_store_manager(self.db_conn, user_id, store_id.clone())
                 } else {
                     false
                 }
             }
         }
     }
+}
+
+fn user_is_buyer<T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
+    conn: &T,
+    user_id: stq_types::UserId,
+    invoice_id: InvoiceId,
+) -> bool {
+    let query = InvoicesV2::invoices_v2
+        .filter(InvoicesV2::id.eq(invoice_id))
+        .select(InvoicesV2::buyer_user_id);
+
+    match query.get_result::<UserId>(conn).optional() {
+        Ok(None) => true,
+        Ok(Some(invoice_user_id)) => invoice_user_id.inner() == &user_id.0,
+        Err(_) => false,
+    }
+}
+
+fn user_is_store_manager<T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
+    conn: &T,
+    user_id: stq_types::UserId,
+    store_id: StoreId,
+) -> bool {
+    UserRolesDsl::roles
+        .filter(UserRolesDsl::user_id.eq(user_id))
+        .get_results::<UserRole>(conn)
+        .map_err(From::from)
+        .map(|user_roles_arg| {
+            user_roles_arg
+                .iter()
+                .any(|user_role_arg| user_role_arg.data.clone().map(|data| data == store_id.inner()).unwrap_or_default())
+        })
+        .unwrap_or_else(|_: FailureError| false)
 }
 
 fn into_expr(search: OrdersSearch) -> Option<BoxedExpr> {
