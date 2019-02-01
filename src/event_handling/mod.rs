@@ -88,11 +88,11 @@ where
         Interval::new(Instant::now(), interval)
             .map_err(ectx!(ErrorSource::TokioTimer, ErrorKind::Internal))
             .fold(self, |event_handler, _| {
-                debug!("Started processing events");
+                trace!("Started processing events");
                 event_handler.clone().process_events().then(|res| {
                     match res {
                         Ok(_) => {
-                            debug!("Finished processing events");
+                            trace!("Finished processing events");
                         }
                         Err(err) => {
                             let err = FailureError::from(err.context("An error occurred while processing events"));
@@ -120,15 +120,15 @@ where
             move |conn| {
                 let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
-                debug!("Resetting stuck events...");
+                trace!("Resetting stuck events...");
                 let reset_events = event_store_repo.reset_stuck_events().map_err(ectx!(try convert))?;
-                debug!("{} events have been reset", reset_events.len());
+                trace!("{} events have been reset", reset_events.len());
 
-                debug!("Getting events for processing...");
+                trace!("Getting events for processing...");
                 event_store_repo
                     .get_events_for_processing(1)
                     .map(|event_entries| {
-                        debug!("Got {} events to process", event_entries.len());
+                        trace!("Got {} events to process", event_entries.len());
                         event_entries
                             .into_iter()
                             .next()
@@ -140,19 +140,19 @@ where
         .and_then(move |event| match event {
             None => future::Either::A(future::ok(())),
             Some((entry_id, event)) => future::Either::B(future::lazy(move || {
-                debug!("Started processing event #{} - {:?}", entry_id, event);
+                trace!("Started processing event #{} - {:?}", entry_id, event);
                 self.handle_event(event.clone()).then(move |result| {
                     spawn_on_pool(db_pool, cpu_pool, move |conn| {
                         let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
 
                         match result {
                             Ok(()) => {
-                                debug!("Finished processing event #{} - {:?}", entry_id, event);
+                                trace!("Finished processing event #{} - {:?}", entry_id, event);
                                 event_store_repo.complete_event(entry_id).map_err(ectx!(try convert => entry_id))?;
                                 Ok(())
                             }
                             Err(e) => {
-                                debug!("Failed to process event #{} - {:?}", entry_id, event);
+                                trace!("Failed to process event #{} - {:?}", entry_id, event);
                                 event_store_repo.fail_event(entry_id).map_err(ectx!(try convert => entry_id))?;
                                 Err(e)
                             }
