@@ -12,18 +12,22 @@ use failure::Error as FailureError;
 use failure::Fail;
 use std::sync::Arc;
 use stq_cache::cache::Cache;
-use stq_types::{BillingRole, RoleId, UserId};
+use stq_types::{BillingRole, RoleId, StoreId, UserId};
 
 use super::acl;
 use models::authorization::*;
 use models::{NewUserRole, RemoveUserRole, UserRole};
+use repos::error::*;
 use repos::legacy_acl::*;
-use repos::types::RepoResult;
+use repos::types::{RepoResult, RepoResultV2};
 use repos::RolesCacheImpl;
 use schema::roles::dsl::*;
 
 /// UserRoles repository for handling UserRoles
 pub trait UserRolesRepo {
+    /// Returns user role by storeId
+    fn get_by_store_id(&self, store_id: StoreId) -> RepoResultV2<Option<UserRole>>;
+
     /// Returns list of user_roles for a specific user
     fn list_for_user(&self, user_id: UserId) -> RepoResult<Vec<BillingRole>>;
 
@@ -74,6 +78,18 @@ where
     C: Cache<Vec<BillingRole>>,
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
 {
+    /// Returns user role by storeId
+    fn get_by_store_id(&self, store_id: StoreId) -> RepoResultV2<Option<UserRole>> {
+        debug!("Getting user role by store id {}", store_id);
+        let query = roles.filter(data.eq(serde_json::json!(store_id.0)));
+        let role = query.get_result::<UserRole>(self.db_conn).optional().map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(try err e, ErrorSource::Diesel, error_kind)
+        })?;
+
+        Ok(role)
+    }
+
     /// Returns list of user_roles for a specific user
     fn list_for_user(&self, user_id_value: UserId) -> RepoResult<Vec<BillingRole>> {
         debug!("list user roles for id {}.", user_id_value);

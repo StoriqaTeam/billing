@@ -12,9 +12,11 @@ use repos::legacy_acl::*;
 
 use models::authorization::*;
 use models::order_v2::OrderId;
-use models::{Fee, FeeId, NewFee, UpdateFee};
+use models::{Fee, FeeId, NewFee, UpdateFee, UserRole};
 
 use schema::fees::dsl as FeesDsl;
+use schema::orders::dsl as OrdersDsl;
+use schema::roles::dsl as UserRolesDsl;
 
 use super::acl;
 use super::error::*;
@@ -134,10 +136,34 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, Fee> for FeeRepoImpl<'a, T> {
-    fn is_in_scope(&self, _user_id: stq_types::UserId, scope: &Scope, _obj: Option<&Fee>) -> bool {
+    fn is_in_scope(&self, user_id: stq_types::UserId, scope: &Scope, obj: Option<&Fee>) -> bool {
         match *scope {
             Scope::All => true,
-            Scope::Owned => false,
+            Scope::Owned => {
+                if let Some(Fee { order_id, .. }) = obj {
+                    let store_id = match OrdersDsl::orders
+                        .filter(OrdersDsl::id.eq(order_id))
+                        .select(OrdersDsl::store_id)
+                        .get_result::<stq_types::StoreId>(self.db_conn)
+                    {
+                        Ok(store_id) => store_id,
+                        Err(_) => return false,
+                    };
+
+                    UserRolesDsl::roles
+                        .filter(UserRolesDsl::user_id.eq(user_id))
+                        .get_results::<UserRole>(self.db_conn)
+                        .map_err(From::from)
+                        .map(|user_roles_arg| {
+                            user_roles_arg
+                                .iter()
+                                .any(|user_role_arg| user_role_arg.data.clone().map(|data| data == store_id.0).unwrap_or_default())
+                        })
+                        .unwrap_or_else(|_: FailureError| false)
+                } else {
+                    false
+                }
+            }
         }
     }
 }
