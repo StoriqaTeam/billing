@@ -1389,7 +1389,7 @@ fn payment_intent_create_params(
             let e = format_err!("Invoice with ID: {} can not convert total_price: {}", invoice_id, buyer_currency,);
             ectx!(try err e, ErrorKind::Internal)
         })?,
-        capture_method: Some(stripe::CaptureMethod::Manual),
+        capture_method: Some(stripe::CaptureMethod::Automatic),
     })
 }
 
