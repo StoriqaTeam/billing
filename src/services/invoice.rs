@@ -1521,7 +1521,7 @@ pub fn create_crypto_fee(
         order_id: order.id,
         amount,
         status: FeeStatus::NotPaid,
-        currency: order.seller_currency.clone(),
+        currency: *fee_currency,
         charge_id: None,
         metadata: None,
         crypto_currency: Some(order.seller_currency.clone()),
