@@ -63,7 +63,11 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn add_scheduled_event(&self, event: Event, scheduled_on: NaiveDateTime) -> RepoResultV2<EventEntry> {
-        debug!("Adding an event with ID: {} scheduled on {}", event.id, scheduled_on.format("%Y-%m-%d %H:%M:%S"));
+        debug!(
+            "Adding an event with ID: {} scheduled on {}",
+            event.id,
+            scheduled_on.format("%Y-%m-%d %H:%M:%S")
+        );
 
         let new_event_entry = RawNewEventEntry::try_from_event_scheduled_on(event.clone(), scheduled_on)
             .map_err(ectx!(try ErrorSource::SerdeJson, ErrorKind::Internal => event))?;
