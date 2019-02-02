@@ -19,7 +19,7 @@ use client::{
 };
 use models::{
     invoice_v2::{InvoiceId, PaymentFlow, RawInvoice},
-    order_v2::RawOrder,
+    order_v2::OrderId,
     AccountId, AccountWithBalance, Amount, Currency, Event, EventPayload, PaymentState,
 };
 use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
@@ -56,7 +56,7 @@ where
             EventPayload::PaymentIntentSucceeded { payment_intent } => {
                 self.handle_payment_intent_succeeded_or_amount_capturable_updated(payment_intent)
             }
-            EventPayload::PaymentIntentCapture { order } => self.handle_payment_intent_capture(order),
+            EventPayload::PaymentIntentCapture { order_id } => self.handle_payment_intent_capture(order_id),
             EventPayload::PaymentExpired { invoice_id } => self.handle_payment_expired(invoice_id),
         }
     }
@@ -391,16 +391,25 @@ where
         Box::new(fut)
     }
 
-    pub fn handle_payment_intent_capture(self, order: RawOrder) -> EventHandlerFuture<()> {
+    pub fn handle_payment_intent_capture(self, order_id: OrderId) -> EventHandlerFuture<()> {
         let db_pool_ = self.db_pool.clone();
         let cpu_pool_ = self.cpu_pool.clone();
         let repo_factory_ = self.repo_factory.clone();
-        let order_id = order.id;
         let stripe_client = self.stripe_client.clone();
 
         let fut = spawn_on_pool(db_pool_, cpu_pool_, move |conn| {
             let payment_intent_repo = repo_factory_.create_payment_intent_repo_with_sys_acl(&conn);
+            let orders_repo = repo_factory_.create_orders_repo_with_sys_acl(&conn);
             let payment_intent_invoices_repo = repo_factory_.create_payment_intent_invoices_repo_with_sys_acl(&conn);
+            let order = orders_repo.get(order_id).map_err(ectx!(try convert => order_id))?.ok_or({
+                let e = format_err!("Record order with id {} not found", order_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+
+            if order.state != PaymentState::Initial || order.stripe_fee.is_some() {
+                let e = format_err!("there is no need to perform capture payment intent");
+                return Err(ectx!(err e, ErrorKind::AlreadyDone));
+            }
 
             let order_invoice_id_cloned = order.invoice_id.clone();
             let payment_intent_invoice = payment_intent_invoices_repo
@@ -479,6 +488,14 @@ where
                         .map(|_| ())
                 })
             }
+        })
+        .then(|res| {
+            if let Err(ref res) = res {
+                if res.kind() == ErrorKind::AlreadyDone {
+                    return Ok(());
+                }
+            }
+            res
         });
         Box::new(fut)
     }

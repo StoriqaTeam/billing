@@ -200,7 +200,7 @@ where
 {
     let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
         let event_store_repo = repo_factory.create_event_store_repo_with_sys_acl(&conn);
-        let event = Event::new(EventPayload::PaymentIntentCapture { order });
+        let event = Event::new(EventPayload::PaymentIntentCapture { order_id: order.id });
         event_store_repo.add_event(event.clone()).map_err(ectx!(try convert => event))?;
         Ok(())
     });
