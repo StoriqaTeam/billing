@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS fees_order_id_idx ON fees (order_id);

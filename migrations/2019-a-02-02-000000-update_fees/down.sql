@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS fees_order_id_idx;
