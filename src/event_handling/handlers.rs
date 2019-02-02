@@ -8,6 +8,7 @@ use r2d2::ManageConnection;
 use stq_http::client::HttpClient;
 use stq_static_resources::OrderState;
 use stq_types::stripe::PaymentIntentId;
+use stripe::CaptureMethod;
 use stripe::PaymentIntent as StripePaymentIntent;
 use uuid::Uuid;
 
@@ -70,7 +71,7 @@ where
         self,
         payment_intent: StripePaymentIntent,
     ) -> EventHandlerFuture<()> {
-        if payment_intent.amount != payment_intent.amount_capturable {
+        if payment_intent.capture_method == CaptureMethod::Manual && payment_intent.amount != payment_intent.amount_capturable {
             info!(
                 "payment intent with id {} amount={}, amount_capturable={} are not equal. Payment intent: {:?}",
                 payment_intent.id, payment_intent.amount, payment_intent.amount_capturable, payment_intent
