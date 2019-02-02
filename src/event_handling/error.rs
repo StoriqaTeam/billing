@@ -15,8 +15,10 @@ pub struct Error {
 pub enum ErrorKind {
     #[fail(display = "event handler error - internal")]
     Internal,
-    #[fail(display = "service context - error currency conversion")]
+    #[fail(display = "event handler error - error currency conversion")]
     CurrencyConversion,
+    #[fail(display = "event handler error - this event has already been completed")]
+    AlreadyDone,
 }
 
 #[derive(Debug, Clone, Fail, PartialEq, Eq)]
