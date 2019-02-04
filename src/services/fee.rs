@@ -132,9 +132,9 @@ impl<
                 .map_err(ectx!(try convert => store_owner))?
                 .ok_or_else(|| {
                     let mut errors = ValidationErrors::new();
-                    let mut error = ValidationError::new("wrong_state");
-                    error.message = Some(format!("Cannot charge fee - no card attached").into());
-                    errors.add("fee", error);
+                    let mut error = ValidationError::new("not_exists");
+                    error.message = Some(format!("Cannot charge fee - payment card does not exist").into());
+                    errors.add("payment_card", error);
                     ectx!(try err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default()))
                 })?;
 
