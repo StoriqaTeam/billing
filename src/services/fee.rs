@@ -7,6 +7,7 @@ use diesel::pg::Pg;
 use diesel::Connection;
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool};
+use validator::{ValidationError, ValidationErrors};
 
 use failure::Fail;
 
@@ -23,7 +24,7 @@ use repos::{ReposFactory, SearchCustomer, SearchFee};
 
 use super::types::ServiceFutureV2;
 use controller::{context::DynamicContext, responses::FeeResponse};
-use services::ErrorKind;
+use services::{ErrorContext, ErrorKind};
 
 use services::types::spawn_on_pool;
 
@@ -129,9 +130,12 @@ impl<
             let stripe_customer = customers_repo
                 .get(SearchCustomer::UserId(store_owner))
                 .map_err(ectx!(try convert => store_owner))?
-                .ok_or({
-                    let e = format_err!("Customer by user id {} not found", store_owner);
-                    ectx!(try err e, ErrorKind::Internal)
+                .ok_or_else(|| {
+                    let mut errors = ValidationErrors::new();
+                    let mut error = ValidationError::new("wrong_state");
+                    error.message = Some(format!("Cannot charge fee - no card attached").into());
+                    errors.add("fee", error);
+                    ectx!(try err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default()))
                 })?;
 
             Ok((current_fee, stripe_customer))
