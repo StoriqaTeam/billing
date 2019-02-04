@@ -8,7 +8,6 @@ use serde_json;
 use stq_static_resources::*;
 use stq_types::*;
 
-use models::Order;
 use schema::invoices;
 
 #[derive(Serialize, Deserialize, Queryable, Insertable, AsChangeset, Debug, Clone)]
@@ -108,49 +107,6 @@ impl From<ExternalBillingTransaction> for Transaction {
         Self {
             id: external_transaction.txid,
             amount_captured,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BillingOrder {
-    pub merchant: MerchantId,
-    /// Total order amount
-    pub amount: ProductPrice,
-    pub currency: String,
-    pub description: Option<String>,
-}
-
-impl BillingOrder {
-    pub fn new(order: &Order, merchant: MerchantId) -> Self {
-        Self {
-            merchant,
-            amount: order.total_amount,
-            currency: order.currency.to_string(),
-            description: Some(format!("Order - id : {}", order.id)),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CreateInvoicePayload {
-    callback_url: String,
-    currency: String,
-    amount: ProductPrice,
-    timeout_s: i32,
-    purchases: Vec<BillingOrder>,
-}
-
-impl CreateInvoicePayload {
-    pub fn new(purchases: Vec<BillingOrder>, callback_url: String, currency: String, timeout_s: i32) -> Self {
-        let amount = purchases.iter().fold(0.0, |acc, x| acc + x.amount.0); //TODO: ON EXTERNAL BILLING SIDE
-        let amount = ProductPrice(amount);
-        Self {
-            purchases,
-            callback_url,
-            currency,
-            amount,
-            timeout_s,
         }
     }
 }

@@ -25,7 +25,6 @@ url = "http://billing:8000"
 
 [external_billing]
 invoice_url = "http://payments.tugush.com/api/v1/invoices/"
-merchant_url = "http://payments.tugush.com/api/v1/merchants/"
 login_url = "http://payments.tugush.com/api/v1/login/"
 username = "storiqa"
 password = "DuRZx,E}8&myT^%-"
