@@ -157,6 +157,16 @@ pub struct RawInvoiceSetAmountPaid {
     pub status: OrderState,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, AsChangeset)]
+#[table_name = "invoices_v2"]
+pub struct RawInvoiceSetAmountPaidFiat {
+    pub amount_captured: Amount,
+    pub final_amount_paid: Amount,
+    pub final_cashback_amount: Amount,
+    pub paid_at: NaiveDateTime,
+    pub status: OrderState,
+}
+
 impl From<InvoiceSetAmountPaid> for RawInvoiceSetAmountPaid {
     fn from(payload: InvoiceSetAmountPaid) -> Self {
         let InvoiceSetAmountPaid {
@@ -165,6 +175,23 @@ impl From<InvoiceSetAmountPaid> for RawInvoiceSetAmountPaid {
             paid_at,
         } = payload;
         Self {
+            final_amount_paid,
+            final_cashback_amount,
+            paid_at,
+            status: OrderState::Paid,
+        }
+    }
+}
+
+impl From<InvoiceSetAmountPaid> for RawInvoiceSetAmountPaidFiat {
+    fn from(payload: InvoiceSetAmountPaid) -> Self {
+        let InvoiceSetAmountPaid {
+            final_amount_paid,
+            final_cashback_amount,
+            paid_at,
+        } = payload;
+        Self {
+            amount_captured: final_amount_paid,
             final_amount_paid,
             final_cashback_amount,
             paid_at,

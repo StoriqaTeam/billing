@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use bigdecimal::BigDecimal;
+use chrono::Utc;
 use diesel::{connection::AnsiTransactionManager, pg::Pg, Connection};
 use failure::Fail;
 use futures::{future, Future, IntoFuture};
@@ -19,7 +20,7 @@ use client::{
     stripe::StripeClient,
 };
 use models::{
-    invoice_v2::{InvoiceId, PaymentFlow, RawInvoice},
+    invoice_v2::{InvoiceId, InvoiceSetAmountPaid, PaymentFlow, RawInvoice},
     order_v2::OrderId,
     AccountId, AccountWithBalance, Amount, Currency, Event, EventPayload, PaymentState,
 };
@@ -82,14 +83,20 @@ where
         let saga_client = self.saga_client.clone();
         let fee_config = self.fee.clone();
 
+        let amount_paid = payment_intent.amount.clone();
         let payment_intent_id = PaymentIntentId(payment_intent.id.clone());
         let payment_intent_id_cloned = payment_intent_id.clone();
         let new_status = OrderState::Paid;
 
-        let EventHandler { db_pool, cpu_pool, .. } = self;
+        let EventHandler {
+            db_pool,
+            cpu_pool,
+            repo_factory,
+            ..
+        } = self;
 
-        let fut = spawn_on_pool(db_pool, cpu_pool, {
-            let repo_factory = self.repo_factory.clone();
+        let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), {
+            let repo_factory = repo_factory.clone();
             move |conn| {
                 let orders_repo = repo_factory.create_orders_repo_with_sys_acl(&conn);
                 let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
@@ -113,26 +120,46 @@ where
                 .map(Some)
             }
         })
-        .and_then(move |payment_type| match payment_type {
-            Some(PaymentType::Invoice { invoice, orders, .. }) => {
-                let order_state_updates = orders
-                    .into_iter()
-                    .map(|order| OrderStateUpdate {
-                        order_id: order.id,
-                        store_id: order.store_id,
-                        customer_id: invoice.buyer_user_id,
-                        status: new_status,
-                    })
-                    .collect();
+        .and_then({
+            let db_pool = db_pool.clone();
+            let cpu_pool = cpu_pool.clone();
+            let repo_factory = repo_factory.clone();
+            move |payment_type| match payment_type {
+                Some(PaymentType::Invoice { invoice, orders, .. }) => {
+                    let order_state_updates = orders
+                        .into_iter()
+                        .map(|order| OrderStateUpdate {
+                            order_id: order.id,
+                            store_id: order.store_id,
+                            customer_id: invoice.buyer_user_id,
+                            status: new_status,
+                        })
+                        .collect();
 
-                future::Either::A(
-                    saga_client
+                    let saga_update_states = saga_client
                         .update_order_states(order_state_updates)
-                        .map_err(ectx!(ErrorKind::Internal => payment_intent_id_cloned)),
-                )
+                        .map_err(ectx!(ErrorKind::Internal => payment_intent_id_cloned));
+
+                    let set_invoice_paid = spawn_on_pool(db_pool, cpu_pool, move |conn| {
+                        let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
+
+                        let invoice_set_amount_paid = InvoiceSetAmountPaid {
+                            final_amount_paid: Amount::new(amount_paid as u128),
+                            final_cashback_amount: Amount::new(0u128),
+                            paid_at: Utc::now().naive_utc(),
+                        };
+
+                        let invoice_id = invoice.id.clone();
+                        invoices_repo
+                            .set_amount_paid_fiat(invoice_id.clone(), invoice_set_amount_paid.clone())
+                            .map_err(ectx!(convert => invoice_id, invoice_set_amount_paid))
+                    });
+
+                    future::Either::A(Future::join(saga_update_states, set_invoice_paid).map(|_| ()))
+                }
+                Some(PaymentType::Fee) => future::Either::B(future::ok(())),
+                None => future::Either::B(future::ok(())),
             }
-            Some(PaymentType::Fee) => future::Either::B(future::ok(())),
-            None => future::Either::B(future::ok(())),
         });
 
         Box::new(fut)
