@@ -1094,6 +1094,10 @@ pub mod tests {
         fn set_amount_paid(&self, _invoice_id: InvoiceV2Id, _input: InvoiceSetAmountPaid) -> RepoResultV2<RawInvoiceV2> {
             unimplemented!()
         }
+
+        fn set_amount_paid_fiat(&self, _invoice_id: InvoiceV2Id, _input: InvoiceSetAmountPaid) -> RepoResultV2<RawInvoiceV2> {
+            unimplemented!()
+        }
     }
 
     #[derive(Debug, Default)]
