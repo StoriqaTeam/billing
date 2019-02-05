@@ -110,7 +110,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .filter(&query)
             .offset(skip)
             .limit(count)
-            .order_by(Orders::id.desc())
+            .order_by(Orders::created_at.desc())
             .get_results::<RawOrder>(self.db_conn)
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
