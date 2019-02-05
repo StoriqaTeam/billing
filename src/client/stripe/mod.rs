@@ -41,10 +41,7 @@ pub trait StripeClient: Send + Sync + 'static {
         amount: Amount,
     ) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
 
-    fn retrieve_balance_transaction(
-        &self,
-        balance_transaction_id: ChargeId,
-    ) -> Box<Future<Item = BalanceTransaction, Error = Error> + Send>;
+    fn retrieve_balance_transaction(&self, balance_transaction_id: String) -> Box<Future<Item = BalanceTransaction, Error = Error> + Send>;
 
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send>;
 
@@ -183,11 +180,8 @@ impl StripeClient for StripeClientImpl {
             .map_err(From::from),
         )
     }
-    fn retrieve_balance_transaction(
-        &self,
-        balance_transaction_id: ChargeId,
-    ) -> Box<Future<Item = BalanceTransaction, Error = Error> + Send> {
-        Box::new(BalanceTransaction::retrieve(&self.client, &balance_transaction_id.inner()).map_err(From::from))
+    fn retrieve_balance_transaction(&self, balance_transaction_id: String) -> Box<Future<Item = BalanceTransaction, Error = Error> + Send> {
+        Box::new(BalanceTransaction::retrieve(&self.client, &balance_transaction_id).map_err(From::from))
     }
 
     fn refund(&self, charge_id: ChargeId, amount: Amount, order_id: OrderId) -> Box<Future<Item = Refund, Error = Error> + Send> {
