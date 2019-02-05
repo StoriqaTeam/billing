@@ -16,6 +16,7 @@ pub enum Resource {
     Fee,
     PaymentIntentInvoice,
     PaymentIntentFee,
+    UserWallet,
 }
 
 impl fmt::Display for Resource {
@@ -34,6 +35,7 @@ impl fmt::Display for Resource {
             Resource::Fee => write!(f, "fee"),
             Resource::PaymentIntentInvoice => write!(f, "payment_intent_invoice"),
             Resource::PaymentIntentFee => write!(f, "payment_intent_fee"),
+            Resource::UserWallet => write!(f, "user wallet"),
         }
     }
 }

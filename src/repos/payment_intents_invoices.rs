@@ -137,7 +137,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
                     match query.get_result::<UserId>(self.db_conn).optional() {
                         Ok(None) => true,
-                        Ok(Some(invoice_user_id)) => invoice_user_id.inner() == &user_id.0,
+                        Ok(Some(invoice_user_id)) => invoice_user_id.inner() == user_id.0,
                         Err(_) => false,
                     }
                 } else {

@@ -6,9 +6,7 @@ use std::str::FromStr;
 use uuid::{self, Uuid};
 
 use config;
-use models::currency::TureCurrency;
-use models::Amount;
-use models::TransactionId;
+use models::{currency::TureCurrency, Amount, TransactionId, WalletAddress};
 use schema::accounts;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, AsExpression, FromSqlRow)]
@@ -46,23 +44,6 @@ impl FromStr for AccountId {
 impl Display for AccountId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&format!("{}", self.0.hyphenated()))
-    }
-}
-
-#[derive(Clone, Debug, Display, Default, PartialEq, Eq, From, FromStr, Hash, Serialize, Deserialize, DieselTypes)]
-pub struct WalletAddress(String);
-
-impl WalletAddress {
-    pub fn new(address: String) -> Self {
-        WalletAddress(address)
-    }
-
-    pub fn inner(&self) -> &str {
-        &self.0
-    }
-
-    pub fn into_inner(self) -> String {
-        self.0
     }
 }
 

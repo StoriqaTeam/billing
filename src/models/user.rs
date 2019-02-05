@@ -14,8 +14,8 @@ impl UserId {
         UserId(id)
     }
 
-    pub fn inner(&self) -> &i32 {
-        &self.0
+    pub fn inner(&self) -> i32 {
+        self.0
     }
 }
 
