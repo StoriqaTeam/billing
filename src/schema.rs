@@ -228,6 +228,16 @@ table! {
     }
 }
 
+table! {
+    user_wallets (id) {
+        id -> Uuid,
+        address -> Text,
+        currency -> Text,
+        user_id -> Int4,
+        created_at -> Timestamp,
+    }
+}
+
 joinable!(amounts_received -> invoices_v2 (invoice_id));
 joinable!(fees -> orders (order_id));
 joinable!(invoices_v2 -> accounts (account_id));
@@ -257,4 +267,5 @@ allow_tables_to_appear_in_same_query!(
     roles,
     russia_billing_info,
     store_billing_type,
+    user_wallets,
 );

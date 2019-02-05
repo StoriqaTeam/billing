@@ -331,7 +331,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             Scope::All => true,
             Scope::Owned => {
                 if let Some(InvoiceAccess { user_id: invoice_user_id }) = obj {
-                    invoice_user_id.inner() == &user_id.0
+                    invoice_user_id.inner() == user_id.0
                 } else {
                     false
                 }

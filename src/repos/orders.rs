@@ -281,7 +281,7 @@ fn user_is_buyer<T: Connection<Backend = Pg, TransactionManager = AnsiTransactio
 
     match query.get_result::<UserId>(conn).optional() {
         Ok(None) => true,
-        Ok(Some(invoice_user_id)) => invoice_user_id.inner() == &user_id.0,
+        Ok(Some(invoice_user_id)) => invoice_user_id.inner() == user_id.0,
         Err(_) => false,
     }
 }

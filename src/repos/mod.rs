@@ -22,6 +22,7 @@ pub mod russia_billing_info;
 pub mod store_billing_type;
 pub mod types;
 pub mod user_roles;
+pub mod user_wallets;
 
 pub use self::accounts::*;
 pub use self::acl::*;
@@ -44,3 +45,4 @@ pub use self::russia_billing_info::*;
 pub use self::store_billing_type::*;
 pub use self::types::*;
 pub use self::user_roles::*;
+pub use self::user_wallets::*;

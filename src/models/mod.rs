@@ -31,6 +31,7 @@ pub mod russia_billing_info;
 pub mod store_billing_type;
 pub mod transaction_id;
 pub mod user;
+pub mod user_wallet;
 
 pub use self::account::*;
 pub use self::amount::*;
@@ -60,3 +61,4 @@ pub use self::russia_billing_info::*;
 pub use self::store_billing_type::*;
 pub use self::transaction_id::*;
 pub use self::user::*;
+pub use self::user_wallet::*;
