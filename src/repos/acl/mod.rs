@@ -109,6 +109,7 @@ impl ApplicationAcl {
         hash.insert(
             BillingRole::FinancialManager,
             vec![
+                permission!(Resource::OrderInfo, Action::Read),
                 permission!(Resource::StoreBillingType, Action::Read),
                 permission!(Resource::BillingInfo, Action::Read),
                 permission!(Resource::Fee, Action::Read),
