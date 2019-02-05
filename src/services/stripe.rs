@@ -215,6 +215,8 @@ fn update_payment_intent(payment_intent: StripePaymentIntent) -> UpdatePaymentIn
             .into_iter()
             .find(|charge| charge.paid)
             .map(|charge| ChargeId::new(charge.id)),
+        status: Some(payment_intent.status.into()),
+        amount_received: Some(payment_intent.amount_received.into()),
         ..Default::default()
     }
 }
