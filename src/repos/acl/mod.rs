@@ -55,7 +55,6 @@ impl ApplicationAcl {
             BillingRole::Superuser,
             vec![
                 permission!(Resource::OrderInfo),
-                permission!(Resource::Merchant),
                 permission!(Resource::UserRoles),
                 permission!(Resource::Invoice),
                 permission!(Resource::Account),
@@ -78,7 +77,6 @@ impl ApplicationAcl {
                 permission!(Resource::Invoice, Action::Write, Scope::Owned),
                 permission!(Resource::OrderInfo, Action::Write, Scope::Owned),
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
-                permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),
                 permission!(Resource::PaymentIntent, Action::Read),
@@ -93,7 +91,6 @@ impl ApplicationAcl {
             BillingRole::StoreManager,
             vec![
                 permission!(Resource::OrderInfo, Action::Read, Scope::Owned),
-                permission!(Resource::Merchant, Action::Read, Scope::Owned),
                 permission!(Resource::UserRoles, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Read, Scope::Owned),
                 permission!(Resource::OrderExchangeRate, Action::Write, Scope::Owned),

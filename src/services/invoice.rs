@@ -39,7 +39,7 @@ use repos::error::ErrorKind as RepoErrorKind;
 use repos::repo_factory::ReposFactory;
 use repos::{
     AccountsRepo, EventStoreRepo, InvoicesV2Repo, OrderExchangeRatesRepo, OrdersRepo, PaymentIntentInvoiceRepo, PaymentIntentRepo,
-    RepoResult, SearchPaymentIntentInvoice,
+    SearchPaymentIntentInvoice,
 };
 use services::accounts::AccountService;
 use services::types::spawn_on_pool;
@@ -51,7 +51,6 @@ use super::types::{ServiceFuture, ServiceFutureV2};
 pub trait InvoiceService {
     /// Creates invoice in billing system
     fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice>;
-    fn create_invoice_v1(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice>;
     fn create_invoice_v2(&self, create_invoice: CreateInvoiceV2) -> ServiceFutureV2<InvoiceDump>;
     /// Get invoice by order id
     fn get_invoice_by_order_id(&self, order_id: OrderId) -> ServiceFuture<Option<Invoice>>;
@@ -100,7 +99,8 @@ impl<
     /// Creates orders in billing system, returning url for payment
     fn create_invoice(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
         if !self.payments_v2_enabled() {
-            self.create_invoice_v1(create_invoice)
+            let e = err_msg("Could not create an invoice because Ture integration is not configured");
+            Box::new(future::err(ectx!(err e => ErrorKind::Internal)))
         } else {
             let fut = CreateInvoiceV2::try_from_v1(create_invoice.clone())
                 .map_err(ectx!(ErrorKind::Internal => create_invoice))
@@ -119,94 +119,6 @@ impl<
 
             Box::new(fut)
         }
-    }
-
-    fn create_invoice_v1(&self, create_invoice: CreateInvoice) -> ServiceFuture<Invoice> {
-        let user_id = self.dynamic_context.user_id;
-        let repo_factory = self.static_context.repo_factory.clone();
-        let client = self.dynamic_context.http_client.clone();
-        let callback_url = self.static_context.config.callback.url.clone();
-        let ExternalBilling {
-            invoice_url,
-            login_url,
-            username,
-            password,
-            amount_recalculate_timeout_sec,
-            ..
-        } = self.static_context.config.external_billing.clone();
-        let credentials = ExternalBillingCredentials::new(username, password);
-
-        self.spawn_on_pool(move |conn| {
-            let order_info_repo = repo_factory.create_order_info_repo(&conn, user_id);
-            let merchant_repo = repo_factory.create_merchant_repo(&conn, user_id);
-            let invoice_repo = repo_factory.create_invoice_repo(&conn, user_id);
-
-            conn.transaction::<Invoice, FailureError, _>(move || {
-                debug!("Creating new invoice: {}", &create_invoice);
-                let saga_id = create_invoice.saga_id;
-                let customer_id = create_invoice.customer_id;
-                create_invoice
-                    .orders
-                    .iter()
-                    .map(|order| {
-                        let payload = NewOrderInfo::new(order.id, saga_id, customer_id, order.store_id, order.total_amount);
-                        order_info_repo.create(payload).and_then(|_| {
-                            merchant_repo
-                                .get_by_subject_id(SubjectIdentifier::Store(order.store_id))
-                                .map(|merchant| BillingOrder::new(&order, merchant.merchant_id))
-                        })
-                    })
-                    .collect::<RepoResult<Vec<BillingOrder>>>()
-                    .and_then(|orders| {
-                        let body = serde_json::to_string(&credentials)?;
-                        let url = login_url.to_string();
-                        let mut headers = Headers::new();
-                        headers.set(ContentType::json());
-                        client
-                            .request_json::<ExternalBillingToken>(Post, url, Some(body), Some(headers))
-                            .map_err(|e| {
-                                e.context("Occured an error during receiving authorization token in external billing.")
-                                    .context(Error::HttpClient)
-                                    .into()
-                            })
-                            .and_then(|ext_token| {
-                                let mut headers = Headers::new();
-                                headers.set(Authorization(Bearer { token: ext_token.token }));
-                                headers.set(ContentType::json());
-                                let callback = callback_url.to_string();
-                                let billing_payload = CreateInvoicePayload::new(
-                                    orders,
-                                    callback,
-                                    create_invoice.currency.to_string(),
-                                    amount_recalculate_timeout_sec,
-                                );
-                                let url = invoice_url.to_string();
-                                serde_json::to_string(&billing_payload)
-                                    .map_err(|e| {
-                                        e.context("Occured an error during invoice creation payload serialization.")
-                                            .context(Error::Parse)
-                                            .into()
-                                    })
-                                    .into_future()
-                                    .and_then(|body| {
-                                        client
-                                            .request_json::<ExternalBillingInvoice>(Post, url, Some(body), Some(headers))
-                                            .map_err(|e| {
-                                                e.context("Occured an error during invoice creation in external billing.")
-                                                    .context(Error::HttpClient)
-                                                    .into()
-                                            })
-                                    })
-                            })
-                            .wait()
-                    })
-                    .and_then(|invoice| {
-                        let payload = Invoice::new(saga_id, invoice);
-                        invoice_repo.create(payload)
-                    })
-            })
-            .map_err(|e: FailureError| e.context("Service invoice, create endpoint error occured.").into())
-        })
     }
 
     fn create_invoice_v2(&self, create_invoice: CreateInvoiceV2) -> ServiceFutureV2<InvoiceDump> {

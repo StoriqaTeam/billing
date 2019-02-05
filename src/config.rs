@@ -68,7 +68,6 @@ pub struct Callback {
 #[derive(Debug, Deserialize, Clone)]
 pub struct ExternalBilling {
     pub invoice_url: String,
-    pub merchant_url: String,
     pub login_url: String,
     pub username: String,
     pub password: String,

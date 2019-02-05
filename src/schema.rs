@@ -104,17 +104,6 @@ table! {
 }
 
 table! {
-    merchants (merchant_id) {
-        merchant_id -> Uuid,
-        user_id -> Nullable<Int4>,
-        store_id -> Nullable<Int4>,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
-        merchant_type -> Varchar,
-    }
-}
-
-table! {
     order_exchange_rates (id) {
         id -> Int8,
         order_id -> Uuid,
@@ -258,7 +247,6 @@ allow_tables_to_appear_in_same_query!(
     international_billing_info,
     invoices,
     invoices_v2,
-    merchants,
     order_exchange_rates,
     orders,
     orders_info,

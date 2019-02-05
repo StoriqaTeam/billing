@@ -18,8 +18,6 @@ where
     fn create_order_info_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<OrderInfoRepo + 'a>;
     fn create_invoice_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<InvoiceRepo + 'a>;
     fn create_invoice_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoiceRepo + 'a>;
-    fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a>;
-    fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a>;
     fn create_user_roles_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a>;
     fn create_user_roles_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserRolesRepo + 'a>;
     fn create_accounts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<AccountsRepo + 'a>;
@@ -142,18 +140,6 @@ where
             db_conn,
             Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, Invoice>>,
         )) as Box<InvoiceRepo>
-    }
-
-    fn create_merchant_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<MerchantRepo + 'a> {
-        let acl = self.get_acl(db_conn, user_id);
-        Box::new(MerchantRepoImpl::new(db_conn, acl)) as Box<MerchantRepo>
-    }
-
-    fn create_merchant_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<MerchantRepo + 'a> {
-        Box::new(MerchantRepoImpl::new(
-            db_conn,
-            Box::new(SystemACL::default()) as Box<Acl<Resource, Action, Scope, FailureError, Merchant>>,
-        )) as Box<MerchantRepo>
     }
 
     fn create_user_roles_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserRolesRepo + 'a> {
@@ -386,14 +372,6 @@ pub mod tests {
 
         fn create_invoice_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<InvoiceRepo + 'a> {
             Box::new(InvoiceRepoMock::default())
-        }
-
-        fn create_merchant_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<MerchantRepo + 'a> {
-            Box::new(MerchantRepoMock::default())
-        }
-
-        fn create_merchant_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<MerchantRepo + 'a> {
-            Box::new(MerchantRepoMock::default())
         }
 
         fn create_user_roles_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<UserRolesRepo + 'a> {
@@ -841,93 +819,6 @@ pub mod tests {
         /// Deletes invoice
         fn delete(&self, _id: SagaId) -> RepoResult<Invoice> {
             Ok(create_invoice())
-        }
-    }
-
-    #[derive(Clone, Default)]
-    pub struct MerchantRepoMock;
-
-    impl MerchantRepo for MerchantRepoMock {
-        /// Returns merchant by subject identifier
-        fn get_by_subject_id(&self, id: SubjectIdentifier) -> RepoResult<Merchant> {
-            Ok(match id {
-                SubjectIdentifier::Store(store_ident) => Merchant {
-                    merchant_id: MerchantId(Uuid::new_v4()),
-                    user_id: None,
-                    store_id: Some(store_ident),
-                    merchant_type: MerchantType::Store,
-                    created_at: SystemTime::now(),
-                    updated_at: SystemTime::now(),
-                },
-                SubjectIdentifier::User(user_ident) => Merchant {
-                    merchant_id: MerchantId(Uuid::new_v4()),
-                    user_id: Some(user_ident),
-                    store_id: None,
-                    merchant_type: MerchantType::User,
-                    created_at: SystemTime::now(),
-                    updated_at: SystemTime::now(),
-                },
-            })
-        }
-
-        /// Returns merchant by merchant identifier
-        fn get_by_merchant_id(&self, merchant_id: MerchantId) -> RepoResult<Merchant> {
-            Ok(Merchant {
-                merchant_id,
-                user_id: Some(UserId(1)),
-                store_id: None,
-                merchant_type: MerchantType::User,
-                created_at: SystemTime::now(),
-                updated_at: SystemTime::now(),
-            })
-        }
-
-        /// Create a new store merchant
-        fn create_store_merchant(&self, payload: NewStoreMerchant) -> RepoResult<Merchant> {
-            Ok(Merchant {
-                merchant_id: payload.merchant_id().clone(),
-                user_id: payload.user_id().clone(),
-                store_id: payload.store_id().clone(),
-                merchant_type: payload.merchant_type().clone(),
-                created_at: SystemTime::now(),
-                updated_at: SystemTime::now(),
-            })
-        }
-
-        /// Create a new user merchant
-        fn create_user_merchant(&self, payload: NewUserMerchant) -> RepoResult<Merchant> {
-            Ok(Merchant {
-                merchant_id: payload.merchant_id().clone(),
-                user_id: payload.user_id().clone(),
-                store_id: payload.store_id().clone(),
-                merchant_type: payload.merchant_type().clone(),
-                created_at: SystemTime::now(),
-                updated_at: SystemTime::now(),
-            })
-        }
-
-        /// Delete store merchant
-        fn delete_by_store_id(&self, store_id: StoreId) -> RepoResult<Merchant> {
-            Ok(Merchant {
-                merchant_id: MerchantId(Uuid::new_v4()),
-                user_id: None,
-                store_id: Some(store_id),
-                merchant_type: MerchantType::Store,
-                created_at: SystemTime::now(),
-                updated_at: SystemTime::now(),
-            })
-        }
-
-        /// Delete user merchant
-        fn delete_by_user_id(&self, user_id: UserId) -> RepoResult<Merchant> {
-            Ok(Merchant {
-                merchant_id: MerchantId(Uuid::new_v4()),
-                user_id: Some(user_id),
-                store_id: None,
-                merchant_type: MerchantType::User,
-                created_at: SystemTime::now(),
-                updated_at: SystemTime::now(),
-            })
         }
     }
 
