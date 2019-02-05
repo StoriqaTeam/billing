@@ -466,6 +466,7 @@ where
                 .into_future()
                 .and_then(move |stripe_currency| {
                     let stripe_client_clone = stripe_client.clone();
+                    let stripe_client_clone2 = stripe_client.clone();
                     payment_intent
                         .charge_id
                         .ok_or({
@@ -473,10 +474,17 @@ where
                             ectx!(err e, ErrorKind::Internal)
                         })
                         .into_future()
-                        .and_then(move |charge_id| {
-                            stripe_client
-                                .retrieve_balance_transaction(charge_id.clone())
-                                .map_err(ectx!(convert => charge_id))
+                        .and_then(move |charge_id| stripe_client.get_charge(charge_id.clone()).map_err(ectx!(convert => charge_id)))
+                        .and_then(move |charge| {
+                            charge.balance_transaction.ok_or({
+                                let e = format_err!("charge balance transaction id not found");
+                                ectx!(err e, ErrorKind::Internal)
+                            })
+                        })
+                        .and_then(move |balance_transaction| {
+                            stripe_client_clone2
+                                .retrieve_balance_transaction(balance_transaction.clone())
+                                .map_err(ectx!(convert => balance_transaction))
                         })
                         .and_then(move |balance_transaction| {
                             // wee need to payout the raw amount without stripe fee
