@@ -21,11 +21,11 @@ pub struct UserWalletsRepoImpl<'a, T: Connection<Backend = Pg, TransactionManage
 }
 
 pub trait UserWalletsRepo {
-    fn create(&self, payload: NewUserWallet) -> RepoResultV2<UserWallet>;
+    fn add(&self, payload: NewActiveUserWallet) -> RepoResultV2<UserWallet>;
     fn get(&self, id: UserWalletId) -> RepoResultV2<Option<UserWallet>>;
-    fn get_many_by_user_id(&self, user_id: UserId) -> RepoResultV2<Vec<UserWallet>>;
-    fn delete(&self, id: UserWalletId) -> RepoResultV2<UserWallet>;
-    fn delete_many_by_user_id(&self, user_id: UserId) -> RepoResultV2<Vec<UserWallet>>;
+    fn get_currency_wallets_by_user_id(&self, currency: TureCurrency, user_id: UserId) -> RepoResultV2<Vec<UserWallet>>;
+    fn deactivate(&self, id: UserWalletId) -> RepoResultV2<UserWallet>;
+    fn deactivate_wallets_by_user_id(&self, user_id: UserId) -> RepoResultV2<Vec<UserWallet>>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> UserWalletsRepoImpl<'a, T> {
@@ -37,8 +37,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> UserWalletsRepo
     for UserWalletsRepoImpl<'a, T>
 {
-    fn create(&self, payload: NewUserWallet) -> RepoResultV2<UserWallet> {
-        debug!("Creating a UserWallet using payload: {:?}", payload);
+    fn add(&self, payload: NewActiveUserWallet) -> RepoResultV2<UserWallet> {
+        debug!("Adding a user wallet using payload: {:?}", payload);
 
         acl::check(
             &*self.acl,
@@ -49,11 +49,13 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         )
         .map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let command = diesel::insert_into(UserWallets::user_wallets).values(&payload);
+        let insert_user_wallet = InsertUserWallet::from(payload);
+
+        let command = diesel::insert_into(UserWallets::user_wallets).values(&insert_user_wallet);
 
         command
             .get_result::<RawUserWallet>(self.db_conn)
-            .map(RawUserWallet::into_domain)
+            .map(UserWallet::from)
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(err e, ErrorSource::Diesel, error_kind)
@@ -61,13 +63,13 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn get(&self, user_wallet_id: UserWalletId) -> RepoResultV2<Option<UserWallet>> {
-        debug!("Getting a UserWallet with ID: {}", user_wallet_id);
+        debug!("Getting a user wallet with ID: {}", user_wallet_id);
 
         let query = UserWallets::user_wallets.filter(UserWallets::id.eq(user_wallet_id));
 
         query
             .get_result::<RawUserWallet>(self.db_conn)
-            .map(RawUserWallet::into_domain)
+            .map(UserWallet::from)
             .optional()
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
@@ -88,8 +90,8 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             })
     }
 
-    fn get_many_by_user_id(&self, user_id: UserId) -> RepoResultV2<Vec<UserWallet>> {
-        debug!("Getting UserWallets with user ID: {}", user_id);
+    fn get_currency_wallets_by_user_id(&self, currency: TureCurrency, user_id: UserId) -> RepoResultV2<Vec<UserWallet>> {
+        debug!("Getting user wallets for currency {} with user ID: {}", currency, user_id);
 
         acl::check(
             &*self.acl,
@@ -100,19 +102,22 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         )
         .map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let query = UserWallets::user_wallets.filter(UserWallets::user_id.eq(user_id));
+        let query = UserWallets::user_wallets
+            .filter(UserWallets::currency.eq(currency))
+            .filter(UserWallets::user_id.eq(user_id))
+            .filter(UserWallets::is_active.eq(true));
 
         query
             .get_results::<RawUserWallet>(self.db_conn)
-            .map(|raw_user_wallets| raw_user_wallets.into_iter().map(RawUserWallet::into_domain).collect::<Vec<_>>())
+            .map(|raw_user_wallets| raw_user_wallets.into_iter().map(UserWallet::from).collect::<Vec<_>>())
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(err e, ErrorSource::Diesel, error_kind)
             })
     }
 
-    fn delete(&self, user_wallet_id: UserWalletId) -> RepoResultV2<UserWallet> {
-        debug!("Deleting a UserWallet with ID: {}", user_wallet_id);
+    fn deactivate(&self, user_wallet_id: UserWalletId) -> RepoResultV2<UserWallet> {
+        debug!("Deactivating a user wallet with ID: {}", user_wallet_id);
 
         let user_id = UserWallets::user_wallets
             .filter(UserWallets::id.eq(user_wallet_id))
@@ -132,19 +137,20 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         )
         .map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let command = diesel::delete(UserWallets::user_wallets.filter(UserWallets::id.eq(user_wallet_id)));
+        let command =
+            diesel::update(UserWallets::user_wallets.filter(UserWallets::id.eq(user_wallet_id))).set(UserWallets::is_active.eq(false));
 
         command
             .get_result::<RawUserWallet>(self.db_conn)
-            .map(RawUserWallet::into_domain)
+            .map(UserWallet::from)
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(err e, ErrorSource::Diesel, error_kind)
             })
     }
 
-    fn delete_many_by_user_id(&self, user_id: UserId) -> RepoResultV2<Vec<UserWallet>> {
-        debug!("Deleting UserWallets with user ID: {}", user_id);
+    fn deactivate_wallets_by_user_id(&self, user_id: UserId) -> RepoResultV2<Vec<UserWallet>> {
+        debug!("Deactivating wallets for user with ID: {}", user_id);
 
         acl::check(
             &*self.acl,
@@ -155,11 +161,12 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         )
         .map_err(ectx!(try ErrorKind::Forbidden))?;
 
-        let command = diesel::delete(UserWallets::user_wallets.filter(UserWallets::user_id.eq(user_id)));
+        let command =
+            diesel::update(UserWallets::user_wallets.filter(UserWallets::user_id.eq(user_id))).set(UserWallets::is_active.eq(false));
 
         command
             .get_results::<RawUserWallet>(self.db_conn)
-            .map(|raw_user_wallets| raw_user_wallets.into_iter().map(RawUserWallet::into_domain).collect::<Vec<_>>())
+            .map(|raw_user_wallets| raw_user_wallets.into_iter().map(UserWallet::from).collect::<Vec<_>>())
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(err e, ErrorSource::Diesel, error_kind)

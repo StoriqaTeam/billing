@@ -5,12 +5,12 @@ use diesel::sql_types::VarChar;
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq, Eq, FromSqlRow, AsExpression, Default, PartialOrd)]
 #[sql_type = "VarChar"]
-pub struct PayOutId(String);
-derive_newtype_sql!(payout_id, VarChar, PayOutId, PayOutId);
+pub struct StripePayoutId(String);
+derive_newtype_sql!(payout_id, VarChar, StripePayoutId, StripePayoutId);
 
-impl PayOutId {
+impl StripePayoutId {
     pub fn new(v: String) -> Self {
-        PayOutId(v)
+        StripePayoutId(v)
     }
 
     pub fn inner(&self) -> String {
@@ -18,15 +18,15 @@ impl PayOutId {
     }
 }
 
-impl FromStr for PayOutId {
+impl FromStr for StripePayoutId {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(PayOutId::new(s.to_string()))
+        Ok(StripePayoutId::new(s.to_string()))
     }
 }
 
-impl Display for PayOutId {
+impl Display for StripePayoutId {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(&format!("{}", self.0,))
     }

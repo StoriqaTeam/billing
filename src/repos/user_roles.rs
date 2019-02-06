@@ -189,3 +189,24 @@ where
         }
     }
 }
+
+pub fn user_is_store_manager<T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
+    conn: &T,
+    user_id_arg: stq_types::UserId,
+    store_id_arg: ::models::order_v2::StoreId,
+) -> bool {
+    roles
+        .filter(user_id.eq(user_id_arg))
+        .get_results::<UserRole>(conn)
+        .map_err(From::from)
+        .map(|user_roles_arg| {
+            user_roles_arg.iter().any(|user_role_arg| {
+                user_role_arg
+                    .data
+                    .clone()
+                    .map(|data_arg| data_arg == store_id_arg.inner())
+                    .unwrap_or_default()
+            })
+        })
+        .unwrap_or_else(|_: FailureError| false)
+}

@@ -38,7 +38,7 @@ impl Display for OrderExchangeRateId {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash, DieselTypes)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ExchangeRateStatus {
     Active,
     Expired,

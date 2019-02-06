@@ -56,42 +56,74 @@ pub struct UserWallet {
     pub currency: TureCurrency,
     pub user_id: UserId,
     pub created_at: NaiveDateTime,
+    pub is_active: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Insertable)]
-#[table_name = "user_wallets"]
-pub struct NewUserWallet {
+#[derive(Clone, Debug, Deserialize)]
+pub struct NewActiveUserWallet {
     pub id: UserWalletId,
     pub address: WalletAddress,
     pub currency: TureCurrency,
     pub user_id: UserId,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Queryable)]
+#[derive(Clone, Debug, Deserialize, Queryable)]
 pub struct RawUserWallet {
     pub id: UserWalletId,
     pub address: WalletAddress,
     pub currency: TureCurrency,
     pub user_id: UserId,
     pub created_at: NaiveDateTime,
+    pub is_active: bool,
 }
 
-impl RawUserWallet {
-    pub fn into_domain(self) -> UserWallet {
+impl From<RawUserWallet> for UserWallet {
+    fn from(raw_user_wallet: RawUserWallet) -> Self {
         let RawUserWallet {
             id,
             address,
             currency,
             user_id,
             created_at,
-        } = self;
+            is_active,
+        } = raw_user_wallet;
 
-        UserWallet {
+        Self {
             id,
             address,
             currency,
             user_id,
             created_at,
+            is_active,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Insertable)]
+#[table_name = "user_wallets"]
+pub struct InsertUserWallet {
+    pub id: UserWalletId,
+    pub address: WalletAddress,
+    pub currency: TureCurrency,
+    pub user_id: UserId,
+    pub is_active: bool,
+}
+
+impl From<NewActiveUserWallet> for InsertUserWallet {
+    fn from(new_wallet: NewActiveUserWallet) -> Self {
+        let NewActiveUserWallet {
+            id,
+            address,
+            currency,
+            user_id,
+        } = new_wallet;
+
+        Self {
+            id,
+            address,
+            currency,
+            user_id,
+            is_active: true,
         }
     }
 }
@@ -109,10 +141,10 @@ impl From<&UserWallet> for UserWalletAccess {
     }
 }
 
-impl From<&NewUserWallet> for UserWalletAccess {
-    fn from(new_user_wallet: &NewUserWallet) -> UserWalletAccess {
+impl From<&NewActiveUserWallet> for UserWalletAccess {
+    fn from(new_wallet: &NewActiveUserWallet) -> UserWalletAccess {
         UserWalletAccess {
-            user_id: new_user_wallet.user_id.clone(),
+            user_id: new_wallet.user_id.clone(),
         }
     }
 }

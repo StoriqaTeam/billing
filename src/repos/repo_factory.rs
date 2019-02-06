@@ -51,6 +51,10 @@ where
         user_id: Option<UserId>,
     ) -> Box<ProxyCompanyBillingInfoRepo + 'a>;
     fn create_proxy_companies_billing_info_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<ProxyCompanyBillingInfoRepo + 'a>;
+    fn create_user_wallets_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserWalletsRepo + 'a>;
+    fn create_user_wallets_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserWalletsRepo + 'a>;
+    fn create_payouts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PayoutsRepo + 'a>;
+    fn create_payouts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PayoutsRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -294,6 +298,26 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(PaymentIntentFeeRepoImpl::new(db_conn, acl))
     }
+
+    fn create_user_wallets_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserWalletsRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(UserWalletsRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_user_wallets_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserWalletsRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(UserWalletsRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_payouts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PayoutsRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(PayoutsRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_payouts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PayoutsRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(PayoutsRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -492,6 +516,22 @@ pub mod tests {
 
         fn create_payment_intent_fees_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PaymentIntentFeeRepo + 'a> {
             Box::new(PaymentIntentFeeRepoMock::default())
+        }
+
+        fn create_user_wallets_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserWalletsRepo + 'a> {
+            Box::new(UserWalletsRepoMock::default())
+        }
+
+        fn create_user_wallets_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserWalletsRepo + 'a> {
+            Box::new(UserWalletsRepoMock::default())
+        }
+
+        fn create_payouts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PayoutsRepo + 'a> {
+            Box::new(PayoutsRepoMock::default())
+        }
+
+        fn create_payouts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PayoutsRepo + 'a> {
+            Box::new(PayoutsRepoMock::default())
         }
     }
 
@@ -1198,6 +1238,44 @@ pub mod tests {
                 status_updated_at: chrono::Utc::now().naive_utc(),
                 scheduled_on: None,
             })
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct UserWalletsRepoMock;
+
+    impl UserWalletsRepo for UserWalletsRepoMock {
+        fn add(&self, _payload: NewActiveUserWallet) -> RepoResultV2<UserWallet> {
+            unimplemented!()
+        }
+
+        fn get(&self, _id: UserWalletId) -> RepoResultV2<Option<UserWallet>> {
+            unimplemented!()
+        }
+
+        fn get_currency_wallets_by_user_id(&self, _currency: TureCurrency, _user_id: ::models::UserId) -> RepoResultV2<Vec<UserWallet>> {
+            unimplemented!()
+        }
+
+        fn deactivate(&self, _id: UserWalletId) -> RepoResultV2<UserWallet> {
+            unimplemented!()
+        }
+
+        fn deactivate_wallets_by_user_id(&self, _user_id: ::models::UserId) -> RepoResultV2<Vec<UserWallet>> {
+            unimplemented!()
+        }
+    }
+
+    #[derive(Debug, Default)]
+    pub struct PayoutsRepoMock;
+
+    impl PayoutsRepo for PayoutsRepoMock {
+        fn create(&self, _payload: Payout) -> RepoResultV2<Payout> {
+            unimplemented!()
+        }
+
+        fn get(&self, _order_id: OrderV2Id) -> RepoResultV2<Option<Payout>> {
+            unimplemented!()
         }
     }
 

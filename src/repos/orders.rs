@@ -9,12 +9,12 @@ use failure::Error as FailureError;
 use failure::Fail;
 
 use repos::legacy_acl::*;
+use repos::user_roles::user_is_store_manager;
 
 use models::authorization::*;
 use models::invoice_v2::InvoiceId;
-use models::order_v2::{NewOrder, OrderAccess, OrderId, OrderSearchResults, OrdersSearch, RawOrder, StoreId};
-use models::{Amount, PaymentState, UserId, UserRole};
-use schema::roles::dsl as UserRolesDsl;
+use models::order_v2::{NewOrder, OrderAccess, OrderId, OrderSearchResults, OrdersSearch, RawOrder};
+use models::{Amount, PaymentState, UserId};
 use schema::{invoices_v2::dsl as InvoicesV2, orders::dsl as Orders};
 
 use super::acl;
@@ -284,23 +284,6 @@ fn user_is_buyer<T: Connection<Backend = Pg, TransactionManager = AnsiTransactio
         Ok(Some(invoice_user_id)) => invoice_user_id.inner() == user_id.0,
         Err(_) => false,
     }
-}
-
-fn user_is_store_manager<T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static>(
-    conn: &T,
-    user_id: stq_types::UserId,
-    store_id: StoreId,
-) -> bool {
-    UserRolesDsl::roles
-        .filter(UserRolesDsl::user_id.eq(user_id))
-        .get_results::<UserRole>(conn)
-        .map_err(From::from)
-        .map(|user_roles_arg| {
-            user_roles_arg
-                .iter()
-                .any(|user_role_arg| user_role_arg.data.clone().map(|data| data == store_id.inner()).unwrap_or_default())
-        })
-        .unwrap_or_else(|_: FailureError| false)
 }
 
 fn into_expr(search: OrdersSearch) -> Option<BoxedExpr> {

@@ -84,7 +84,7 @@ pub struct NewPayOut {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PayOut {
-    pub id: PayOutId,
+    pub id: StripePayoutId,
     pub amount: Amount,
     pub currency: Currency,
     pub status: PayoutStatus,

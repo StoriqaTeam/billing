@@ -181,6 +181,17 @@ table! {
 }
 
 table! {
+    payouts (order_id) {
+        order_id -> Uuid,
+        amount -> Numeric,
+        completed_at -> Timestamp,
+        payout_target_type -> Text,
+        user_wallet_id -> Nullable<Uuid>,
+        blockchain_fee -> Nullable<Numeric>,
+    }
+}
+
+table! {
     proxy_companies_billing_info (id) {
         id -> Int4,
         country_alpha3 -> Varchar,
@@ -235,6 +246,7 @@ table! {
         currency -> Text,
         user_id -> Int4,
         created_at -> Timestamp,
+        is_active -> Bool,
     }
 }
 
@@ -247,6 +259,8 @@ joinable!(payment_intents_fees -> fees (fee_id));
 joinable!(payment_intents_fees -> payment_intent (payment_intent_id));
 joinable!(payment_intents_invoices -> invoices_v2 (invoice_id));
 joinable!(payment_intents_invoices -> payment_intent (payment_intent_id));
+joinable!(payouts -> orders (order_id));
+joinable!(payouts -> user_wallets (user_wallet_id));
 
 allow_tables_to_appear_in_same_query!(
     accounts,
@@ -263,6 +277,7 @@ allow_tables_to_appear_in_same_query!(
     payment_intent,
     payment_intents_fees,
     payment_intents_invoices,
+    payouts,
     proxy_companies_billing_info,
     roles,
     russia_billing_info,
