@@ -24,7 +24,7 @@ fn accounts_repo_crud_happy() {
         id: AccountId::new(Uuid::new_v4()),
         currency: TureCurrency::Stq,
         is_pooled: false,
-        wallet_address: Some("0x0".to_string().into()),
+        wallet_address: "0x0".to_string().into(),
     };
 
     let created_account = {

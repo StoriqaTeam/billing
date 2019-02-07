@@ -518,19 +518,19 @@ pub mod tests {
             Box::new(PaymentIntentFeeRepoMock::default())
         }
 
-        fn create_user_wallets_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<UserWalletsRepo + 'a> {
+        fn create_user_wallets_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<UserWalletsRepo + 'a> {
             Box::new(UserWalletsRepoMock::default())
         }
 
-        fn create_user_wallets_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserWalletsRepo + 'a> {
+        fn create_user_wallets_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<UserWalletsRepo + 'a> {
             Box::new(UserWalletsRepoMock::default())
         }
 
-        fn create_payouts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PayoutsRepo + 'a> {
+        fn create_payouts_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<PayoutsRepo + 'a> {
             Box::new(PayoutsRepoMock::default())
         }
 
-        fn create_payouts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PayoutsRepo + 'a> {
+        fn create_payouts_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PayoutsRepo + 'a> {
             Box::new(PayoutsRepoMock::default())
         }
     }
@@ -938,6 +938,10 @@ pub mod tests {
             Ok(None)
         }
 
+        fn get_by_wallet_address(&self, _wallet_address: WalletAddress) -> RepoResultV2<Option<Account>> {
+            Ok(None)
+        }
+
         fn get_many(&self, _account_ids: &[AccountId]) -> RepoResultV2<Vec<Account>> {
             Ok(vec![])
         }
@@ -964,7 +968,7 @@ pub mod tests {
                 currency: TureCurrency::Stq,
                 is_pooled: false,
                 created_at: NaiveDateTime::from_timestamp(0, 0),
-                wallet_address: None,
+                wallet_address: "0x0".to_string().into(),
             }))
         }
 

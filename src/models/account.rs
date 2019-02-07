@@ -59,7 +59,7 @@ pub struct Account {
     pub currency: TureCurrency,
     pub is_pooled: bool,
     pub created_at: NaiveDateTime,
-    pub wallet_address: Option<WalletAddress>,
+    pub wallet_address: WalletAddress,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,7 +76,7 @@ pub struct RawAccount {
     pub currency: TureCurrency,
     pub is_pooled: bool,
     pub created_at: NaiveDateTime,
-    pub wallet_address: Option<WalletAddress>,
+    pub wallet_address: WalletAddress,
 }
 
 impl From<RawAccount> for Account {
@@ -105,7 +105,7 @@ pub struct NewAccount {
     pub id: AccountId,
     pub currency: TureCurrency,
     pub is_pooled: bool,
-    pub wallet_address: Option<WalletAddress>,
+    pub wallet_address: WalletAddress,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -116,7 +116,7 @@ pub struct PaymentsCallback {
     pub amount_captured: String,
     pub currency: TureCurrency,
     pub address: WalletAddress,
-    pub account_id: AccountId,
+    pub account_id: Option<AccountId>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

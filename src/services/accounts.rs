@@ -315,7 +315,7 @@ impl<
                                     id: AccountId::new(account_id),
                                     currency,
                                     is_pooled,
-                                    wallet_address: Some(account_address),
+                                    wallet_address: account_address,
                                 };
                                 accounts_repo.create(new_account.clone()).map_err(ectx!(convert => new_account))
                             })

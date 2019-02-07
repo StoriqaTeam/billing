@@ -4,7 +4,7 @@ table! {
         currency -> Text,
         is_pooled -> Bool,
         created_at -> Timestamp,
-        wallet_address -> Nullable<Text>,
+        wallet_address -> Text,
     }
 }
 
