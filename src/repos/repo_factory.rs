@@ -746,6 +746,10 @@ pub mod tests {
             Ok(Some(res))
         }
 
+        fn search(&self, _search_term: SearchFeeParams) -> RepoResultV2<Vec<Fee>> {
+            Ok(vec![create_fee()])
+        }
+
         fn create(&self, payload: NewFee) -> RepoResultV2<Fee> {
             let fee = create_fee();
 

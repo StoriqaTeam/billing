@@ -57,7 +57,6 @@ pub trait StripeClient: Send + Sync + 'static {
     fn cancel_payment_intent(&self, payment_intent_id: PaymentIntentId) -> Box<Future<Item = PaymentIntent, Error = Error> + Send>;
 }
 
-#[derive(Clone)]
 pub struct StripeClientImpl {
     public_key: String,
     secret_key: String,
@@ -240,5 +239,15 @@ impl StripeClient for StripeClientImpl {
         Box::new(
             PaymentIntent::cancel(&self.client, &payment_intent_id.0, stripe::PaymentIntentCancelParams::default()).map_err(From::from),
         )
+    }
+}
+
+impl Clone for StripeClientImpl {
+    fn clone(&self) -> Self {
+        StripeClientImpl {
+            public_key: self.public_key.clone(),
+            secret_key: self.secret_key.clone(),
+            client: self.client.clone(),
+        }
     }
 }

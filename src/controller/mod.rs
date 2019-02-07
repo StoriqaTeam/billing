@@ -356,6 +356,10 @@ impl<
             (Get, Some(Route::FeesByOrder { id })) => serialize_future({ fees_service.get_by_order_id(id).map_err(failure::Error::from) }),
             (Post, Some(Route::FeesPay { id })) => serialize_future({ fees_service.create_charge(SearchFee::Id(id)) }),
             (Post, Some(Route::FeesPayByOrder { id })) => serialize_future({ fees_service.create_charge(SearchFee::OrderId(id)) }),
+            (Post, Some(Route::FeesPayByOrders)) => serialize_future({
+                parse_body::<FeesPayByOrdersRequest>(req.body())
+                    .and_then(move |payload| fees_service.create_charge_for_several_fees(payload).map_err(failure::Error::from))
+            }),
             (Get, Some(Route::RussiaBillingInfoByStore { id })) => serialize_future({
                 billing_info_service
                     .get_russia_billing_info_by_store(id)

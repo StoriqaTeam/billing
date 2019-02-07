@@ -113,7 +113,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn search(&self, search_params: InternationalBillingInfoSearch) -> RepoResultV2<Vec<InternationalBillingInfo>> {
-        debug!("get international billing info {:?}.", search_params);
+        debug!("search international billing info {:?}.", search_params);
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {

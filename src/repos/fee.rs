@@ -24,10 +24,18 @@ use super::types::RepoResultV2;
 
 type FeeRepoAcl = Box<Acl<Resource, Action, Scope, FailureError, Fee>>;
 
+type BoxedExpr = Box<BoxableExpression<crate::schema::fees::table, Pg, SqlType = Bool>>;
+
 #[derive(Debug, Clone)]
 pub enum SearchFee {
     Id(FeeId),
     OrderId(OrderId),
+}
+
+#[derive(Debug, Default)]
+pub struct SearchFeeParams {
+    pub id: Option<FeeId>,
+    pub order_ids: Option<Vec<OrderId>>,
 }
 
 pub struct FeeRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> {
@@ -37,6 +45,7 @@ pub struct FeeRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = Ansi
 
 pub trait FeeRepo {
     fn get(&self, search: SearchFee) -> RepoResultV2<Option<Fee>>;
+    fn search(&self, search_term: SearchFeeParams) -> RepoResultV2<Vec<Fee>>;
     fn create(&self, payload: NewFee) -> RepoResultV2<Fee>;
     fn update(&self, fee_id: FeeId, payload: UpdateFee) -> RepoResultV2<Fee>;
     fn delete(&self, fee_id: FeeId) -> RepoResultV2<()>;
@@ -72,6 +81,30 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 };
                 Ok(fee)
             })
+    }
+
+    fn search(&self, search_params: SearchFeeParams) -> RepoResultV2<Vec<Fee>> {
+        debug!("search fee {:?}.", search_params);
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("fee search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let fees = crate::schema::fees::table
+            .filter(query)
+            .get_results::<Fee>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        for fee in &fees {
+            acl::check(&*self.acl, Resource::Fee, Action::Read, self, Some(&fee)).map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(fees)
     }
 
     fn create(&self, payload: NewFee) -> RepoResultV2<Fee> {
@@ -165,5 +198,40 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 }
             }
         }
+    }
+}
+
+impl SearchFeeParams {
+    pub fn by_order_ids(order_ids: Vec<OrderId>) -> SearchFeeParams {
+        SearchFeeParams {
+            order_ids: Some(order_ids),
+            ..Default::default()
+        }
+    }
+}
+
+fn into_expr(search: SearchFeeParams) -> Option<BoxedExpr> {
+    let mut query: Option<BoxedExpr> = None;
+
+    let SearchFeeParams { id, order_ids } = search;
+
+    if let Some(id_filter) = id {
+        let new_condition = FeesDsl::id.eq(id_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(order_ids_filter) = order_ids {
+        let new_condition = FeesDsl::order_id.eq_any(order_ids_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    query
+}
+
+fn and(old_condition: Option<BoxedExpr>, new_condition: BoxedExpr) -> BoxedExpr {
+    if let Some(old_condition) = old_condition {
+        Box::new(old_condition.and(new_condition))
+    } else {
+        new_condition
     }
 }
