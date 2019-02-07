@@ -75,6 +75,7 @@ impl<
                         store_id: payload.store_id.map(|id| StoreIdV2::new(id.0)),
                         state: payload.payment_state,
                         order_id: payload.order_id,
+                        ..Default::default()
                     },
                 )
                 .map_err(ectx!(try convert))?;

@@ -207,7 +207,7 @@ fn validate_create_russia_billing_info(repo: &RussiaBillingInfoRepo, payload: &N
         let mut error = ValidationError::new("Russia billing info already exists");
         error.message = Some(format!("Russia billing info already exists for \"{}\"", payload.store_id,).into());
         errors.add("billing_info", error);
-        return Err(ectx!(err ErrorContext::BillingInfo ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
+        return Err(ectx!(err ErrorContext::BillingInfo, ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
     }
 
     Ok(())

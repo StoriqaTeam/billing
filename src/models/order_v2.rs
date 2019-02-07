@@ -116,17 +116,27 @@ pub struct OrderAccess {
     pub store_id: StoreId,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct OrdersSearch {
     pub store_id: Option<StoreId>,
     pub state: Option<PaymentState>,
     pub order_id: Option<OrderId>,
+    pub order_ids: Option<Vec<OrderId>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct OrderSearchResults {
     pub total_count: i64,
     pub orders: Vec<RawOrder>,
+}
+
+impl OrdersSearch {
+    pub fn by_order_ids(order_ids: Vec<OrderId>) -> OrdersSearch {
+        OrdersSearch {
+            order_ids: Some(order_ids),
+            ..Default::default()
+        }
+    }
 }
 
 impl From<NewOrder> for OrderAccess {

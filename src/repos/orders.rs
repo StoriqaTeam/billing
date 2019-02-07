@@ -289,7 +289,12 @@ fn user_is_buyer<T: Connection<Backend = Pg, TransactionManager = AnsiTransactio
 fn into_expr(search: OrdersSearch) -> Option<BoxedExpr> {
     let mut query: Option<BoxedExpr> = None;
 
-    let OrdersSearch { store_id, state, order_id } = search;
+    let OrdersSearch {
+        store_id,
+        state,
+        order_id,
+        order_ids,
+    } = search;
 
     if let Some(store_id_filter) = store_id {
         let new_condition = Orders::store_id.eq(store_id_filter);
@@ -303,6 +308,11 @@ fn into_expr(search: OrdersSearch) -> Option<BoxedExpr> {
 
     if let Some(order_id_filter) = order_id {
         let new_condition = Orders::id.eq(order_id_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(order_ids_filter) = order_ids {
+        let new_condition = Orders::id.eq_any(order_ids_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 
