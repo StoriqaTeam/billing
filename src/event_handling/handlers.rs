@@ -460,51 +460,32 @@ where
                 .map(|payment_intent| (payment_intent, order.total_amount, order.seller_currency))
         })
         .and_then(move |(payment_intent, total_amount, currency)| {
-            currency
-                .convert()
-                .map_err(ectx!(convert => currency))
+            let stripe_client_clone = stripe_client.clone();
+            payment_intent
+                .charge_id
+                .ok_or({
+                    let e = format_err!("payment intent charge paid not found");
+                    ectx!(err e, ErrorKind::Internal)
+                })
                 .into_future()
-                .and_then(move |stripe_currency| {
-                    let stripe_client_clone = stripe_client.clone();
-                    let stripe_client_clone2 = stripe_client.clone();
-                    payment_intent
-                        .charge_id
-                        .ok_or({
-                            let e = format_err!("payment intent charge paid not found");
-                            ectx!(err e, ErrorKind::Internal)
-                        })
-                        .into_future()
-                        .and_then(move |charge_id| stripe_client.get_charge(charge_id.clone()).map_err(ectx!(convert => charge_id)))
-                        .and_then(move |charge| {
-                            charge.balance_transaction.ok_or({
-                                let e = format_err!("charge balance transaction id not found");
-                                ectx!(err e, ErrorKind::Internal)
-                            })
-                        })
-                        .and_then(move |balance_transaction| {
-                            stripe_client_clone2
-                                .retrieve_balance_transaction(balance_transaction.clone())
-                                .map_err(ectx!(convert => balance_transaction))
-                        })
-                        .and_then(move |balance_transaction| {
-                            // wee need to payout the raw amount without stripe fee
-                            let total_amount_super_unit = total_amount.to_super_unit(currency);
-                            let fee_procent = balance_transaction.fee as f64 / balance_transaction.amount as f64;
-                            let stripe_fee = Amount::from_super_unit(currency, total_amount_super_unit * BigDecimal::from(fee_procent));
-                            total_amount
-                                .checked_sub(stripe_fee)
-                                .ok_or({
-                                    let e = format_err!("Calculation of total amount without fee is overflow");
-                                    ectx!(err e, ErrorKind::Internal)
-                                })
-                                .into_future()
-                                .and_then(move |amount_without_fee| {
-                                    stripe_client_clone
-                                        .create_payout(amount_without_fee, stripe_currency, order_id)
-                                        .map_err(ectx!(convert => total_amount, stripe_currency, order_id))
-                                        .map(move |_| stripe_fee)
-                                })
-                        })
+                .and_then(move |charge_id| stripe_client.get_charge(charge_id.clone()).map_err(ectx!(convert => charge_id)))
+                .and_then(move |charge| {
+                    charge.balance_transaction.ok_or({
+                        let e = format_err!("charge balance transaction id not found");
+                        ectx!(err e, ErrorKind::Internal)
+                    })
+                })
+                .and_then(move |balance_transaction| {
+                    stripe_client_clone
+                        .retrieve_balance_transaction(balance_transaction.clone())
+                        .map_err(ectx!(convert => balance_transaction))
+                })
+                .and_then(move |balance_transaction| {
+                    // wee need to payout the raw amount without stripe fee
+                    let total_amount_super_unit = total_amount.to_super_unit(currency);
+                    let fee_procent = balance_transaction.fee as f64 / balance_transaction.amount as f64;
+                    let stripe_fee = Amount::from_super_unit(currency, total_amount_super_unit * BigDecimal::from(fee_procent));
+                    Ok(stripe_fee)
                 })
         })
         .and_then({
