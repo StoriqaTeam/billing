@@ -201,7 +201,7 @@ impl<
                         account_service
                             .get_or_create_free_pooled_account(buyer_currency)
                             .map_err(ectx!(convert => buyer_currency))
-                            .map(|account| (Some(account.id), account.wallet_address, None, orders))
+                            .map(|account| (Some(account.id), Some(account.wallet_address), None, orders))
                     }))
                 }
             })
@@ -511,17 +511,19 @@ impl<
                 let current_order_rates = get_order_active_rates(&*orders_repo, &*rates_repo, id)?;
 
                 let wallet_address = if let Some(account_id) = invoice.account_id {
-                    accounts_repo
-                        .get(account_id.clone())
-                        .map_err({
-                            let account_id = account_id.clone();
-                            ectx!(try convert => account_id)
-                        })?
-                        .ok_or({
-                            let e = format_err!("Account {} not found", account_id);
-                            ectx!(try err e, ErrorKind::Internal)
-                        })?
-                        .wallet_address
+                    Some(
+                        accounts_repo
+                            .get(account_id.clone())
+                            .map_err({
+                                let account_id = account_id.clone();
+                                ectx!(try convert => account_id)
+                            })?
+                            .ok_or({
+                                let e = format_err!("Account {} not found", account_id);
+                                ectx!(try err e, ErrorKind::Internal)
+                            })?
+                            .wallet_address,
+                    )
                 } else {
                     None
                 };
@@ -783,6 +785,7 @@ impl<
             transaction_id,
             account_id,
             amount_captured: amount_received,
+            address: wallet_address,
             ..
         } = callback.clone();
 
@@ -805,6 +808,17 @@ impl<
                     move |conn| {
                         check_ture_sign(sign_public_key, signature_header, body)?;
                         let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
+                        let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
+                        let account_id = match account_id {
+                            Some(account_id) => account_id,
+                            None => accounts_repo.get_by_wallet_address(wallet_address.clone())
+                                .map_err({let wallet_address = wallet_address.clone(); ectx!(try convert => wallet_address)})?
+                                .ok_or_else(|| {
+                                    let e = format_err!("Account with wallet address {} not found", wallet_address);
+                                    ectx!(try err e, ErrorKind::NotFound)
+                                })?
+                                .id
+                        };
                         let amount_received = Amount::from_str(&amount_received).map_err(move |e| {
                                 let e = format_err!("Amount has wrong format: {}", e);
                                 ectx!(try err e, ErrorKind::Internal => amount_received)
@@ -1146,17 +1160,19 @@ pub fn get_invoice_price(
         .collect::<Result<Vec<_>, ServiceError>>()?;
 
     let wallet_address = if let Some(account_id) = invoice.account_id {
-        accounts_repo
-            .get(account_id.clone())
-            .map_err({
-                let account_id = account_id.clone();
-                ectx!(try convert => account_id)
-            })?
-            .ok_or({
-                let e = format_err!("Account {} not found", account_id);
-                ectx!(try err e, ErrorKind::Internal)
-            })?
-            .wallet_address
+        Some(
+            accounts_repo
+                .get(account_id.clone())
+                .map_err({
+                    let account_id = account_id.clone();
+                    ectx!(try convert => account_id)
+                })?
+                .ok_or({
+                    let e = format_err!("Account {} not found", account_id);
+                    ectx!(try err e, ErrorKind::Internal)
+                })?
+                .wallet_address,
+        )
     } else {
         None
     };

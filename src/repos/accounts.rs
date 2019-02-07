@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use stq_types::UserId;
 
 use models::invoice_v2::RawInvoice;
-use models::{authorization::*, Account, AccountCount, AccountId, NewAccount, RawAccount, TureCurrency};
+use models::{authorization::*, Account, AccountCount, AccountId, NewAccount, RawAccount, TureCurrency, WalletAddress};
 use repos::{
     acl,
     error::{ErrorKind, ErrorSource},
@@ -23,6 +23,7 @@ pub struct AccountsRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager =
 pub trait AccountsRepo {
     fn count(&self) -> RepoResultV2<AccountCount>;
     fn get(&self, account_id: AccountId) -> RepoResultV2<Option<Account>>;
+    fn get_by_wallet_address(&self, wallet_address: WalletAddress) -> RepoResultV2<Option<Account>>;
     fn get_many(&self, account_ids: &[AccountId]) -> RepoResultV2<Vec<Account>>;
     fn get_free_account(&self, currency: TureCurrency) -> RepoResultV2<Option<Account>>;
     fn create(&self, payload: NewAccount) -> RepoResultV2<Account>;
@@ -84,6 +85,23 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(err e, ErrorSource::Diesel, error_kind => account_id)
+            })
+    }
+
+    fn get_by_wallet_address(&self, wallet_address: WalletAddress) -> RepoResultV2<Option<Account>> {
+        debug!("Getting an account with wallet_address: {}", wallet_address);
+
+        acl::check(&*self.acl, Resource::Account, Action::Read, self, None).map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        let query = Accounts::accounts.filter(Accounts::wallet_address.eq(&wallet_address));
+
+        query
+            .get_result::<RawAccount>(self.db_conn)
+            .map(Account::from)
+            .optional()
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(err e, ErrorSource::Diesel, error_kind => wallet_address)
             })
     }
 
