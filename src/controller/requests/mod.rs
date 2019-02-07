@@ -25,5 +25,5 @@ pub struct OrderPaymentStateRequest {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct FeesPayByOrdersRequest {
-    pub orders: Vec<Orderv2Id>,
+    pub order_ids: Vec<Orderv2Id>,
 }

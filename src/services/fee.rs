@@ -135,7 +135,7 @@ impl<
 
     fn create_charge_for_several_fees(&self, params: FeesPayByOrdersRequest) -> ServiceFutureV2<Vec<FeeResponse>> {
         debug!("Create charge in stripe by params: {:?}", params);
-        self.create_charge_by_order_ids(params.orders)
+        self.create_charge_by_order_ids(params.order_ids)
     }
 }
 
