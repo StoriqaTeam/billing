@@ -195,6 +195,8 @@ impl<
             let user_roles_repo = repo_factory.create_user_roles_repo(&conn, user_id);
             let customers_repo = repo_factory.create_customers_repo(&conn, user_id);
 
+            validate_charge_fees(&fees)?;
+
             let store_owner_user_role = user_roles_repo
                 .get_by_store_id(StqStoreId(store_id.inner()))
                 .map_err(|e| ectx!(try err e, ErrorKind::Internal => store_id))?
@@ -247,29 +249,30 @@ impl<
             move |(fees, charge)| {
                 spawn_on_pool(db_pool, cpu_pool, move |conn| {
                     let fees_repo = repo_factory.create_fees_repo(&conn, user_id);
-
-                    let status = if charge.paid {
-                        Some(FeeStatus::Paid)
-                    } else {
-                        Some(FeeStatus::Fail)
-                    };
-                    let charge_id = Some(charge.id).map(|v| ChargeId::new(v));
-                    let update_fee = UpdateFee {
-                        charge_id,
-                        status,
-                        ..Default::default()
-                    };
-                    let fee_result: Result<Vec<_>, _> = fees
-                        .into_iter()
-                        .map(|fee| {
-                            let fee_id_cloned = fee.id.clone();
-                            fees_repo
-                                .update(fee.id, update_fee.clone())
-                                .map_err(ectx!(convert => fee_id_cloned))
-                                .and_then(|res| FeeResponse::try_from_fee(res))
-                        })
-                        .collect();
-                    fee_result
+                    conn.transaction(|| {
+                        let status = if charge.paid {
+                            Some(FeeStatus::Paid)
+                        } else {
+                            Some(FeeStatus::Fail)
+                        };
+                        let charge_id = Some(charge.id).map(|v| ChargeId::new(v));
+                        let update_fee = UpdateFee {
+                            charge_id,
+                            status,
+                            ..Default::default()
+                        };
+                        let fee_result: Result<Vec<_>, _> = fees
+                            .into_iter()
+                            .map(|fee| {
+                                let fee_id_cloned = fee.id.clone();
+                                fees_repo
+                                    .update(fee.id, update_fee.clone())
+                                    .map_err(ectx!(convert => fee_id_cloned))
+                                    .and_then(|res| FeeResponse::try_from_fee(res))
+                            })
+                            .collect();
+                        fee_result
+                    })
                 })
             }
         });
@@ -278,11 +281,24 @@ impl<
     }
 }
 
+fn validate_charge_fees(fees: &[Fee]) -> Result<(), Error> {
+    for fee in fees {
+        if fee.status == FeeStatus::Paid {
+            let mut errors = ValidationErrors::new();
+            let mut error = ValidationError::new("wrong_fee_status");
+            error.message = Some(format!("Cannot charge fee - fee {} has status \"{}\"", fee.id, FeeStatus::Paid).into());
+            errors.add("order_id", error);
+            return Err(ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
+        }
+    }
+    Ok(())
+}
+
 fn extract_currency(fees: Vec<Fee>) -> Result<Currency, Error> {
     let currencies: HashSet<Currency> = fees.iter().map(|fee| fee.currency).collect();
     if currencies.len() != 1 {
         let mut errors = ValidationErrors::new();
-        let mut error = ValidationError::new("too_many");
+        let mut error = ValidationError::new("wrong_currency");
         error.message = Some(format!("Cannot charge fee - orders have different currencies").into());
         errors.add("order_id", error);
         return Err(ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));
@@ -320,7 +336,7 @@ fn create_charge_metadata(fees: &[Fee]) -> Option<HashMap<String, String>> {
 fn verify_store_ids(store_ids: &HashSet<StoreId>) -> Result<(), Error> {
     if store_ids.len() != 1 {
         let mut errors = ValidationErrors::new();
-        let mut error = ValidationError::new("too_many");
+        let mut error = ValidationError::new("wrong_store_id");
         error.message = Some(format!("Cannot charge fee - orders belong to different stores").into());
         errors.add("order_id", error);
         return Err(ectx!(err ErrorContext::OrderState ,ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())));

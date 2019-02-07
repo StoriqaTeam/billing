@@ -1,3 +1,5 @@
+use std::fmt::{self, Display};
+
 pub mod fee_id;
 pub use self::fee_id::FeeId;
 
@@ -50,10 +52,20 @@ pub struct UpdateFee {
     pub crypto_amount: Option<Amount>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, DieselTypes)]
+#[derive(Clone, Debug, Deserialize, Serialize, DieselTypes, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum FeeStatus {
     NotPaid,
     Paid,
     Fail,
+}
+
+impl Display for FeeStatus {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            FeeStatus::NotPaid => write!(f, "NotPaid"),
+            FeeStatus::Paid => write!(f, "Paid"),
+            FeeStatus::Fail => write!(f, "Fail"),
+        }
+    }
 }
