@@ -480,12 +480,11 @@ where
                         .retrieve_balance_transaction(balance_transaction.clone())
                         .map_err(ectx!(convert => balance_transaction))
                 })
-                .and_then(move |balance_transaction| {
-                    // wee need to payout the raw amount without stripe fee
+                .map(move |balance_transaction| {
                     let total_amount_super_unit = total_amount.to_super_unit(currency);
                     let fee_procent = balance_transaction.fee as f64 / balance_transaction.amount as f64;
                     let stripe_fee = Amount::from_super_unit(currency, total_amount_super_unit * BigDecimal::from(fee_procent));
-                    Ok(stripe_fee)
+                    stripe_fee
                 })
         })
         .and_then({
