@@ -77,7 +77,7 @@ pub trait InvoiceService {
     /// Creates orders in billing system, returning url for payment
     fn update_invoice(&self, invoice: ExternalBillingInvoice) -> ServiceFuture<()>;
     /// Handles the callback from Payments gateway which carries a new inbound transaction
-    fn handle_inbound_tx(&self, signature_header: TureSignature, callback: PaymentsCallback) -> ServiceFutureV2<()>;
+    fn handle_inbound_tx(&self, signature_header: TureSignature, callback: PaymentsCallback, callback_body: String) -> ServiceFutureV2<()>;
     /// Get missing rates from Payments gateway and refresh existing rates
     fn get_missing_rates_from_payments_gateway_and_refresh_existing_rates(
         &self,
@@ -769,7 +769,7 @@ impl<
     }
 
     /// Handles the callback from Payments gateway which carries a new inbound transaction
-    fn handle_inbound_tx(&self, signature_header: TureSignature, callback: PaymentsCallback) -> ServiceFutureV2<()> {
+    fn handle_inbound_tx(&self, signature_header: TureSignature, callback: PaymentsCallback, callback_body: String) -> ServiceFutureV2<()> {
         let payments_client = if let Some(payments_client) = self.dynamic_context.payments_client.clone() {
             payments_client
         } else {
@@ -797,8 +797,6 @@ impl<
             return Box::new(future::err::<_, ServiceError>(ectx!(err e, ErrorKind::Internal)));
         };
 
-        let body = serde_json::to_string(&callback).unwrap_or_default();
-
         let fut =
             // Increase amount captured for the invoice
             spawn_on_pool(
@@ -806,7 +804,7 @@ impl<
                 {
                     let repo_factory = repo_factory.clone();
                     move |conn| {
-                        check_ture_sign(sign_public_key, signature_header, body)?;
+                        check_ture_sign(sign_public_key, signature_header, callback_body)?;
                         let invoices_repo = repo_factory.create_invoices_v2_repo_with_sys_acl(&conn);
                         let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
                         let account_id = match account_id {
