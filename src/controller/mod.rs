@@ -218,13 +218,15 @@ impl<
                     .ok_or(format_err!("Sign header not provided"))
                     .into_future()
                     .and_then(|signature_header| {
-                        parse_body::<PaymentsCallback>(req.body())
-                            .map(move |data| (signature_header, data))
-                            .map_err(failure::Error::from)
+                        read_body(req.body()).map_err(failure::Error::from).and_then(|body| {
+                            serde_json::from_str(&body)
+                                .map(|data| (signature_header, data, body))
+                                .map_err(failure::Error::from)
+                        })
                     })
-                    .and_then(move |(signature_header, data)| {
+                    .and_then(move |(signature_header, data, body)| {
                         service
-                            .handle_inbound_tx(signature_header, data)
+                            .handle_inbound_tx(signature_header, data, body)
                             .map_err(Error::from)
                             .map_err(failure::Error::from)
                     }),
