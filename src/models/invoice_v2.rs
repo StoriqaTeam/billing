@@ -258,6 +258,7 @@ pub struct InvoiceDump {
     pub created_at: NaiveDateTime,
     pub paid_at: Option<NaiveDateTime>,
     pub wallet_address: Option<WalletAddress>,
+    pub status: OrderState,
 }
 
 #[derive(Debug, Clone, Fail)]
@@ -276,7 +277,7 @@ impl InvoiceDump {
             wallet_address,
             amount_captured,
             total_price,
-            paid_at,
+            status,
             ..
         } = self;
 
@@ -298,10 +299,7 @@ impl InvoiceDump {
             amount,
             currency: buyer_currency.into(),
             price_reserved: SystemTime::now() + Duration::from_secs(300), // assume that the price is reserved for 5 mins
-            state: match paid_at {
-                None => OrderState::PaymentAwaited,
-                Some(_) => OrderState::Paid,
-            },
+            state: status,
             wallet: wallet_address.map(|address| address.into_inner()),
             amount_captured,
             created_at: SystemTime::now(),
@@ -329,6 +327,7 @@ pub fn calculate_invoice_price(
         final_cashback_amount,
         created_at,
         paid_at,
+        status,
         ..
     } = invoice;
 
@@ -406,6 +405,7 @@ pub fn calculate_invoice_price(
             created_at,
             paid_at: Some(paid_at),
             wallet_address,
+            status,
         },
         _ => orders.clone().into_iter().fold(
             InvoiceDump {
@@ -419,6 +419,7 @@ pub fn calculate_invoice_price(
                 created_at,
                 paid_at: None,
                 wallet_address,
+                status,
             },
             |mut invoice, order_price| {
                 if let Some(BuyerAmounts { price, .. }) = order_price.buyer_amounts {
