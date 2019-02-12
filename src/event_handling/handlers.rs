@@ -22,7 +22,7 @@ use client::{
 use models::{
     invoice_v2::{InvoiceId, InvoiceSetAmountPaid, PaymentFlow, RawInvoice},
     order_v2::OrderId,
-    AccountId, AccountWithBalance, Amount, Currency, Event, EventPayload, PaymentState,
+    AccountId, AccountWithBalance, Amount, Currency, Event, EventPayload, PaymentState, PayoutId,
 };
 use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
 
@@ -60,6 +60,7 @@ where
             }
             EventPayload::PaymentIntentCapture { order_id } => self.handle_payment_intent_capture(order_id),
             EventPayload::PaymentExpired { invoice_id } => self.handle_payment_expired(invoice_id),
+            EventPayload::PayoutInitiated { payout_id } => self.handle_payout_initiated(payout_id),
         }
     }
 
@@ -514,5 +515,10 @@ where
             res
         });
         Box::new(fut)
+    }
+
+    // TODO: implement payout processing
+    pub fn handle_payout_initiated(self, _payout_id: PayoutId) -> EventHandlerFuture<()> {
+        Box::new(future::ok(()))
     }
 }

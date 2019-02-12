@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use models::invoice_v2::InvoiceId;
 use models::order_v2::OrderId;
+use models::PayoutId;
 
 #[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq, Eq, FromStr)]
 #[sql_type = "SqlUuid"]
@@ -55,6 +56,7 @@ pub enum EventPayload {
     PaymentIntentSucceeded { payment_intent: PaymentIntent },
     PaymentIntentCapture { order_id: OrderId },
     PaymentExpired { invoice_id: InvoiceId },
+    PayoutInitiated { payout_id: PayoutId },
 }
 
 impl fmt::Debug for EventPayload {
@@ -74,6 +76,7 @@ impl fmt::Display for EventPayload {
             EventPayload::PaymentIntentSucceeded { .. } => "PaymentIntentSucceeded",
             EventPayload::PaymentIntentCapture { .. } => "PaymentIntentCapture",
             EventPayload::PaymentExpired { .. } => "PaymentExpired",
+            EventPayload::PayoutInitiated { .. } => "PayoutInitiated",
         };
 
         f.write_str(&s)

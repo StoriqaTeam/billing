@@ -3,6 +3,7 @@ use failure::{Backtrace, Context, Fail};
 use serde_json;
 use std::fmt;
 use stripe::WebhookError;
+use validator::ValidationErrors;
 
 use client::payments::ErrorKind as PaymentsClientErrorKind;
 use client::stores::ErrorKind as StoresErrorKind;
@@ -58,7 +59,7 @@ derive_error_impls!();
 impl From<RepoErrorKind> for ErrorKind {
     fn from(e: RepoErrorKind) -> Self {
         match e {
-            RepoErrorKind::Constraints(errors) => ErrorKind::Validation(serde_json::to_value(errors).unwrap_or(json!({}))),
+            RepoErrorKind::Constraints(errors) => ErrorKind::from(errors),
             RepoErrorKind::Forbidden => ErrorKind::Forbidden,
             RepoErrorKind::Internal => ErrorKind::Internal,
             RepoErrorKind::NotFound => ErrorKind::Internal,
@@ -124,5 +125,11 @@ impl From<StoresErrorKind> for ErrorKind {
             StoresErrorKind::Unauthorized => ErrorKind::Internal,
             StoresErrorKind::Validation(value) => ErrorKind::Validation(value),
         }
+    }
+}
+
+impl From<ValidationErrors> for ErrorKind {
+    fn from(errors: ValidationErrors) -> Self {
+        ErrorKind::Validation(serde_json::to_value(errors).unwrap_or_default())
     }
 }

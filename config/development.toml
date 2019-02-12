@@ -9,10 +9,9 @@ url = "http://billing:8000"
 
 # [payments]
 # url = "https://pay-nightly.stq.cloud"
-# jwt_public_key_base64 = "MIIBCgKCAQEAt3TQPCbcWM/Fba2s6V/WRuQv8SlEQp4F56fSY4LQ+yW2xY3f2fLOw/SurObHMQF7QpnQ7x/2zhGqe11Ad0MHbWG+OARR/B/76X8QhA3xEneZpgc8aykagl0Tr616tazEKr0JxGuUo3qHy+e/dqSQ9T04EjGqccfr3+gfmVZlzml2/kN2EmaFa28Q8NseY5a2TVL9XcEDHHpGHVpoRQI8ibfa92i2Lwo7E33Iz8hpbp+GgeyReua2z341nxSNqk0VSYa6KtNUk03G5YYmsrsoE+ECC69GAD07R4YcGqF4NRKSA0T3L8jY8rVbl5HUCIFuZynZEHWWpFvyMYW+9ffMfwIDAQAB"
-# user_jwt = "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJ1c2VyX2lkIjoxNjYsImV4cCI6MTU0NjAyMzEzOCwicHJvdmlkZXIiOiJFbWFpbCJ9.QSf4j2RCbiJgCIr7PtVrMQX8pVHxQs8n1nWUCZ8Y5hWpaGzooWrLy-2tI11yYVf4TPx12nCP3Z9XriqYZNmKneeHXE9n5-CqjTyMtnfRyB18wxEFzwkVN3u3tfcudEemNYAX6GqUghKp7fLPjzTnwLW4rtw56SC60wLBQvxbZXY8dtfv-SuxuNebNC4h4v5A4oLrlhRmQpujpah8igyK57BcIlYWkEhe70i8pXQVBuIC4F_86VRWV44WKZZmuiR-JFwnORV1rBEXV7b5pf60FntfwImDV2AzKFq64PBxVEXmOA4Um1nN0L0mQNPwCu7AgssAUxorXLyVLHOjvBiETg"
-# # user public key = 02b27f95a9f892a8e9460347ba19be421403da5d05e68281a980be865ad86dd02b
-# user_private_key = "a7190fcbbb97a08e0a0f39be542186efc3e59790b61b6338f83960f2519acb4d"
+# jwt_public_key_base64 = ""
+# user_jwt = ""
+# user_private_key = ""
 # device_id = ""
 # min_pooled_accounts = 10
 # sign_public_key = ""

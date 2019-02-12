@@ -1,6 +1,6 @@
 use diesel;
 use diesel::connection::AnsiTransactionManager;
-use diesel::pg::Pg;
+use diesel::pg::{expression::dsl::any, Pg};
 use diesel::prelude::*;
 use diesel::query_dsl::RunQueryDsl;
 use diesel::sql_types::Bool;
@@ -32,6 +32,7 @@ pub struct OrdersRepoImpl<'a, T: Connection<Backend = Pg, TransactionManager = A
 
 pub trait OrdersRepo {
     fn get(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrder>>;
+    fn get_many(&self, order_ids: &[OrderId]) -> RepoResultV2<Vec<RawOrder>>;
     fn get_many_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>>;
     fn search(&self, skip: i64, count: i64, search: OrdersSearch) -> RepoResultV2<OrderSearchResults>;
     fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder>;
@@ -73,6 +74,33 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 };
                 Ok(order)
             })
+    }
+
+    fn get_many(&self, order_ids: &[OrderId]) -> RepoResultV2<Vec<RawOrder>> {
+        debug!(
+            "Getting orders with IDs: {}",
+            order_ids.iter().map(OrderId::to_string).collect::<Vec<_>>().join(", ")
+        );
+
+        let query = Orders::orders.filter(Orders::id.eq(any(order_ids)));
+
+        let orders = query.get_results::<RawOrder>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(try err e, ErrorSource::Diesel, error_kind)
+        })?;
+
+        for order in &orders {
+            acl::check(
+                &*self.acl,
+                Resource::OrderInfo,
+                Action::Read,
+                self,
+                Some(&OrderAccess::from(order.clone())),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(orders)
     }
 
     fn get_many_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>> {

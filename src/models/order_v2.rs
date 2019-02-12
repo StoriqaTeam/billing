@@ -13,10 +13,10 @@ use diesel::{
 use uuid::{self, Uuid};
 
 use models::invoice_v2::InvoiceId;
-use models::{Amount, Currency, PaymentState};
+use models::{Amount, Currency, CurrencyChoice, FiatCurrency, PaymentState, TureCurrency};
 use schema::orders;
 
-#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Clone, Copy, PartialEq, Eq, Hash)]
 #[sql_type = "SqlUuid"]
 pub struct OrderId(Uuid);
 newtype_from_to_sql!(SqlUuid, OrderId, OrderId);
@@ -97,6 +97,29 @@ pub struct RawOrder {
     pub store_id: StoreId,
     pub state: PaymentState,
     pub stripe_fee: Option<Amount>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum OrderPaymentKind {
+    Crypto {
+        currency: TureCurrency,
+    },
+    Fiat {
+        currency: FiatCurrency,
+        stripe_fee: Option<Amount>,
+    },
+}
+
+impl RawOrder {
+    pub fn payment_kind(&self) -> OrderPaymentKind {
+        match self.seller_currency.clone().classify() {
+            CurrencyChoice::Crypto(currency) => OrderPaymentKind::Crypto { currency },
+            CurrencyChoice::Fiat(currency) => OrderPaymentKind::Fiat {
+                currency,
+                stripe_fee: self.stripe_fee.clone(),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Insertable)]

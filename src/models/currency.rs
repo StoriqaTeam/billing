@@ -90,11 +90,26 @@ impl Display for Currency {
 }
 
 impl Currency {
-    pub fn is_fiat(self) -> bool {
+    pub fn classify(self) -> CurrencyChoice {
         use self::Currency::*;
+        use self::CurrencyChoice::*;
+
         match self {
-            Eth | Stq | Btc => false,
-            Eur | Usd | Rub => true,
+            Eth => Crypto(TureCurrency::Eth),
+            Stq => Crypto(TureCurrency::Stq),
+            Btc => Crypto(TureCurrency::Btc),
+            Eur => Fiat(FiatCurrency::Eur),
+            Usd => Fiat(FiatCurrency::Usd),
+            Rub => Fiat(FiatCurrency::Rub),
+        }
+    }
+
+    pub fn is_fiat(self) -> bool {
+        use self::CurrencyChoice::*;
+
+        match self.classify() {
+            Crypto(_) => false,
+            Fiat(_) => true,
         }
     }
 
@@ -131,6 +146,12 @@ impl Into<StqCurrency> for Currency {
             Currency::Rub => StqCurrency::RUB,
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub enum CurrencyChoice {
+    Crypto(TureCurrency),
+    Fiat(FiatCurrency),
 }
 
 #[derive(Debug, Clone, Fail)]
@@ -225,6 +246,16 @@ pub enum FiatCurrency {
     Eur,
     Usd,
     Rub,
+}
+
+impl From<FiatCurrency> for Currency {
+    fn from(fiat_currency: FiatCurrency) -> Self {
+        match fiat_currency {
+            FiatCurrency::Usd => Currency::Usd,
+            FiatCurrency::Eur => Currency::Eur,
+            FiatCurrency::Rub => Currency::Rub,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Fail)]

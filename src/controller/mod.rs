@@ -49,6 +49,7 @@ use services::merchant::MerchantService;
 use services::order::OrderService;
 use services::order_billing::{OrderBillingService, OrderBillingServiceImpl};
 use services::payment_intent::{PaymentIntentService, PaymentIntentServiceImpl};
+use services::payout::{GetPayoutsPayload, PayOutToSellerPayload, PayoutService, PayoutServiceImpl};
 use services::stripe::{StripeService, StripeServiceImpl};
 use services::user_roles::UserRolesService;
 use services::Service;
@@ -184,6 +185,13 @@ impl<
             stripe_client: self.static_context.stripe_client.clone(),
             dynamic_context: dynamic_context.clone(),
             static_context: self.static_context.clone(),
+        });
+
+        let payout_service = Arc::new(PayoutServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            user_id: dynamic_context.user_id.clone(),
         });
 
         let path = req.path().to_string();
@@ -375,6 +383,22 @@ impl<
             (Get, Some(Route::BillingTypeByStore { id })) => {
                 serialize_future({ billing_type_service.get_billing_type_by_store(id).map_err(failure::Error::from) })
             }
+            (Post, Some(Route::Payouts)) => serialize_future({
+                parse_body::<PayOutToSellerPayload>(req.body()).and_then(move |payload| {
+                    payout_service
+                        .pay_out_to_seller(payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                })
+            }),
+            (Post, Some(Route::PayoutsByOrderIds)) => serialize_future({
+                parse_body::<GetPayoutsPayload>(req.body()).and_then(move |payload| {
+                    payout_service
+                        .get_payouts(payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                })
+            }),
 
             // Fallback
             (m, _) => not_found(m, path),

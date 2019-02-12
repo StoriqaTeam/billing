@@ -90,6 +90,7 @@ impl ApplicationAcl {
                 permission!(Resource::UserWallet, Action::Read, Scope::Owned),
                 permission!(Resource::UserWallet, Action::Write, Scope::Owned),
                 permission!(Resource::Payout, Action::Read, Scope::Owned),
+                permission!(Resource::Payout, Action::Write, Scope::Owned),
             ],
         );
         hash.insert(
@@ -112,6 +113,7 @@ impl ApplicationAcl {
                 permission!(Resource::UserWallet, Action::Read, Scope::Owned),
                 permission!(Resource::UserWallet, Action::Write, Scope::Owned),
                 permission!(Resource::Payout, Action::Read, Scope::Owned),
+                permission!(Resource::Payout, Action::Write, Scope::Owned),
             ],
         );
         hash.insert(

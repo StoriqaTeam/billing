@@ -21,6 +21,7 @@ futures-cpupool = "0.1"
 hex = "0.3"
 hyper = "0.11"
 hyper-tls = { git = "https://github.com/storiqateam/hyper-tls", tag = "v0.1.4-fresh-tls" }
+itertools = "0.8"
 jsonwebtoken = "5.0"
 log = "0.4"
 r2d2 = "0.8"
