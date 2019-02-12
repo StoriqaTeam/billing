@@ -68,6 +68,7 @@ pub mod errors;
 pub mod event_handling;
 pub mod models;
 pub mod repos;
+#[rustfmt::skip]
 pub mod schema;
 pub mod sentry_integration;
 pub mod services;
