@@ -56,6 +56,7 @@ impl PayloadCarrier for Error {
     fn payload(&self) -> Option<serde_json::Value> {
         match *self {
             Error::Validate(ref e) => serde_json::to_value(e.clone()).ok(),
+            Error::ValidateV2(ref e) => Some(e.clone()),
             _ => None,
         }
     }

@@ -1047,6 +1047,10 @@ pub mod tests {
             Ok(None)
         }
 
+        fn get_many(&self, _order_ids: &[OrderV2Id]) -> RepoResultV2<Vec<RawOrder>> {
+            Ok(vec![])
+        }
+
         fn get_many_by_invoice_id(&self, _invoice_id: InvoiceV2Id) -> RepoResultV2<Vec<RawOrder>> {
             Ok(vec![])
         }
@@ -1282,7 +1286,19 @@ pub mod tests {
             unimplemented!()
         }
 
-        fn get(&self, _order_id: OrderV2Id) -> RepoResultV2<Option<Payout>> {
+        fn get(&self, _id: PayoutId) -> RepoResultV2<Option<Payout>> {
+            unimplemented!()
+        }
+
+        fn get_by_order_id(&self, _order_id: OrderV2Id) -> RepoResultV2<Option<Payout>> {
+            unimplemented!()
+        }
+
+        fn get_by_order_ids(&self, _order_ids: &[OrderV2Id]) -> RepoResultV2<PayoutsByOrderIds> {
+            unimplemented!()
+        }
+
+        fn mark_as_completed(&self, _id: PayoutId) -> RepoResultV2<Payout> {
             unimplemented!()
         }
     }

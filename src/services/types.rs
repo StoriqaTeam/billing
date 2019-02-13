@@ -15,6 +15,8 @@ use services::accounts::AccountService;
 
 use super::{Error as ServiceError, ErrorKind};
 
+pub type ServiceResultV2<T> = Result<T, ServiceError>;
+
 /// Service layer Future
 pub type ServiceFuture<T> = Box<Future<Item = T, Error = FailureError>>;
 pub type ServiceFutureV2<T> = Box<Future<Item = T, Error = ServiceError>>;

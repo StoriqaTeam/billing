@@ -127,6 +127,14 @@ table! {
 }
 
 table! {
+    order_payouts (id) {
+        id -> Int8,
+        order_id -> Uuid,
+        payout_id -> Uuid,
+    }
+}
+
+table! {
     orders (id) {
         id -> Uuid,
         seller_currency -> Text,
@@ -192,12 +200,16 @@ table! {
 }
 
 table! {
-    payouts (order_id) {
-        order_id -> Uuid,
-        amount -> Numeric,
-        completed_at -> Timestamp,
+    payouts (id) {
+        id -> Uuid,
+        currency -> Text,
+        gross_amount -> Numeric,
+        net_amount -> Numeric,
+        user_id -> Int4,
+        initiated_at -> Timestamp,
+        completed_at -> Nullable<Timestamp>,
         payout_target_type -> Text,
-        user_wallet_id -> Nullable<Uuid>,
+        wallet_address -> Nullable<Text>,
         blockchain_fee -> Nullable<Numeric>,
     }
 }
@@ -265,13 +277,13 @@ joinable!(amounts_received -> invoices_v2 (invoice_id));
 joinable!(fees -> orders (order_id));
 joinable!(invoices_v2 -> accounts (account_id));
 joinable!(order_exchange_rates -> orders (order_id));
+joinable!(order_payouts -> orders (order_id));
+joinable!(order_payouts -> payouts (payout_id));
 joinable!(orders -> invoices_v2 (invoice_id));
 joinable!(payment_intents_fees -> fees (fee_id));
 joinable!(payment_intents_fees -> payment_intent (payment_intent_id));
 joinable!(payment_intents_invoices -> invoices_v2 (invoice_id));
 joinable!(payment_intents_invoices -> payment_intent (payment_intent_id));
-joinable!(payouts -> orders (order_id));
-joinable!(payouts -> user_wallets (user_wallet_id));
 
 allow_tables_to_appear_in_same_query!(
     accounts,
@@ -284,6 +296,7 @@ allow_tables_to_appear_in_same_query!(
     invoices_v2,
     merchants,
     order_exchange_rates,
+    order_payouts,
     orders,
     orders_info,
     payment_intent,
