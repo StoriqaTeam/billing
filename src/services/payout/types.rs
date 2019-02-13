@@ -23,7 +23,7 @@ pub enum PaymentDetails {
 pub struct CryptoPaymentDetails {
     pub wallet_currency: TureCurrency,
     pub wallet_address: WalletAddress,
-    pub blockchain_fee: Amount,
+    pub blockchain_fee: BigDecimal,
 }
 
 #[derive(Debug, Clone, Serialize)]

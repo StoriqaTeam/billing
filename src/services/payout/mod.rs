@@ -79,6 +79,8 @@ impl<
                 }),
         } = payload;
 
+        let blockchain_fee = Amount::from_super_unit(wallet_currency.into(), blockchain_fee);
+
         spawn_on_pool(db_pool.clone(), cpu_pool.clone(), move |conn| {
             let orders_repo = repo_factory.create_orders_repo(&conn, Some(user_id));
             let payouts_repo = repo_factory.create_payouts_repo(&conn, Some(user_id));
