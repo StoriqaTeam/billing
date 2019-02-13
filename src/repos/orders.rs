@@ -13,8 +13,8 @@ use repos::user_roles::user_is_store_manager;
 
 use models::authorization::*;
 use models::invoice_v2::InvoiceId;
-use models::order_v2::{NewOrder, OrderAccess, OrderId, OrderSearchResults, OrdersSearch, RawOrder};
-use models::{Amount, PaymentState, UserId};
+use models::order_v2::{NewOrder, OrderAccess, OrderId, OrderSearchResults, OrdersSearch, RawOrder, StoreId};
+use models::{Amount, Currency, PaymentState, UserId};
 use schema::{invoices_v2::dsl as InvoicesV2, orders::dsl as Orders};
 
 use super::acl;
@@ -34,6 +34,7 @@ pub trait OrdersRepo {
     fn get(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrder>>;
     fn get_many(&self, order_ids: &[OrderId]) -> RepoResultV2<Vec<RawOrder>>;
     fn get_many_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>>;
+    fn get_orders_for_payout(&self, store_id: StoreId, currency: Currency) -> RepoResultV2<Vec<RawOrder>>;
     fn search(&self, skip: i64, count: i64, search: OrdersSearch) -> RepoResultV2<OrderSearchResults>;
     fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder>;
     fn delete(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrder>>;
@@ -121,6 +122,39 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
                 self,
                 Some(&OrderAccess {
                     invoice_id,
+                    store_id: result.store_id,
+                }),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(results)
+    }
+
+    fn get_orders_for_payout(&self, store_id: StoreId, currency: Currency) -> RepoResultV2<Vec<RawOrder>> {
+        debug!(
+            "Getting orders for payout for store with ID: {} and currency: {}",
+            store_id, currency
+        );
+
+        let query = Orders::orders
+            .filter(Orders::state.eq(PaymentState::PaymentToSellerNeeded))
+            .filter(Orders::store_id.eq(store_id))
+            .filter(Orders::seller_currency.eq(currency));
+
+        let results = query.get_results::<RawOrder>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(try err e, ErrorSource::Diesel, error_kind)
+        })?;
+
+        for result in &results {
+            acl::check(
+                &*self.acl,
+                Resource::OrderInfo,
+                Action::Read,
+                self,
+                Some(&OrderAccess {
+                    invoice_id: result.invoice_id,
                     store_id: result.store_id,
                 }),
             )

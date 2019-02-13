@@ -4,13 +4,14 @@ use chrono::Utc;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
-use failure::Fail;
-use futures::future;
+use failure::{err_msg, Fail};
+use futures::{future, Future};
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool};
 use stq_types::UserId as StqUserId;
 use validator::{ValidationError, ValidationErrors};
 
+use client::payments::{self, PaymentsClient};
 use models::order_v2::{OrderId, OrderPaymentKind, RawOrder};
 use models::*;
 use repos::ReposFactory;
@@ -22,6 +23,7 @@ use super::types::{ServiceFutureV2, ServiceResultV2};
 pub use self::types::*;
 
 pub trait PayoutService {
+    fn calculate_payout(&self, payload: CalculatePayoutPayload) -> ServiceFutureV2<CalculatedPayoutOutput>;
     fn get_payouts(&self, order_ids: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput>;
     fn pay_out_to_seller(&self, payload: PayOutToSellerPayload) -> ServiceFutureV2<PayoutOutput>;
 }
@@ -30,19 +32,105 @@ pub struct PayoutServiceImpl<
     T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
     M: ManageConnection<Connection = T>,
     F: ReposFactory<T>,
+    PC: PaymentsClient + Clone,
 > {
     pub db_pool: Pool<M>,
     pub cpu_pool: CpuPool,
     pub repo_factory: F,
     pub user_id: Option<StqUserId>,
+    pub payments_client: Option<PC>,
 }
 
 impl<
         T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static,
         M: ManageConnection<Connection = T>,
         F: ReposFactory<T>,
-    > PayoutService for PayoutServiceImpl<T, M, F>
+        PC: PaymentsClient + Clone,
+    > PayoutService for PayoutServiceImpl<T, M, F, PC>
 {
+    fn calculate_payout(&self, payload: CalculatePayoutPayload) -> ServiceFutureV2<CalculatedPayoutOutput> {
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.user_id.clone();
+
+        let payments_client = match self.payments_client.clone() {
+            None => return Box::new(future::err(ErrorKind::NotFound.into())),
+            Some(payments_client) => payments_client,
+        };
+
+        let CalculatePayoutPayload {
+            store_id,
+            currency,
+            wallet_address,
+        } = payload;
+
+        let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            let payouts_repo = repo_factory.create_payouts_repo(&conn, user_id);
+
+            let orders_for_payout = orders_repo
+                .get_orders_for_payout(store_id.clone(), currency.clone().into())
+                .map_err(ectx!(try convert => store_id, currency))?;
+
+            let order_ids_without_payout = {
+                let order_ids = orders_for_payout.iter().map(|o| o.id).collect::<Vec<_>>();
+
+                payouts_repo
+                    .get_by_order_ids(&order_ids)
+                    .map(|p| p.order_ids_without_payout)
+                    .map_err(ectx!(try convert => order_ids))
+            }?;
+
+            orders_for_payout
+                .into_iter()
+                .filter(|order| order_ids_without_payout.contains(&order.id))
+                .try_fold(
+                    CalculatedPayoutExcludingFees {
+                        order_ids: Vec::default(),
+                        currency,
+                        gross_amount: Amount::zero(),
+                    },
+                    |mut payout, RawOrder { id, total_amount, .. }| {
+                        payout.order_ids.push(id);
+                        payout.gross_amount = payout.gross_amount.checked_add(total_amount)?;
+                        Some(payout)
+                    },
+                )
+                .ok_or({
+                    let e = err_msg("Overflow while calculating the gross amount of a payout");
+                    ectx!(err e, ErrorKind::Internal)
+                })
+        })
+        .and_then(move |calculated_payout_excluding_fees| {
+            let CalculatedPayoutExcludingFees {
+                order_ids,
+                currency,
+                gross_amount,
+            } = calculated_payout_excluding_fees;
+
+            let input = payments::GetFees {
+                currency,
+                account_address: wallet_address.into_inner(),
+            };
+
+            payments_client
+                .get_fees(input.clone())
+                .map(move |payments::FeesResponse { currency: _, fees }| CalculatedPayoutOutput {
+                    order_ids,
+                    currency,
+                    gross_amount: gross_amount.to_super_unit(currency.into()),
+                    blockchain_fee_options: fees
+                        .into_iter()
+                        .map(|fee| BlockchainFeeOption::from_payments_fee(currency, fee))
+                        .collect(),
+                })
+                .map_err(ectx!(convert => input))
+        });
+
+        Box::new(fut)
+    }
+
     fn get_payouts(&self, payload: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput> {
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
