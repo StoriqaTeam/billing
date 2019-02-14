@@ -219,7 +219,14 @@ impl CreateTransactionRequestBody {
     }
 
     pub fn new_external(create_external_tx: CreateExternalTransaction, user_id: u32) -> Self {
-        let CreateExternalTransaction { id, from, to, amount, currency, fee } = create_external_tx;
+        let CreateExternalTransaction {
+            id,
+            from,
+            to,
+            amount,
+            currency,
+            fee,
+        } = create_external_tx;
 
         Self {
             id,

@@ -19,8 +19,8 @@ use models::order_v2::ExchangeId;
 pub use self::error::*;
 use self::types::AccountResponse;
 pub use self::types::{
-    Account, CreateAccount, CreateExternalTransaction, CreateInternalTransaction, CreateTransactionRequestBody,
-    Fee, FeesResponse, GetFees, GetRate, GetRateResponse, Rate, RateRefresh, RefreshRateResponse, TransactionsResponse,
+    Account, CreateAccount, CreateExternalTransaction, CreateInternalTransaction, CreateTransactionRequestBody, Fee, FeesResponse, GetFees,
+    GetRate, GetRateResponse, Rate, RateRefresh, RefreshRateResponse, TransactionsResponse,
 };
 
 pub trait PaymentsClient: Send + Sync + 'static {
@@ -261,18 +261,18 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
 
         Box::new(
             self.request_with_auth::<_, Option<TransactionsResponse>>(Method::Get, query.clone(), json!({}))
-                .map_err(ectx!(ErrorKind::Internal => Method::Get, query))
+                .map_err(ectx!(ErrorKind::Internal => Method::Get, query)),
         )
     }
 
     fn create_external_transaction(&self, input: CreateExternalTransaction) -> Box<Future<Item = (), Error = Error> + Send> {
         let body = CreateTransactionRequestBody::new_external(input, self.user_id.clone());
         let query = format!("/v1/transactions");
-        
+
         Box::new(
             self.request_with_auth::<_, Option<TransactionsResponse>>(Method::Post, query.clone(), body.clone())
                 .map_err(ectx!(ErrorKind::Internal => Method::Post, query, body))
-                .map(|_| ())
+                .map(|_| ()),
         )
     }
 

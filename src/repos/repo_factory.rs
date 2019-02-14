@@ -369,9 +369,8 @@ pub mod tests {
     use stq_types::*;
 
     use client::payments::{
-        self,
-        CreateAccount, CreateExternalTransaction, CreateInternalTransaction,
-        FeesResponse, GetFees, GetRate, PaymentsClient, RateRefresh, TransactionsResponse,
+        self, CreateAccount, CreateExternalTransaction, CreateInternalTransaction, FeesResponse, GetFees, GetRate, PaymentsClient,
+        RateRefresh, TransactionsResponse,
     };
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
