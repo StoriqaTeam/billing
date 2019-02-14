@@ -370,7 +370,8 @@ pub mod tests {
 
     use client::payments::{
         self,
-        CreateAccount, CreateInternalTransaction, FeesResponse, GetFees, GetRate, PaymentsClient, RateRefresh,
+        CreateAccount, CreateExternalTransaction, CreateInternalTransaction,
+        FeesResponse, GetFees, GetRate, PaymentsClient, RateRefresh, TransactionsResponse,
     };
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
@@ -1602,7 +1603,15 @@ pub mod tests {
             unimplemented!()
         }
 
+        fn get_transaction(&self, _tx_id: Uuid) -> Box<Future<Item = Option<TransactionsResponse>, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
         fn create_internal_transaction(&self, _input: CreateInternalTransaction) -> Box<Future<Item = (), Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn create_external_transaction(&self, _input: CreateExternalTransaction) -> Box<Future<Item = (), Error = payments::Error> + Send> {
             unimplemented!()
         }
     }

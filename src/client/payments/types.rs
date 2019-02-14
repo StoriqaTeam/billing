@@ -170,6 +170,16 @@ pub struct Fee {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateExternalTransaction {
+    pub id: Uuid,
+    pub from: Uuid,
+    pub to: WalletAddress,
+    pub amount: Amount,
+    pub currency: TureCurrency,
+    pub fee: Amount,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateInternalTransaction {
     pub id: Uuid,
     pub from: Uuid,
@@ -179,11 +189,11 @@ pub struct CreateInternalTransaction {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateInternalTransactionRequestBody {
+pub struct CreateTransactionRequestBody {
     pub id: Uuid,
     pub user_id: u32,
     pub from: Uuid,
-    pub to: Uuid,
+    pub to: String,
     pub to_type: String,
     pub to_currency: TureCurrency,
     pub value: String,
@@ -191,20 +201,36 @@ pub struct CreateInternalTransactionRequestBody {
     pub fee: String,
 }
 
-impl CreateInternalTransactionRequestBody {
-    pub fn new(create_internal_tx: CreateInternalTransaction, currency: TureCurrency, user_id: u32) -> Self {
+impl CreateTransactionRequestBody {
+    pub fn new_internal(create_internal_tx: CreateInternalTransaction, currency: TureCurrency, user_id: u32) -> Self {
         let CreateInternalTransaction { id, from, to, amount } = create_internal_tx;
 
         Self {
             id,
             user_id,
             from,
-            to,
+            to: to.hyphenated().to_string(),
             to_type: "account".into(),
             to_currency: currency,
             value: amount.to_string(),
             value_currency: currency,
             fee: Amount::new(0u128).to_string(),
+        }
+    }
+
+    pub fn new_external(create_external_tx: CreateExternalTransaction, user_id: u32) -> Self {
+        let CreateExternalTransaction { id, from, to, amount, currency, fee } = create_external_tx;
+
+        Self {
+            id,
+            user_id,
+            from,
+            to: to.into_inner(),
+            to_type: "address".into(),
+            to_currency: currency,
+            value: amount.to_string(),
+            value_currency: currency,
+            fee: fee.to_string(),
         }
     }
 }

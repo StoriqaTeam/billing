@@ -1,7 +1,6 @@
-use std::fmt;
-
 use failure::{Backtrace, Context, Fail};
 use serde_json;
+use std::fmt;
 
 #[derive(Debug)]
 pub struct Error {
@@ -16,7 +15,7 @@ pub enum ErrorKind {
     Unauthorized,
     #[fail(display = "payments client error - internal error")]
     Internal,
-    #[fail(display = "payments client error - bad request")]
+    #[fail(display = "payments client error - unprocessable input")]
     Validation(serde_json::Value),
 }
 
