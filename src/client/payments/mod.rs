@@ -19,8 +19,8 @@ use models::order_v2::ExchangeId;
 pub use self::error::*;
 use self::types::AccountResponse;
 pub use self::types::{
-    Account, CreateAccount, CreateInternalTransaction, CreateInternalTransactionRequestBody, GetRate, GetRateResponse, Rate, RateRefresh,
-    RefreshRateResponse, TransactionsResponse,
+    Account, CreateAccount, CreateInternalTransaction, CreateInternalTransactionRequestBody, Fee, FeesResponse, GetFees, GetRate,
+    GetRateResponse, Rate, RateRefresh, RefreshRateResponse, TransactionsResponse,
 };
 
 pub trait PaymentsClient: Send + Sync + 'static {
@@ -35,6 +35,8 @@ pub trait PaymentsClient: Send + Sync + 'static {
     fn get_rate(&self, input: GetRate) -> Box<Future<Item = Rate, Error = Error> + Send>;
 
     fn refresh_rate(&self, exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = Error> + Send>;
+
+    fn get_fees(&self, input: GetFees) -> Box<Future<Item = FeesResponse, Error = Error> + Send>;
 
     fn create_internal_transaction(&self, input: CreateInternalTransaction) -> Box<Future<Item = (), Error = Error> + Send>;
 }
@@ -239,6 +241,14 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
             self.request_with_auth::<_, RefreshRateResponse>(Method::Post, query.clone(), json!({ "rateId": exchange_id }))
                 .map_err(ectx!(ErrorKind::Internal => Method::Post, query, json!({ "rateId": exchange_id })))
                 .map(RateRefresh::from),
+        )
+    }
+
+    fn get_fees(&self, input: GetFees) -> Box<Future<Item = FeesResponse, Error = Error> + Send> {
+        let query = format!("/v1/fees");
+        Box::new(
+            self.request_with_auth::<_, FeesResponse>(Method::Post, query.clone(), input.clone())
+                .map_err(ectx!(ErrorKind::Internal => Method::Post, query.clone(), input.clone())),
         )
     }
 

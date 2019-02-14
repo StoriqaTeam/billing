@@ -1,7 +1,47 @@
 use bigdecimal::BigDecimal;
 
-use models::order_v2::OrderId;
+use client::payments;
+use models::order_v2::{OrderId, StoreId};
 use models::*;
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CalculatePayoutPayload {
+    pub store_id: StoreId,
+    pub currency: TureCurrency,
+    pub wallet_address: WalletAddress,
+}
+
+#[derive(Debug, Clone)]
+pub struct CalculatedPayoutExcludingFees {
+    pub order_ids: Vec<OrderId>,
+    pub currency: TureCurrency,
+    pub gross_amount: Amount,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CalculatedPayoutOutput {
+    pub order_ids: Vec<OrderId>,
+    pub currency: TureCurrency,
+    pub gross_amount: BigDecimal,
+    pub blockchain_fee_options: Vec<BlockchainFeeOption>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BlockchainFeeOption {
+    pub value: BigDecimal,
+    pub estimated_time_seconds: u64,
+}
+
+impl BlockchainFeeOption {
+    pub fn from_payments_fee(currency: TureCurrency, fee: payments::Fee) -> Self {
+        let payments::Fee { value, estimated_time } = fee;
+
+        Self {
+            value: value.to_super_unit(currency.into()),
+            estimated_time_seconds: estimated_time,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct GetPayoutsPayload {
@@ -23,7 +63,7 @@ pub enum PaymentDetails {
 pub struct CryptoPaymentDetails {
     pub wallet_currency: TureCurrency,
     pub wallet_address: WalletAddress,
-    pub blockchain_fee: Amount,
+    pub blockchain_fee: BigDecimal,
 }
 
 #[derive(Debug, Clone, Serialize)]

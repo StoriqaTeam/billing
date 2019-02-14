@@ -368,7 +368,10 @@ pub mod tests {
     use stq_types::UserId;
     use stq_types::*;
 
-    use client::payments::{self, CreateAccount, CreateInternalTransaction, GetRate, PaymentsClient, RateRefresh};
+    use client::payments::{
+        self,
+        CreateAccount, CreateInternalTransaction, FeesResponse, GetFees, GetRate, PaymentsClient, RateRefresh,
+    };
     use config::Config;
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
@@ -1055,6 +1058,10 @@ pub mod tests {
             Ok(vec![])
         }
 
+        fn get_orders_for_payout(&self, _store_id: StoreV2Id, _currency: BillingCurrency) -> RepoResultV2<Vec<RawOrder>> {
+            Ok(vec![])
+        }
+
         fn search(&self, _skip: i64, _count: i64, _search: OrdersSearch) -> RepoResultV2<OrderSearchResults> {
             Ok(OrderSearchResults {
                 total_count: 0,
@@ -1588,6 +1595,10 @@ pub mod tests {
         }
 
         fn refresh_rate(&self, _exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = payments::Error> + Send> {
+            unimplemented!()
+        }
+
+        fn get_fees(&self, _input: GetFees) -> Box<Future<Item = FeesResponse, Error = payments::Error> + Send> {
             unimplemented!()
         }
 

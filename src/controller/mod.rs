@@ -49,7 +49,7 @@ use services::merchant::MerchantService;
 use services::order::OrderService;
 use services::order_billing::{OrderBillingService, OrderBillingServiceImpl};
 use services::payment_intent::{PaymentIntentService, PaymentIntentServiceImpl};
-use services::payout::{GetPayoutsPayload, PayOutToSellerPayload, PayoutService, PayoutServiceImpl};
+use services::payout::{CalculatePayoutPayload, GetPayoutsPayload, PayOutToSellerPayload, PayoutService, PayoutServiceImpl};
 use services::stripe::{StripeService, StripeServiceImpl};
 use services::user_roles::UserRolesService;
 use services::Service;
@@ -127,7 +127,7 @@ impl<
             user_id,
             correlation_token,
             time_limited_http_client,
-            payments_client,
+            payments_client.clone(),
             account_service,
         );
 
@@ -192,6 +192,7 @@ impl<
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
             user_id: dynamic_context.user_id.clone(),
+            payments_client: payments_client.clone(),
         });
 
         let path = req.path().to_string();
@@ -395,6 +396,14 @@ impl<
                 parse_body::<GetPayoutsPayload>(req.body()).and_then(move |payload| {
                     payout_service
                         .get_payouts(payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                })
+            }),
+            (Post, Some(Route::PayoutsCalculate)) => serialize_future({
+                parse_body::<CalculatePayoutPayload>(req.body()).and_then(move |payload| {
+                    payout_service
+                        .calculate_payout(payload)
                         .map_err(Error::from)
                         .map_err(failure::Error::from)
                 })

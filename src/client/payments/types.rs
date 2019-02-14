@@ -149,6 +149,27 @@ impl From<RefreshRateResponse> for RateRefresh {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetFees {
+    pub currency: TureCurrency,
+    pub account_address: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeesResponse {
+    pub currency: TureCurrency,
+    pub fees: Vec<Fee>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Fee {
+    pub value: Amount,
+    pub estimated_time: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateInternalTransaction {
     pub id: Uuid,
     pub from: Uuid,

@@ -52,6 +52,7 @@ pub enum Route {
     FeesPayByOrders,
     Payouts,
     PayoutsByOrderIds,
+    PayoutsCalculate,
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -230,6 +231,7 @@ pub fn create_route_parser() -> RouteParser<Route> {
     });
     route_parser.add_route(r"^/payouts$", || Route::Payouts);
     route_parser.add_route(r"^/payouts/by-order-ids$", || Route::PayoutsByOrderIds);
+    route_parser.add_route(r"^/payouts/calculate$", || Route::PayoutsCalculate);
 
     route_parser
 }
