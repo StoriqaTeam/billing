@@ -14,7 +14,7 @@ use stripe::PaymentIntent as StripePaymentIntent;
 use uuid::Uuid;
 
 use client::{
-    payments::{CreateInternalTransaction, PaymentsClient},
+    payments::{CreateExternalTransaction, CreateInternalTransaction, PaymentsClient},
     saga::{OrderStateUpdate, SagaClient},
     stores::{CurrencyExchangeInfo, StoresClient},
     stripe::StripeClient,
@@ -22,7 +22,8 @@ use client::{
 use models::{
     invoice_v2::{InvoiceId, InvoiceSetAmountPaid, PaymentFlow, RawInvoice},
     order_v2::OrderId,
-    AccountId, AccountWithBalance, Amount, Currency, Event, EventPayload, PaymentState, PayoutId,
+    Account, AccountId, AccountWithBalance, Amount, CryptoWalletPayoutTarget, Currency, Event, EventPayload, PaymentState, Payout,
+    PayoutId, PayoutStatus, PayoutTarget,
 };
 use repos::{ReposFactory, SearchPaymentIntent, SearchPaymentIntentInvoice};
 
@@ -156,7 +157,7 @@ where
                             .map_err(ectx!(convert => invoice_id, invoice_set_amount_paid))
                     });
 
-                    future::Either::A(Future::join(saga_update_states, set_invoice_paid).map(|_| ()))
+                    future::Either::A(saga_update_states.and_then(|_| set_invoice_paid).map(|_| ()))
                 }
                 Some(PaymentType::Fee) => future::Either::B(future::ok(())),
                 None => future::Either::B(future::ok(())),
@@ -173,12 +174,13 @@ where
             .into_future()
             .and_then(move |(payments_client, account_service)| {
                 Box::new(
-                    Future::join3(
-                        self.clone().drain_and_unlink_account(payments_client, account_service, invoice_id),
-                        self.clone().set_orders_status(invoice_id.clone(), OrderState::Paid),
-                        self.create_fee_for_orders(invoice_id),
-                    )
-                    .map(|_| ()),
+                    self.clone()
+                        .drain_and_unlink_account(payments_client, account_service, invoice_id)
+                        .and_then({
+                            let self_ = self.clone();
+                            move |_| self_.set_orders_status(invoice_id.clone(), OrderState::Paid)
+                        })
+                        .and_then(move |_| self.create_fee_for_orders(invoice_id)),
                 )
             });
 
@@ -205,19 +207,21 @@ where
                 self.clone()
                     .get_ture_context()
                     .into_future()
-                    .and_then(move |(payments_client, account_service)| {
-                        Future::join(
-                            self.clone().drain_and_unlink_account(payments_client, account_service, invoice.id),
-                            self.set_orders_status(invoice.id.clone(), OrderState::AmountExpired),
-                        )
+                    .and_then({
+                        let self_ = self.clone();
+                        let invoice_id = invoice.id;
+                        move |(payments_client, account_service)| {
+                            self_.drain_and_unlink_account(payments_client, account_service, invoice_id)
+                        }
                     })
+                    .and_then(move |_| self.set_orders_status(invoice.id.clone(), OrderState::AmountExpired))
             })),
             PaymentFlow::Fiat => future::Either::B(future::lazy(move || {
-                Future::join(
-                    self.set_orders_status(invoice.id.clone(), OrderState::AmountExpired),
-                    cancel_payment_intent(db_pool, cpu_pool, stripe_client, repo_factory, invoice.id.clone())
-                        .map_err(ectx!(ErrorKind::Internal => invoice.id)),
-                )
+                self.set_orders_status(invoice.id.clone(), OrderState::AmountExpired)
+                    .and_then(move |_| {
+                        cancel_payment_intent(db_pool, cpu_pool, stripe_client, repo_factory, invoice.id.clone())
+                            .map_err(ectx!(ErrorKind::Internal => invoice.id))
+                    })
             })),
         }
         .map(|_| ());
@@ -517,8 +521,119 @@ where
         Box::new(fut)
     }
 
-    // TODO: implement payout processing
-    pub fn handle_payout_initiated(self, _payout_id: PayoutId) -> EventHandlerFuture<()> {
-        Box::new(future::ok(()))
+    pub fn handle_payout_initiated(self, payout_id: PayoutId) -> EventHandlerFuture<()> {
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let repo_factory = self.repo_factory.clone();
+
+        let (payments_client, account_service) = match self.clone().get_ture_context() {
+            Ok((payments_client, account_service)) => (payments_client, account_service),
+            Err(e) => return Box::new(future::err(e)),
+        };
+
+        let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), move |conn| {
+            let payouts_repo = repo_factory.create_payouts_repo_with_sys_acl(&conn);
+
+            let payout_id = payout_id.clone();
+            payouts_repo.get(payout_id.clone()).map_err(ectx!(convert => payout_id))
+        })
+        .and_then(move |payout| match payout {
+            None => {
+                info!("Payout intiated handler: payout with ID {} not found", payout_id);
+                Box::new(future::ok(()))
+            }
+            Some(payout) => match payout.status {
+                PayoutStatus::Processing { .. } => self.pay_out(payments_client, account_service, payout),
+                PayoutStatus::Completed { .. } => {
+                    info!(
+                        "Payout intiated handler: payout with ID {} has already been marked as completed",
+                        payout_id
+                    );
+                    Box::new(future::ok(()))
+                }
+            },
+        });
+
+        Box::new(fut)
     }
+
+    fn pay_out(self, payments_client: PC, account_service: AS, payout: Payout) -> EventHandlerFuture<()> {
+        let payout_id = payout.id.clone();
+        let tx_id = payout_id.clone().into_inner();
+
+        let fut = payments_client
+            .clone()
+            .get_transaction(tx_id.clone())
+            .map_err(ectx!(ErrorKind::Internal => tx_id))
+            .and_then(move |tx| match tx {
+                None => future::Either::A(
+                    create_payout_tx(payments_client, account_service, payout).and_then(move |_| self.mark_payout_as_completed(payout_id)),
+                ),
+                Some(_tx) => future::Either::B(self.mark_payout_as_completed(payout_id)),
+            });
+
+        Box::new(fut)
+    }
+
+    fn mark_payout_as_completed(self, payout_id: PayoutId) -> EventHandlerFuture<()> {
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let repo_factory = self.repo_factory.clone();
+
+        let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let payouts_repo = repo_factory.create_payouts_repo_with_sys_acl(&conn);
+
+            payouts_repo
+                .mark_as_completed(payout_id.clone())
+                .map_err(ectx!(ErrorKind::Internal => payout_id))
+                .map(|_| ())
+        });
+
+        Box::new(fut)
+    }
+}
+
+fn create_payout_tx<PC, AS>(payments_client: PC, account_service: AS, payout: Payout) -> EventHandlerFuture<()>
+where
+    PC: PaymentsClient,
+    AS: AccountService,
+{
+    let Payout {
+        id: payout_id,
+        gross_amount,
+        target:
+            PayoutTarget::CryptoWallet(CryptoWalletPayoutTarget {
+                currency,
+                wallet_address,
+                blockchain_fee,
+            }),
+        ..
+    } = payout;
+
+    let tx_id = payout_id.into_inner();
+
+    let fut = account_service
+        .get_main_account(currency)
+        .map_err(ectx!(ErrorKind::Internal => currency))
+        .and_then(move |account| {
+            let AccountWithBalance {
+                account: Account { id: account_id, .. },
+                balance: _,
+            } = account;
+
+            let tx = CreateExternalTransaction {
+                id: tx_id,
+                from: account_id.into_inner(),
+                to: wallet_address,
+                amount: gross_amount,
+                currency,
+                fee: blockchain_fee,
+            };
+
+            payments_client
+                .create_external_transaction(tx.clone())
+                .map_err(ectx!(ErrorKind::Internal => tx))
+        });
+
+    Box::new(fut)
 }
