@@ -12,7 +12,7 @@ use stq_types::UserId as StqUserId;
 use validator::{ValidationError, ValidationErrors};
 
 use client::payments::{self, PaymentsClient};
-use models::order_v2::{OrderId, OrderPaymentKind, RawOrder};
+use models::order_v2::{OrderId, OrderPaymentKind, RawOrder, StoreId};
 use models::*;
 use repos::ReposFactory;
 use services::types::spawn_on_pool;
@@ -25,7 +25,8 @@ pub use self::types::*;
 pub trait PayoutService {
     fn calculate_payout(&self, payload: CalculatePayoutPayload) -> ServiceFutureV2<CalculatedPayoutOutput>;
     fn get_payout(&self, payout_id: PayoutId) -> ServiceFutureV2<Option<PayoutOutput>>;
-    fn get_payouts(&self, order_ids: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput>;
+    fn get_payouts_by_order_ids(&self, order_ids: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput>;
+    fn get_payouts_by_store_id(&self, store_id: StoreId) -> ServiceFutureV2<PayoutsByStoreIdOutput>;
     fn pay_out_to_seller(&self, payload: PayOutToSellerPayload) -> ServiceFutureV2<PayoutOutput>;
 }
 
@@ -147,7 +148,7 @@ impl<
         })
     }
 
-    fn get_payouts(&self, payload: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput> {
+    fn get_payouts_by_order_ids(&self, payload: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput> {
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
         let repo_factory = self.repo_factory.clone();
@@ -159,6 +160,33 @@ impl<
                 .get_by_order_ids(&payload.order_ids)
                 .map(PayoutsByOrderIdsOutput::from)
                 .map_err(ectx!(convert => payload.order_ids.to_vec()))
+        })
+    }
+
+    fn get_payouts_by_store_id(&self, store_id: StoreId) -> ServiceFutureV2<PayoutsByStoreIdOutput> {
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.user_id.clone();
+
+        spawn_on_pool(db_pool.clone(), cpu_pool.clone(), move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            let payouts_repo = repo_factory.create_payouts_repo(&conn, user_id);
+
+            let order_ids = orders_repo
+                .get_order_ids_by_store_id(store_id.clone())
+                .map_err(ectx!(try convert => store_id))?;
+
+            payouts_repo
+                .get_by_order_ids(&order_ids)
+                .map_err(ectx!(convert => order_ids.to_vec()))
+                .map(|payouts| {
+                    let payouts_by_order_ids = PayoutsByOrderIdsOutput::from(payouts);
+                    PayoutsByStoreIdOutput {
+                        store_id,
+                        payouts_by_order_ids,
+                    }
+                })
         })
     }
 
