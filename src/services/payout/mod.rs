@@ -24,6 +24,7 @@ pub use self::types::*;
 
 pub trait PayoutService {
     fn calculate_payout(&self, payload: CalculatePayoutPayload) -> ServiceFutureV2<CalculatedPayoutOutput>;
+    fn get_payout(&self, payout_id: PayoutId) -> ServiceFutureV2<Option<PayoutOutput>>;
     fn get_payouts(&self, order_ids: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput>;
     fn pay_out_to_seller(&self, payload: PayOutToSellerPayload) -> ServiceFutureV2<PayoutOutput>;
 }
@@ -129,6 +130,21 @@ impl<
         });
 
         Box::new(fut)
+    }
+
+    fn get_payout(&self, payout_id: PayoutId) -> ServiceFutureV2<Option<PayoutOutput>> {
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.user_id.clone();
+
+        spawn_on_pool(db_pool.clone(), cpu_pool.clone(), move |conn| {
+            let payouts_repo = repo_factory.create_payouts_repo(&conn, user_id);
+            payouts_repo
+                .get(payout_id)
+                .map_err(ectx!(convert => payout_id))
+                .map(|payout| payout.map(PayoutOutput::from))
+        })
     }
 
     fn get_payouts(&self, payload: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput> {
