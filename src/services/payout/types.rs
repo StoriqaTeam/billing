@@ -136,3 +136,10 @@ impl From<PayoutsByOrderIds> for PayoutsByOrderIdsOutput {
         }
     }
 }
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PayoutsByStoreIdOutput {
+    pub store_id: StoreId,
+    #[serde(flatten)]
+    pub payouts_by_order_ids: PayoutsByOrderIdsOutput,
+}

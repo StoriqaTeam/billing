@@ -392,10 +392,16 @@ impl<
                         .map_err(failure::Error::from)
                 })
             }),
+            (Get, Some(Route::PayoutsByStoreId { id })) => serialize_future(
+                payout_service
+                    .get_payouts_by_store_id(id)
+                    .map_err(Error::from)
+                    .map_err(failure::Error::from),
+            ),
             (Post, Some(Route::PayoutsByOrderIds)) => serialize_future({
                 parse_body::<GetPayoutsPayload>(req.body()).and_then(move |payload| {
                     payout_service
-                        .get_payouts(payload)
+                        .get_payouts_by_order_ids(payload)
                         .map_err(Error::from)
                         .map_err(failure::Error::from)
                 })

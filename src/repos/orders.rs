@@ -34,6 +34,7 @@ pub trait OrdersRepo {
     fn get(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrder>>;
     fn get_many(&self, order_ids: &[OrderId]) -> RepoResultV2<Vec<RawOrder>>;
     fn get_many_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>>;
+    fn get_order_ids_by_store_id(&self, store_id: StoreId) -> RepoResultV2<Vec<OrderId>>;
     fn get_orders_for_payout(&self, store_id: StoreId, currency: Currency) -> RepoResultV2<Vec<RawOrder>>;
     fn search(&self, skip: i64, count: i64, search: OrdersSearch) -> RepoResultV2<OrderSearchResults>;
     fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder>;
@@ -129,6 +130,37 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         }
 
         Ok(results)
+    }
+
+    fn get_order_ids_by_store_id(&self, store_id: StoreId) -> RepoResultV2<Vec<OrderId>> {
+        debug!("Getting order IDs by store ID: {}", store_id);
+
+        let query = Orders::orders
+            .filter(Orders::store_id.eq(store_id))
+            .select((Orders::id, Orders::invoice_id));
+
+        let results = query.get_results::<(OrderId, InvoiceId)>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(try err e, ErrorSource::Diesel, error_kind)
+        })?;
+
+        for result in &results {
+            acl::check(
+                &*self.acl,
+                Resource::OrderInfo,
+                Action::Read,
+                self,
+                Some(&OrderAccess {
+                    invoice_id: result.1,
+                    store_id,
+                }),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        let order_ids = results.into_iter().map(|(order_id, _)| order_id).collect();
+
+        Ok(order_ids)
     }
 
     fn get_orders_for_payout(&self, store_id: StoreId, currency: Currency) -> RepoResultV2<Vec<RawOrder>> {
