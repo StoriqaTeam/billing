@@ -232,6 +232,8 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .map(|id| Route::RussiaBillingInfo { id })
     });
     route_parser.add_route(r"^/payouts$", || Route::Payouts);
+    route_parser.add_route(r"^/payouts/by-order-ids$", || Route::PayoutsByOrderIds);
+    route_parser.add_route(r"^/payouts/calculate$", || Route::PayoutsCalculate);
     route_parser.add_route_with_params(r"^/payouts/by-store-id/(\d+)$", |params| {
         params
             .get(0)
@@ -244,8 +246,6 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::PayoutById { id })
     });
-    route_parser.add_route(r"^/payouts/by-order-ids$", || Route::PayoutsByOrderIds);
-    route_parser.add_route(r"^/payouts/calculate$", || Route::PayoutsCalculate);
 
     route_parser
 }
