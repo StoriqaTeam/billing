@@ -5,6 +5,7 @@ use failure::{err_msg, Fail};
 use futures::{future, Future, IntoFuture, Stream};
 use futures_cpupool::CpuPool;
 use r2d2::{ManageConnection, Pool, PooledConnection};
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::error::{Error, ErrorKind};
@@ -27,6 +28,36 @@ pub trait AccountService: 'static {
     fn create_account(&self, account_id: Uuid, name: String, currency: TureCurrency, is_pooled: bool) -> ServiceFutureV2<Account>;
 
     fn get_or_create_free_pooled_account(&self, currency: TureCurrency) -> ServiceFutureV2<Account>;
+}
+
+impl<T: ?Sized + AccountService> AccountService for Arc<T> {
+    fn init_system_accounts(&self) -> ServiceFutureV2<()> {
+        (*self.clone()).init_system_accounts()
+    }
+
+    fn init_account_pools(&self) -> ServiceFutureV2<()> {
+        (*self.clone()).init_account_pools()
+    }
+
+    fn get_account(&self, account_id: Uuid) -> ServiceFutureV2<AccountWithBalance> {
+        (*self.clone()).get_account(account_id)
+    }
+
+    fn get_main_account(&self, currency: TureCurrency) -> ServiceFutureV2<AccountWithBalance> {
+        (*self.clone()).get_main_account(currency)
+    }
+
+    fn get_stq_cashback_account(&self) -> ServiceFutureV2<AccountWithBalance> {
+        (*self.clone()).get_stq_cashback_account()
+    }
+
+    fn create_account(&self, account_id: Uuid, name: String, currency: TureCurrency, is_pooled: bool) -> ServiceFutureV2<Account> {
+        (*self.clone()).create_account(account_id, name, currency, is_pooled)
+    }
+
+    fn get_or_create_free_pooled_account(&self, currency: TureCurrency) -> ServiceFutureV2<Account> {
+        (*self.clone()).get_or_create_free_pooled_account(currency)
+    }
 }
 
 pub struct AccountServiceImpl<T, M, F, PC>

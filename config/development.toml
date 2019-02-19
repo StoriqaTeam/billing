@@ -22,6 +22,16 @@ url = "http://billing:8000"
 # main_btc = "64eebbcd-db65-486a-a83a-7cdd631ef1c1"
 # cashback_stq = "a22ece2f-e7bf-4a24-a338-2f60dab777bf"
 
+[payments_mock]
+use_mock = true
+min_pooled_accounts = 10
+
+[payments_mock.accounts]
+main_stq = "33580f4d-3aa6-4844-89c1-419b51f986b3"
+main_eth = "3b5f8db0-97a5-401b-9e40-e774c1ed9632"
+main_btc = "f1ce78f7-b6e2-4aa5-8db6-861ce0b5ca80"
+cashback_stq = "8fd9690f-9032-40ae-a1c3-46d52923ff28"
+
 [external_billing]
 invoice_url = "http://payments.tugush.com/api/v1/invoices/"
 login_url = "http://payments.tugush.com/api/v1/login/"
