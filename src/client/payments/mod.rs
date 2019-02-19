@@ -1,4 +1,5 @@
 mod error;
+pub mod mock;
 mod types;
 
 use chrono::Utc;
@@ -10,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt::Debug;
 use std::str::FromStr;
+use std::sync::Arc;
 use stq_http::client::HttpClient;
 use uuid::Uuid;
 
@@ -43,6 +45,48 @@ pub trait PaymentsClient: Send + Sync + 'static {
     fn create_external_transaction(&self, input: CreateExternalTransaction) -> Box<Future<Item = (), Error = Error> + Send>;
 
     fn create_internal_transaction(&self, input: CreateInternalTransaction) -> Box<Future<Item = (), Error = Error> + Send>;
+}
+
+impl<T: ?Sized + PaymentsClient> PaymentsClient for Arc<T> {
+    fn get_account(&self, account_id: Uuid) -> Box<Future<Item = Account, Error = Error> + Send> {
+        (*self.clone()).get_account(account_id)
+    }
+
+    fn list_accounts(&self) -> Box<Future<Item = Vec<Account>, Error = Error> + Send> {
+        (*self.clone()).list_accounts()
+    }
+
+    fn create_account(&self, input: CreateAccount) -> Box<Future<Item = Account, Error = Error> + Send> {
+        (*self.clone()).create_account(input)
+    }
+
+    fn delete_account(&self, account_id: Uuid) -> Box<Future<Item = (), Error = Error> + Send> {
+        (*self.clone()).delete_account(account_id)
+    }
+
+    fn get_rate(&self, input: GetRate) -> Box<Future<Item = Rate, Error = Error> + Send> {
+        (*self.clone()).get_rate(input)
+    }
+
+    fn refresh_rate(&self, exchange_id: ExchangeId) -> Box<Future<Item = RateRefresh, Error = Error> + Send> {
+        (*self.clone()).refresh_rate(exchange_id)
+    }
+
+    fn get_fees(&self, input: GetFees) -> Box<Future<Item = FeesResponse, Error = Error> + Send> {
+        (*self.clone()).get_fees(input)
+    }
+
+    fn get_transaction(&self, tx_id: Uuid) -> Box<Future<Item = Option<TransactionsResponse>, Error = Error> + Send> {
+        (*self.clone()).get_transaction(tx_id)
+    }
+
+    fn create_external_transaction(&self, input: CreateExternalTransaction) -> Box<Future<Item = (), Error = Error> + Send> {
+        (*self.clone()).create_external_transaction(input)
+    }
+
+    fn create_internal_transaction(&self, input: CreateInternalTransaction) -> Box<Future<Item = (), Error = Error> + Send> {
+        (*self.clone()).create_internal_transaction(input)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

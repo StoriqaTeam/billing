@@ -18,6 +18,7 @@ pub struct Config {
     pub callback: Callback,
     pub external_billing: ExternalBilling,
     pub payments: Option<Payments>,
+    pub payments_mock: PaymentsMock,
     pub graylog: Option<GrayLogConfig>,
     pub sentry: Option<SentryConfig>,
     pub stripe: Stripe,
@@ -87,6 +88,13 @@ pub struct Payments {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct PaymentsMock {
+    pub use_mock: bool,
+    pub min_pooled_accounts: u32,
+    pub accounts: Accounts,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct Accounts {
     pub main_stq: Uuid,
     pub main_eth: Uuid,
@@ -138,6 +146,8 @@ impl Config {
         s.set_default("event_store.polling_rate_sec", 10i64).unwrap();
         s.set_default("payment_expiry.crypto_timeout_min", 4320i64).unwrap();
         s.set_default("payment_expiry.fiat_timeout_min", 60i64).unwrap();
+        s.set_default("payments_mock.use_mock", false).unwrap();
+        s.set_default("payments_mock.min_pooled_accounts", 10).unwrap();
 
         s.merge(File::with_name("config/base"))?;
 

@@ -30,7 +30,8 @@ use stq_types::UserId;
 
 use self::context::{DynamicContext, StaticContext};
 use self::routes::Route;
-use client::payments::PaymentsClientImpl;
+use client::payments::mock::MockPaymentsClient;
+use client::payments::{PaymentsClient, PaymentsClientImpl};
 use controller::requests::*;
 use errors::Error;
 use models::order_v2::OrdersSearch;
@@ -38,7 +39,7 @@ use models::*;
 use repos::repo_factory::*;
 use repos::SearchFee;
 use sentry_integration::log_and_capture_error;
-use services::accounts::AccountServiceImpl;
+use services::accounts::{AccountService, AccountServiceImpl};
 use services::billing_info::{BillingInfoService, BillingInfoServiceImpl};
 use services::billing_type::{BillingTypeService, BillingTypeServiceImpl};
 use services::customer::CustomersService;
@@ -98,9 +99,31 @@ impl<
 
         let time_limited_http_client = TimeLimitedHttpClient::new(self.static_context.client_handle.clone(), request_timeout);
 
-        let (payments_client, account_service) = match self.static_context.config.payments.clone() {
-            None => (None, None),
-            Some(payments_config) => {
+        let payments_mock_cfg = &self.static_context.config.payments_mock;
+        let (payments_client, account_service) = match (payments_mock_cfg.use_mock, self.static_context.config.payments.clone()) {
+            (true, _) => {
+                let payments_client = MockPaymentsClient::default();
+                let account_service = AccountServiceImpl::new(
+                    self.static_context.db_pool.clone(),
+                    self.static_context.cpu_pool.clone(),
+                    self.static_context.repo_factory.clone(),
+                    payments_mock_cfg.min_pooled_accounts,
+                    payments_client.clone(),
+                    format!(
+                        "{}{}",
+                        self.static_context.config.callback.url.clone(),
+                        routes::PAYMENTS_CALLBACK_ENDPOINT
+                    ),
+                    payments_mock_cfg.clone().accounts.into(),
+                );
+
+                let payments_client = Arc::new(payments_client) as Arc<dyn PaymentsClient>;
+                let account_service = Arc::new(account_service) as Arc<dyn AccountService + Send + Sync>;
+
+                (Some(payments_client), Some(account_service))
+            }
+            (_, None) => (None, None),
+            (_, Some(payments_config)) => {
                 PaymentsClientImpl::create_from_config(time_limited_http_client.clone(), payments_config.clone().into())
                     .ok()
                     .map(|payments_client| {
@@ -117,6 +140,10 @@ impl<
                             ),
                             payments_config.accounts.into(),
                         );
+
+                        let payments_client = Arc::new(payments_client) as Arc<dyn PaymentsClient>;
+                        let account_service = Arc::new(account_service) as Arc<dyn AccountService + Send + Sync>;
+
                         (Some(payments_client), Some(account_service))
                     })
                     .unwrap_or((None, None))
