@@ -90,7 +90,7 @@ use stq_http::controller::Application;
 use tokio_core::reactor::Core;
 
 use client::{
-    payments::{self, PaymentsClientImpl},
+    payments::{self, mock::MockPaymentsClient, PaymentsClient, PaymentsClientImpl},
     saga::SagaClientImpl,
     stores::StoresClientImpl,
     stripe::StripeClientImpl,
@@ -186,8 +186,33 @@ pub fn start_server<F: FnOnce() + 'static>(config: Config, port: &Option<String>
             payments_config.accounts.into(),
         );
 
+        let payments_client = Arc::new(payments_client) as Arc<dyn PaymentsClient>;
+        let account_service = Arc::new(account_service) as Arc<dyn AccountService + Send + Sync>;
+
         (payments_client, account_service)
     });
+
+    let payments_mock_cfg = config.payments_mock.clone();
+    let payments_ctx = if payments_mock_cfg.use_mock {
+        let payments_client = MockPaymentsClient::default();
+
+        let account_service = AccountServiceImpl::new(
+            db_pool.clone(),
+            cpu_pool.clone(),
+            repo_factory.clone(),
+            payments_mock_cfg.min_pooled_accounts,
+            payments_client.clone(),
+            format!("{}{}", config.callback.url, controller::routes::PAYMENTS_CALLBACK_ENDPOINT),
+            payments_mock_cfg.accounts.into(),
+        );
+
+        let payments_client = Arc::new(payments_client) as Arc<dyn PaymentsClient>;
+        let account_service = Arc::new(account_service) as Arc<dyn AccountService + Send + Sync>;
+
+        Some((payments_client, account_service))
+    } else {
+        payments_ctx
+    };
 
     match payments_ctx.as_ref() {
         None => {
