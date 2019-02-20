@@ -148,11 +148,14 @@ impl Config {
         s.set_default("payment_expiry.fiat_timeout_min", 60i64).unwrap();
         s.set_default("payments_mock.use_mock", false).unwrap();
         s.set_default("payments_mock.min_pooled_accounts", 10).unwrap();
-        s.set_default("payments_mock.accounts.main_stq", "cc3f3875-e719-427f-9b83-d4dae8d4263a").unwrap();
-        s.set_default("payments_mock.accounts.main_eth", "4fbaed3b-5e04-416b-8423-a21a457eeaa4").unwrap();
-        s.set_default("payments_mock.accounts.main_btc", "cd03fbed-6779-404d-a2a7-7ebee0a87dea").unwrap();
-        s.set_default("payments_mock.accounts.cashback_stq", "38d0017b-c2c9-4234-9154-e77c378998b8").unwrap();
-
+        s.set_default("payments_mock.accounts.main_stq", "cc3f3875-e719-427f-9b83-d4dae8d4263a")
+            .unwrap();
+        s.set_default("payments_mock.accounts.main_eth", "4fbaed3b-5e04-416b-8423-a21a457eeaa4")
+            .unwrap();
+        s.set_default("payments_mock.accounts.main_btc", "cd03fbed-6779-404d-a2a7-7ebee0a87dea")
+            .unwrap();
+        s.set_default("payments_mock.accounts.cashback_stq", "38d0017b-c2c9-4234-9154-e77c378998b8")
+            .unwrap();
 
         s.merge(File::with_name("config/base"))?;
 

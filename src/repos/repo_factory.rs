@@ -376,8 +376,8 @@ pub mod tests {
     use controller::context::{DynamicContext, StaticContext};
     use models::invoice_v2::{InvoiceId as InvoiceV2Id, InvoiceSetAmountPaid, NewInvoice as NewInvoiceV2, RawInvoice as RawInvoiceV2};
     use models::order_v2::{ExchangeId, NewOrder, OrderId as OrderV2Id, OrderSearchResults, OrdersSearch, RawOrder, StoreId as StoreV2Id};
-    use models::*;
     use models::{Currency as BillingCurrency, NewPaymentIntent, PaymentIntent, TransactionId, TureCurrency, UpdatePaymentIntent};
+    use models::{PayoutId, *};
     use repos::*;
     use services::*;
 
