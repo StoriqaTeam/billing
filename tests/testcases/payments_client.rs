@@ -1,5 +1,5 @@
 use billing_lib::client::payments::{self, CreateAccount, GetRate, PaymentsClient, PaymentsClientImpl};
-use billing_lib::models::{Amount, TureCurrency};
+use billing_lib::models::{Amount, DailyLimitType, TureCurrency};
 use failure::Error as FailureError;
 use futures::{Future, Stream};
 use std::sync::Arc;
@@ -92,6 +92,7 @@ fn payments_client_account_crud_happy() {
             currency: TureCurrency::Stq,
             name: "Autotest account".to_string(),
             callback_url: String::default(),
+            daily_limit_type: DailyLimitType::Unlimited,
         };
 
         Box::new(
