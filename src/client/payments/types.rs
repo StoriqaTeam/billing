@@ -4,7 +4,7 @@ use failure::Fail;
 use std::str::FromStr;
 use uuid::Uuid;
 
-use models::{Amount, TureCurrency, WalletAddress};
+use models::{Amount, DailyLimitType, TureCurrency, WalletAddress};
 
 use super::error::*;
 
@@ -15,6 +15,7 @@ pub struct CreateAccount {
     pub currency: TureCurrency,
     pub name: String,
     pub callback_url: String,
+    pub daily_limit_type: DailyLimitType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

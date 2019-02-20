@@ -324,6 +324,7 @@ impl<
             currency,
             name,
             callback_url: self.payments_callback_url.clone(),
+            daily_limit_type: DailyLimitType::Unlimited,
         };
 
         Box::new(

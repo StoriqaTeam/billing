@@ -70,6 +70,7 @@ impl PaymentsClient for MockPaymentsClient {
             currency,
             name,
             callback_url: _,
+            ..
         } = input;
 
         let balance = match currency {
