@@ -45,7 +45,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> EventStoreRepo for EventStoreRepoImpl<'a, T> {
     fn add_event(&self, event: Event) -> RepoResultV2<EventEntry> {
-        debug!("Adding an event with ID: {}", event.id);
+        trace!("Adding an event with ID: {}", event.id);
 
         let new_event_entry =
             RawNewEventEntry::try_from_event(event.clone()).map_err(ectx!(try ErrorSource::SerdeJson, ErrorKind::Internal => event))?;
@@ -63,7 +63,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn add_scheduled_event(&self, event: Event, scheduled_on: NaiveDateTime) -> RepoResultV2<EventEntry> {
-        debug!(
+        trace!(
             "Adding an event with ID: {} scheduled on {}",
             event.id,
             scheduled_on.format("%Y-%m-%d %H:%M:%S")
@@ -85,7 +85,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn get_events_for_processing(&self, limit: u32) -> RepoResultV2<Vec<EventEntry>> {
-        debug!("Getting events for processing (limit: {})", limit);
+        trace!("Getting events for processing (limit: {})", limit);
 
         let now = Utc::now().naive_utc();
 
@@ -128,7 +128,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn reset_stuck_events(&self) -> RepoResultV2<Vec<EventEntry>> {
-        debug!(
+        trace!(
             "Resetting stuck events left in \"{}\" status for more than {} seconds",
             EventStatus::InProgress,
             self.stuck_threshold_sec
@@ -179,7 +179,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn complete_event(&self, event_entry_id: EventEntryId) -> RepoResultV2<EventEntry> {
-        debug!("Completing an event with ID: {}", event_entry_id);
+        trace!("Completing an event with ID: {}", event_entry_id);
 
         self.db_conn.transaction(|| {
             let event_status = EventStore::event_store
@@ -221,7 +221,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     }
 
     fn fail_event(&self, event_entry_id: EventEntryId) -> RepoResultV2<EventEntry> {
-        debug!("Failing an event with ID: {}", event_entry_id);
+        trace!("Failing an event with ID: {}", event_entry_id);
 
         self.db_conn.transaction(|| {
             let (event_status, attempt_count) = EventStore::event_store
