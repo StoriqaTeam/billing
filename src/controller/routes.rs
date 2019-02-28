@@ -55,6 +55,7 @@ pub enum Route {
     PayoutsByOrderIds,
     PayoutsByStoreId { id: BillingStoreId },
     PayoutsCalculate,
+    Subscriptions,
 }
 
 pub fn create_route_parser() -> RouteParser<Route> {
@@ -246,6 +247,7 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::PayoutById { id })
     });
+    route_parser.add_route(r"^/subscriptions$", || Route::Subscriptions);
 
     route_parser
 }

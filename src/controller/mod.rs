@@ -52,6 +52,7 @@ use services::order_billing::{OrderBillingService, OrderBillingServiceImpl};
 use services::payment_intent::{PaymentIntentService, PaymentIntentServiceImpl};
 use services::payout::{CalculatePayoutPayload, GetPayoutsPayload, PayOutToSellerPayload, PayoutService, PayoutServiceImpl};
 use services::stripe::{StripeService, StripeServiceImpl};
+use services::subscription::{SubscriptionService, SubscriptionServiceImpl};
 use services::user_roles::UserRolesService;
 use services::Service;
 
@@ -220,6 +221,13 @@ impl<
             repo_factory: self.static_context.repo_factory.clone(),
             user_id: dynamic_context.user_id.clone(),
             payments_client: payments_client.clone(),
+        });
+
+        let subscription_service = Arc::new(SubscriptionServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
         });
 
         let path = req.path().to_string();
@@ -440,6 +448,14 @@ impl<
                 parse_body::<CalculatePayoutPayload>(req.body()).and_then(move |payload| {
                     payout_service
                         .calculate_payout(payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                })
+            }),
+            (Post, Some(Route::Subscriptions)) => serialize_future({
+                parse_body::<CreateSubscriptionsRequest>(req.body()).and_then(move |payload| {
+                    subscription_service
+                        .create_all(payload)
                         .map_err(Error::from)
                         .map_err(failure::Error::from)
                 })

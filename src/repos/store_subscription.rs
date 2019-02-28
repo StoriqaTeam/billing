@@ -11,7 +11,7 @@ use failure::Fail;
 use stq_types::{StoreId, UserId};
 
 use models::authorization::*;
-use models::{NewStoreSubscription, StoreSubscription, StoreSubscriptionSearch, UserRole};
+use models::{NewStoreSubscription, StoreSubscription, StoreSubscriptionSearch, UpdateStoreSubscription, UserRole};
 use repos::legacy_acl::*;
 
 use schema::roles::dsl as UserRolesDsl;
@@ -37,6 +37,7 @@ pub struct StoreSubscriptionRepoImpl<'a, T: Connection<Backend = Pg, Transaction
 pub trait StoreSubscriptionRepo {
     fn create(&self, new_store_subscription: NewStoreSubscription) -> RepoResultV2<StoreSubscription>;
     fn get(&self, search: StoreSubscriptionSearch) -> RepoResultV2<Option<StoreSubscription>>;
+    fn update(&self, search: StoreSubscriptionSearch, payload: UpdateStoreSubscription) -> RepoResultV2<StoreSubscription>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> StoreSubscriptionRepoImpl<'a, T> {
@@ -102,6 +103,28 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         }
 
         Ok(store_subscription)
+    }
+
+    fn update(&self, search_params: StoreSubscriptionSearch, payload: UpdateStoreSubscription) -> RepoResultV2<StoreSubscription> {
+        debug!("update store subscription {:?}.", search_params);
+        let updated_entry = self.get(search_params.clone())?;
+        let access = updated_entry
+            .as_ref()
+            .map(|entry| StoreSubscriptionAccess { store_id: entry.store_id });
+        acl::check(&*self.acl, Resource::StoreSubscription, Action::Write, self, access.as_ref())
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        let query: Option<BoxedExpr> = into_expr(search_params);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("store subscription search_params is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let query = diesel::update(crate::schema::store_subscription::table.filter(query)).set(&payload);
+        query.get_result::<StoreSubscription>(self.db_conn).map_err(|e| {
+            let error_kind = ErrorKind::from(&e);
+            ectx!(err e, ErrorSource::Diesel, error_kind)
+        })
     }
 }
 

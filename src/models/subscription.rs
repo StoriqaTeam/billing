@@ -62,8 +62,6 @@ pub enum SubscriptionPaymentStatus {
 pub struct NewSubscription {
     pub store_id: StoreId,
     pub published_base_products_quantity: Quantity,
-    pub subscription_payment_id: Option<SubscriptionPaymentId>,
-    pub created_at: NaiveDateTime,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, AsChangeset)]
@@ -78,8 +76,13 @@ pub struct NewStoreSubscription {
     pub store_id: StoreId,
     pub currency: Currency,
     pub value: Amount,
-    pub wallet_address: WalletAddress,
-    pub trial_start_date: NaiveDateTime,
+    pub wallet_address: Option<WalletAddress>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, AsChangeset)]
+#[table_name = "store_subscription"]
+pub struct UpdateStoreSubscription {
+    pub trial_start_date: Option<NaiveDateTime>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
@@ -94,12 +97,14 @@ pub struct NewSubscriptionPayment {
     pub created_at: NaiveDateTime,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SubscriptionSearch {
     pub id: Option<SubscriptionId>,
+    pub store_id: Option<StoreId>,
+    pub paid: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StoreSubscriptionSearch {
     pub id: Option<StoreSubscriptionId>,
     pub store_id: Option<StoreId>,
@@ -109,6 +114,15 @@ pub struct StoreSubscriptionSearch {
 pub struct SubscriptionPaymentSearch {
     pub id: Option<SubscriptionPaymentId>,
     pub store_id: Option<StoreId>,
+}
+
+impl StoreSubscriptionSearch {
+    pub fn by_store_id(store_id: StoreId) -> StoreSubscriptionSearch {
+        StoreSubscriptionSearch {
+            store_id: Some(store_id),
+            ..Default::default()
+        }
+    }
 }
 
 impl FromSql<VarChar, Pg> for SubscriptionPaymentStatus {
