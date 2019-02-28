@@ -14,6 +14,7 @@ pub mod order_billing;
 pub mod payment_intent;
 pub mod payout;
 pub mod stripe;
+pub mod subscription;
 pub mod types;
 pub mod user_roles;
 

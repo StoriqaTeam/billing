@@ -40,6 +40,7 @@ pub trait SubscriptionRepo {
     fn create(&self, new_subscription: NewSubscription) -> RepoResultV2<Subscription>;
     fn get(&self, search: SubscriptionSearch) -> RepoResultV2<Option<Subscription>>;
     fn get_unpaid(&self) -> RepoResultV2<Vec<Subscription>>;
+    fn search(&self, search: SubscriptionSearch) -> RepoResultV2<Vec<Subscription>>;
     fn update(&self, search: SubscriptionSearch, payload: UpdateSubscription) -> RepoResultV2<Subscription>;
 }
 
@@ -111,28 +112,44 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
     fn get_unpaid(&self) -> RepoResultV2<Vec<Subscription>> {
         debug!("get unpaid subscriptions.");
 
-        let entries = crate::schema::subscription::table
-            .filter(SubscriptionDsl::subscription_payment_id.is_null())
+        self.search(SubscriptionSearch {
+            paid: Some(false),
+            ..Default::default()
+        })
+    }
+
+    fn search(&self, search: SubscriptionSearch) -> RepoResultV2<Vec<Subscription>> {
+        debug!("search subscription {:?}.", search);
+
+        let query: Option<BoxedExpr> = into_expr(search);
+
+        let query = query.ok_or_else(|| {
+            let e = format_err!("subscription search is empty");
+            ectx!(try err e, ErrorKind::Internal)
+        })?;
+
+        let subscriptions = crate::schema::subscription::table
+            .filter(query)
             .get_results::<Subscription>(self.db_conn)
             .map_err(|e| {
                 let error_kind = ErrorKind::from(&e);
                 ectx!(try err e, ErrorSource::Diesel, error_kind)
             })?;
 
-        let store_ids: HashSet<StoreId> = entries.iter().map(|s| s.store_id).collect();
+        let store_ids: HashSet<StoreId> = subscriptions.iter().map(|s| s.store_id).collect();
 
         for store_id in store_ids {
             acl::check(
                 &*self.acl,
                 Resource::Subscription,
-                Action::Write,
+                Action::Read,
                 self,
                 Some(&SubscriptionAccess { store_id }),
             )
             .map_err(ectx!(try ErrorKind::Forbidden))?;
         }
 
-        Ok(entries)
+        Ok(subscriptions)
     }
 
     fn update(&self, search_params: SubscriptionSearch, payload: UpdateSubscription) -> RepoResultV2<Subscription> {
@@ -184,11 +201,26 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 fn into_expr(search: SubscriptionSearch) -> Option<BoxedExpr> {
     let mut query: Option<BoxedExpr> = None;
 
-    let SubscriptionSearch { id } = search;
+    let SubscriptionSearch { id, store_id, paid } = search;
 
     if let Some(id_filter) = id {
         let new_condition = SubscriptionDsl::id.eq(id_filter);
         query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(store_id_filter) = store_id {
+        let new_condition = SubscriptionDsl::store_id.eq(store_id_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(paid_filter) = paid {
+        let new_condition = if paid_filter {
+            Box::new(SubscriptionDsl::subscription_payment_id.is_not_null()) as BoxedExpr
+        } else {
+            Box::new(SubscriptionDsl::subscription_payment_id.is_null()) as BoxedExpr
+        };
+
+        query = Some(and(query, new_condition));
     }
 
     query
