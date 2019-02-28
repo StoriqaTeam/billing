@@ -94,7 +94,6 @@ pub struct NewSubscriptionPayment {
     pub charge_id: Option<ChargeId>,
     pub transaction_id: Option<TransactionId>,
     pub status: SubscriptionPaymentStatus,
-    pub created_at: NaiveDateTime,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -114,6 +113,15 @@ pub struct StoreSubscriptionSearch {
 pub struct SubscriptionPaymentSearch {
     pub id: Option<SubscriptionPaymentId>,
     pub store_id: Option<StoreId>,
+}
+
+impl SubscriptionSearch {
+    pub fn by_id(id: SubscriptionId) -> SubscriptionSearch {
+        SubscriptionSearch {
+            id: Some(id),
+            ..Default::default()
+        }
+    }
 }
 
 impl StoreSubscriptionSearch {

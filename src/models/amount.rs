@@ -11,6 +11,8 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Numeric;
 use failure::Fail;
 
+use stq_types::Quantity;
+
 use models::Currency;
 
 const WEI_IN_ETH: u32 = 18;
@@ -122,6 +124,12 @@ impl From<Amount> for u64 {
 impl From<u64> for Amount {
     fn from(val: u64) -> Self {
         Amount(val as u128)
+    }
+}
+
+impl From<Quantity> for Amount {
+    fn from(val: Quantity) -> Self {
+        Amount(val.0 as u128)
     }
 }
 

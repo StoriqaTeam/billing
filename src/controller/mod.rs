@@ -53,6 +53,7 @@ use services::payment_intent::{PaymentIntentService, PaymentIntentServiceImpl};
 use services::payout::{CalculatePayoutPayload, GetPayoutsPayload, PayOutToSellerPayload, PayoutService, PayoutServiceImpl};
 use services::stripe::{StripeService, StripeServiceImpl};
 use services::subscription::{SubscriptionService, SubscriptionServiceImpl};
+use services::subscription_payment::{SubscriptionPaymentService, SubscriptionPaymentServiceImpl};
 use services::user_roles::UserRolesService;
 use services::Service;
 
@@ -228,6 +229,14 @@ impl<
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
             dynamic_context: dynamic_context.clone(),
+        });
+
+        let subscription_payment_service = Arc::new(SubscriptionPaymentServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
+            stripe_client: self.static_context.stripe_client.clone(),
         });
 
         let path = req.path().to_string();
@@ -460,6 +469,12 @@ impl<
                         .map_err(failure::Error::from)
                 })
             }),
+            (Post, Some(Route::SubscriptionPayment)) => serialize_future(
+                subscription_payment_service
+                    .pay_subscriptions()
+                    .map_err(Error::from)
+                    .map_err(failure::Error::from),
+            ),
 
             // Fallback
             (m, _) => not_found(m, path),
