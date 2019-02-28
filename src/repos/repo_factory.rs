@@ -55,6 +55,12 @@ where
     fn create_user_wallets_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<UserWalletsRepo + 'a>;
     fn create_payouts_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<PayoutsRepo + 'a>;
     fn create_payouts_repo_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<PayoutsRepo + 'a>;
+    fn create_subscription_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<SubscriptionRepo + 'a>;
+    fn create_subscription_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<SubscriptionRepo + 'a>;
+    fn create_store_subscription_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreSubscriptionRepo + 'a>;
+    fn create_store_subscription_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreSubscriptionRepo + 'a>;
+    fn create_subscription_payment_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<SubscriptionPaymentRepo + 'a>;
+    fn create_subscription_payment_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<SubscriptionPaymentRepo + 'a>;
 }
 
 pub struct ReposFactoryImpl<C1>
@@ -318,6 +324,36 @@ where
         let acl = Box::new(SystemACL::default());
         Box::new(PayoutsRepoImpl::new(db_conn, acl))
     }
+
+    fn create_subscription_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<SubscriptionRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(SubscriptionRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_subscription_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<SubscriptionRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(SubscriptionRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_store_subscription_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<StoreSubscriptionRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(StoreSubscriptionRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_store_subscription_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<StoreSubscriptionRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(StoreSubscriptionRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_subscription_payment_repo<'a>(&self, db_conn: &'a C, user_id: Option<UserId>) -> Box<SubscriptionPaymentRepo + 'a> {
+        let acl = self.get_acl(db_conn, user_id);
+        Box::new(SubscriptionPaymentRepoImpl::new(db_conn, acl))
+    }
+
+    fn create_subscription_payment_with_sys_acl<'a>(&self, db_conn: &'a C) -> Box<SubscriptionPaymentRepo + 'a> {
+        let acl = Box::new(SystemACL::default());
+        Box::new(SubscriptionPaymentRepoImpl::new(db_conn, acl))
+    }
 }
 
 #[cfg(test)]
@@ -535,6 +571,30 @@ pub mod tests {
 
         fn create_payouts_repo_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<PayoutsRepo + 'a> {
             Box::new(PayoutsRepoMock::default())
+        }
+
+        fn create_subscription_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<SubscriptionRepo + 'a> {
+            unimplemented!()
+        }
+
+        fn create_subscription_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<SubscriptionRepo + 'a> {
+            unimplemented!()
+        }
+
+        fn create_store_subscription_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<StoreSubscriptionRepo + 'a> {
+            unimplemented!()
+        }
+
+        fn create_store_subscription_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<StoreSubscriptionRepo + 'a> {
+            unimplemented!()
+        }
+
+        fn create_subscription_payment_repo<'a>(&self, _db_conn: &'a C, _user_id: Option<UserId>) -> Box<SubscriptionPaymentRepo + 'a> {
+            unimplemented!()
+        }
+
+        fn create_subscription_payment_with_sys_acl<'a>(&self, _db_conn: &'a C) -> Box<SubscriptionPaymentRepo + 'a> {
+            unimplemented!()
         }
     }
 

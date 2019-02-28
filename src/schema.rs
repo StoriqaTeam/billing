@@ -263,6 +263,42 @@ table! {
 }
 
 table! {
+    store_subscription (id) {
+        id -> Int4,
+        store_id -> Int4,
+        currency -> Varchar,
+        value -> Numeric,
+        wallet_address -> Nullable<Varchar>,
+        trial_start_date -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+table! {
+    subscription (id) {
+        id -> Int4,
+        store_id -> Int4,
+        published_base_products_quantity -> Int4,
+        subscription_payment_id -> Nullable<Int4>,
+        created_at -> Timestamp,
+    }
+}
+
+table! {
+    subscription_payment (id) {
+        id -> Int4,
+        store_id -> Int4,
+        amount -> Numeric,
+        currency -> Varchar,
+        charge_id -> Nullable<Varchar>,
+        transaction_id -> Nullable<Uuid>,
+        status -> Varchar,
+        created_at -> Timestamp,
+    }
+}
+
+table! {
     user_wallets (id) {
         id -> Uuid,
         address -> Text,
@@ -284,6 +320,7 @@ joinable!(payment_intents_fees -> fees (fee_id));
 joinable!(payment_intents_fees -> payment_intent (payment_intent_id));
 joinable!(payment_intents_invoices -> invoices_v2 (invoice_id));
 joinable!(payment_intents_invoices -> payment_intent (payment_intent_id));
+joinable!(subscription -> subscription_payment (subscription_payment_id));
 
 allow_tables_to_appear_in_same_query!(
     accounts,
@@ -307,5 +344,8 @@ allow_tables_to_appear_in_same_query!(
     roles,
     russia_billing_info,
     store_billing_type,
+    store_subscription,
+    subscription,
+    subscription_payment,
     user_wallets,
 );
