@@ -183,14 +183,14 @@ impl<
             let cpu_pool = self.cpu_pool.clone();
             move |finished_paymnets| {
                 spawn_on_pool(db_pool, cpu_pool, move |conn| {
-                    let subscription_paymnet_repo = repo_factory.create_subscription_payment_repo(&conn, user_id);
+                    let subscription_payment_repo = repo_factory.create_subscription_payment_repo(&conn, user_id);
                     let subscription_repo = repo_factory.create_subscription_repo(&conn, user_id);
                     conn.transaction(move || {
                         for finished_paymnet in finished_paymnets {
-                            let subscription_paymnet = subscription_paymnet_repo
+                            let subscription_payment = subscription_payment_repo
                                 .create(finished_paymnet.subscription_payment)
                                 .map_err(ectx!(try convert))?;
-                            let subscription_payment_id = subscription_paymnet.id;
+                            let subscription_payment_id = subscription_payment.id;
                             for subscription in finished_paymnet.subscriptions {
                                 let update_filter = SubscriptionSearch::by_id(subscription.id);
                                 let update_payload = UpdateSubscription { subscription_payment_id };
