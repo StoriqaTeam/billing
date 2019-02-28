@@ -270,6 +270,8 @@ table! {
         value -> Numeric,
         wallet_address -> Nullable<Varchar>,
         trial_start_date -> Nullable<Timestamp>,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
     }
 }
 

@@ -32,6 +32,8 @@ pub struct StoreSubscription {
     pub value: Amount,
     pub wallet_address: Option<WalletAddress>,
     pub trial_start_date: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Queryable, Insertable)]

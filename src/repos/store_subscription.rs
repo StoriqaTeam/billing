@@ -91,7 +91,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         if let Some(ref store_subscription) = store_subscription {
             acl::check(
                 &*self.acl,
-                Resource::Subscription,
+                Resource::StoreSubscription,
                 Action::Read,
                 self,
                 Some(&StoreSubscriptionAccess {

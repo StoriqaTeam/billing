@@ -4,7 +4,9 @@ CREATE TABLE store_subscription (
     currency VARCHAR NOT NULL,
     value NUMERIC NOT NULL,
     wallet_address VARCHAR,
-    trial_start_date timestamp without time zone
+    trial_start_date timestamp without time zone,
+    created_at TIMESTAMP NOT NULL DEFAULT current_timestamp,
+    updated_at TIMESTAMP NOT NULL DEFAULT current_timestamp
 );
 
 CREATE TABLE subscription_payment (
