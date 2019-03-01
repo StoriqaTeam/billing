@@ -263,8 +263,7 @@ table! {
 }
 
 table! {
-    store_subscription (id) {
-        id -> Int4,
+    store_subscription (store_id) {
         store_id -> Int4,
         currency -> Varchar,
         value -> Numeric,

@@ -13,6 +13,7 @@ pub mod order;
 pub mod order_billing;
 pub mod payment_intent;
 pub mod payout;
+pub mod store_subscription;
 pub mod stripe;
 pub mod subscription;
 pub mod subscription_payment;

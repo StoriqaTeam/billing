@@ -51,6 +51,7 @@ use services::order::OrderService;
 use services::order_billing::{OrderBillingService, OrderBillingServiceImpl};
 use services::payment_intent::{PaymentIntentService, PaymentIntentServiceImpl};
 use services::payout::{CalculatePayoutPayload, GetPayoutsPayload, PayOutToSellerPayload, PayoutService, PayoutServiceImpl};
+use services::store_subscription::{StoreSubscriptionService, StoreSubscriptionServiceImpl};
 use services::stripe::{StripeService, StripeServiceImpl};
 use services::subscription::{SubscriptionService, SubscriptionServiceImpl};
 use services::subscription_payment::{SubscriptionPaymentService, SubscriptionPaymentServiceImpl};
@@ -237,6 +238,13 @@ impl<
             repo_factory: self.static_context.repo_factory.clone(),
             dynamic_context: dynamic_context.clone(),
             stripe_client: self.static_context.stripe_client.clone(),
+        });
+
+        let store_subscription_service = Arc::new(StoreSubscriptionServiceImpl {
+            db_pool: self.static_context.db_pool.clone(),
+            cpu_pool: self.static_context.cpu_pool.clone(),
+            repo_factory: self.static_context.repo_factory.clone(),
+            dynamic_context: dynamic_context.clone(),
         });
 
         let path = req.path().to_string();
@@ -475,6 +483,26 @@ impl<
                     .map_err(Error::from)
                     .map_err(failure::Error::from),
             ),
+
+            (Post, Some(Route::StoreSubscriptionByStoreId { store_id })) => {
+                serialize_future(parse_body::<CreateStoreSubscriptionRequest>(req.body()).and_then(move |payload| {
+                    store_subscription_service
+                        .create(store_id, payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                }))
+            }
+            (Get, Some(Route::StoreSubscriptionByStoreId { store_id })) => {
+                serialize_future({ store_subscription_service.get(store_id).map_err(failure::Error::from) })
+            }
+            (Put, Some(Route::StoreSubscriptionByStoreId { store_id })) => {
+                serialize_future(parse_body::<UpdateStoreSubscriptionRequest>(req.body()).and_then(move |payload| {
+                    store_subscription_service
+                        .update(store_id, payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                }))
+            }
 
             // Fallback
             (m, _) => not_found(m, path),
