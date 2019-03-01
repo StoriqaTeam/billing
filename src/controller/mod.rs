@@ -238,6 +238,7 @@ impl<
             repo_factory: self.static_context.repo_factory.clone(),
             dynamic_context: dynamic_context.clone(),
             stripe_client: self.static_context.stripe_client.clone(),
+            config: self.static_context.config.subscription.clone(),
         });
 
         let store_subscription_service = Arc::new(StoreSubscriptionServiceImpl {

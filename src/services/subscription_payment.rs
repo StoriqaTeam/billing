@@ -17,6 +17,7 @@ use stq_types::StoreId;
 use super::types::ServiceFutureV2;
 use client::payments::{CreateInternalTransaction, PaymentsClient};
 use client::stripe::{NewCharge, StripeClient};
+use config::Subscription as SubscriptionConfig;
 use controller::context::DynamicContext;
 use models::{
     Account, Amount, ChargeId, CurrencyChoice, DbCustomer, FiatCurrency, NewSubscriptionPayment, StoreSubscription,
@@ -27,8 +28,6 @@ use repos::{AccountsRepo, CustomersRepo, SearchCustomer, StoreSubscriptionRepo, 
 use services::accounts::AccountService;
 use services::types::{spawn_on_pool, ServiceResultV2};
 use services::ErrorKind;
-
-const PAYMENT_PERIODICITY_DAYS: i64 = 30;
 
 pub trait SubscriptionPaymentService {
     fn pay_subscriptions(&self) -> ServiceFutureV2<()>;
@@ -47,6 +46,7 @@ pub struct SubscriptionPaymentServiceImpl<
     pub repo_factory: F,
     pub dynamic_context: DynamicContext<C, PC, AS>,
     pub stripe_client: Arc<dyn StripeClient>,
+    pub config: SubscriptionConfig,
 }
 
 #[derive(Debug)]
@@ -95,7 +95,7 @@ impl<
 
         let now = chrono::offset::Utc::now().naive_utc();
 
-        let payment_periodicity_duration = Duration::days(PAYMENT_PERIODICITY_DAYS);
+        let payment_periodicity_duration = Duration::days(self.config.periodicity_days);
 
         let stripe_client = self.stripe_client.clone();
 

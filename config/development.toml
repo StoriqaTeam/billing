@@ -59,3 +59,6 @@ currency_code = "eur"
 [payment_expiry]
 crypto_timeout_min = 1
 fiat_timeout_min = 1
+
+[subscription]
+periodicity_days = 30

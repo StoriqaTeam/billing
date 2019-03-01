@@ -25,6 +25,7 @@ pub struct Config {
     pub event_store: EventStore,
     pub fee: FeeValues,
     pub payment_expiry: PaymentExpiry,
+    pub subscription: Subscription,
 }
 
 /// Common server settings
@@ -127,6 +128,11 @@ pub struct FeeValues {
 pub struct PaymentExpiry {
     pub crypto_timeout_min: u32,
     pub fiat_timeout_min: u32,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Subscription {
+    pub periodicity_days: i64,
 }
 
 /// Creates new app config struct
