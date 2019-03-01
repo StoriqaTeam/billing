@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::Duration;
+use chrono::{Duration, NaiveDateTime};
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
@@ -23,7 +23,7 @@ use models::{
     StoreSubscriptionSearch, Subscription, SubscriptionPaymentStatus, SubscriptionSearch, TransactionId, TureCurrency, UpdateSubscription,
 };
 use repos::repo_factory::ReposFactory;
-use repos::SearchCustomer;
+use repos::{AccountsRepo, CustomersRepo, SearchCustomer, StoreSubscriptionRepo, SubscriptionRepo, UserRolesRepo};
 use services::accounts::AccountService;
 use services::types::{spawn_on_pool, ServiceResultV2};
 use services::ErrorKind;
@@ -123,99 +123,15 @@ impl<
             let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
 
             conn.transaction(move || {
-                let unpaid_subscriptions = subscription_repo.get_unpaid().map_err(ectx!(try convert))?;
+                let subscriptions_by_stores = subscriptions_to_pay(&*subscription_repo, now, payment_periodicity_duration)?;
 
-                let mut by_stores: HashMap<StoreId, Vec<Subscription>> = HashMap::new();
-                for unpaid_subscription in unpaid_subscriptions {
-                    by_stores
-                        .entry(unpaid_subscription.store_id)
-                        .or_insert_with(Vec::new)
-                        .push(unpaid_subscription);
-                }
-
-                by_stores.retain(|_, unpaid_subscriptions| {
-                    let oldest_unpaid = unpaid_subscriptions.iter().map(|s| s.created_at).min().unwrap_or(now);
-                    now - oldest_unpaid > payment_periodicity_duration
-                });
-
-                let mut payment_preparations = Vec::new();
-                for (store_id, subscriptions) in by_stores {
-                    info!(
-                        "subscription_payment: Ready to collect {} subscriptions from store {}",
-                        subscriptions.len(),
-                        store_id
-                    );
-                    let store_subscription = store_subscription_repo
-                        .get(StoreSubscriptionSearch::by_store_id(store_id))
-                        .map_err(ectx!(try convert))?
-                        .ok_or({
-                            let e = format_err!("Store {} does not have store subscription", store_id);
-                            ectx!(try err e, ErrorKind::Internal)
-                        })?;
-
-                    let total_amount = calculate_total_amount(&store_subscription, &subscriptions)?;
-
-                    let store_owner = user_role_repo
-                        .get_by_store_id(store_id)
-                        .map_err(ectx!(try convert))?
-                        .ok_or({
-                            let e = format_err!("Store {} does not have user roles entry", store_id);
-                            ectx!(try err e, ErrorKind::Internal)
-                        })?
-                        .user_id;
-
-                    let payment_preparation = match store_subscription.currency.classify() {
-                        CurrencyChoice::Crypto(ture_currency) => {
-                            let wallet_address = match store_subscription.wallet_address.clone() {
-                                Some(wallet_address) => wallet_address,
-                                None => {
-                                    warn!(
-                                        "subscription_payment: User {} has no wallet addess in store subscription",
-                                        store_owner
-                                    );
-                                    continue;
-                                }
-                            };
-
-                            let store_owner_account =
-                                match accounts_repo.get_by_wallet_address(wallet_address).map_err(ectx!(try convert))? {
-                                    Some(store_owner_account) => store_owner_account,
-                                    None => {
-                                        warn!("subscription_payment: Account with wallet address {} not found", store_owner);
-                                        continue;
-                                    }
-                                };
-
-                            PaymentPreparation::Crypto(CryptoPaymentPreparation {
-                                store_owner_account,
-                                ture_currency,
-                                store_subscription,
-                                subscriptions,
-                                total_amount,
-                            })
-                        }
-                        CurrencyChoice::Fiat(fiat_currency) => {
-                            let customer = match customer_repo.get(SearchCustomer::UserId(store_owner)).map_err(ectx!(try convert))? {
-                                Some(customer) => customer,
-                                None => {
-                                    warn!("subscription_payment: User {} has no stripe customer", store_owner);
-                                    continue;
-                                }
-                            };
-                            PaymentPreparation::Fiat(FiatPaymentPreparation {
-                                fiat_currency,
-                                customer,
-                                store_subscription,
-                                subscriptions,
-                                total_amount,
-                            })
-                        }
-                    };
-
-                    payment_preparations.push(payment_preparation)
-                }
-
-                Ok(payment_preparations)
+                create_payment_preparations(
+                    &*store_subscription_repo,
+                    &*accounts_repo,
+                    &*customer_repo,
+                    &*user_role_repo,
+                    subscriptions_by_stores,
+                )
             })
         })
         .map(futures::stream::iter_ok)
@@ -255,6 +171,115 @@ impl<
 
         Box::new(fut)
     }
+}
+
+fn create_payment_preparations(
+    store_subscription_repo: &StoreSubscriptionRepo,
+    accounts_repo: &AccountsRepo,
+    customer_repo: &CustomersRepo,
+    user_role_repo: &UserRolesRepo,
+    subscriptions_by_stores: HashMap<StoreId, Vec<Subscription>>,
+) -> ServiceResultV2<Vec<PaymentPreparation>> {
+    let mut payment_preparations = Vec::new();
+    for (store_id, subscriptions) in subscriptions_by_stores {
+        info!(
+            "subscription_payment: Ready to collect {} subscriptions from store {}",
+            subscriptions.len(),
+            store_id
+        );
+        let store_subscription = store_subscription_repo
+            .get(StoreSubscriptionSearch::by_store_id(store_id))
+            .map_err(ectx!(try convert))?
+            .ok_or({
+                let e = format_err!("Store {} does not have store subscription", store_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?;
+
+        let total_amount = calculate_total_amount(&store_subscription, &subscriptions)?;
+
+        let store_owner = user_role_repo
+            .get_by_store_id(store_id)
+            .map_err(ectx!(try convert))?
+            .ok_or({
+                let e = format_err!("Store {} does not have user roles entry", store_id);
+                ectx!(try err e, ErrorKind::Internal)
+            })?
+            .user_id;
+
+        let payment_preparation = match store_subscription.currency.classify() {
+            CurrencyChoice::Crypto(ture_currency) => {
+                let wallet_address = match store_subscription.wallet_address.clone() {
+                    Some(wallet_address) => wallet_address,
+                    None => {
+                        warn!(
+                            "subscription_payment: User {} has no wallet addess in store subscription",
+                            store_owner
+                        );
+                        continue;
+                    }
+                };
+
+                let store_owner_account = match accounts_repo.get_by_wallet_address(wallet_address).map_err(ectx!(try convert))? {
+                    Some(store_owner_account) => store_owner_account,
+                    None => {
+                        warn!("subscription_payment: Account with wallet address {} not found", store_owner);
+                        continue;
+                    }
+                };
+
+                PaymentPreparation::Crypto(CryptoPaymentPreparation {
+                    store_owner_account,
+                    ture_currency,
+                    store_subscription,
+                    subscriptions,
+                    total_amount,
+                })
+            }
+            CurrencyChoice::Fiat(fiat_currency) => {
+                let customer = match customer_repo.get(SearchCustomer::UserId(store_owner)).map_err(ectx!(try convert))? {
+                    Some(customer) => customer,
+                    None => {
+                        warn!("subscription_payment: User {} has no stripe customer", store_owner);
+                        continue;
+                    }
+                };
+                PaymentPreparation::Fiat(FiatPaymentPreparation {
+                    fiat_currency,
+                    customer,
+                    store_subscription,
+                    subscriptions,
+                    total_amount,
+                })
+            }
+        };
+
+        payment_preparations.push(payment_preparation)
+    }
+
+    Ok(payment_preparations)
+}
+
+fn subscriptions_to_pay(
+    subscription_repo: &SubscriptionRepo,
+    now: NaiveDateTime,
+    payment_periodicity_duration: Duration,
+) -> ServiceResultV2<HashMap<StoreId, Vec<Subscription>>> {
+    let unpaid_subscriptions = subscription_repo.get_unpaid().map_err(ectx!(try convert))?;
+
+    let mut by_stores: HashMap<StoreId, Vec<Subscription>> = HashMap::new();
+    for unpaid_subscription in unpaid_subscriptions {
+        by_stores
+            .entry(unpaid_subscription.store_id)
+            .or_insert_with(Vec::new)
+            .push(unpaid_subscription);
+    }
+
+    by_stores.retain(|_, unpaid_subscriptions| {
+        let oldest_unpaid = unpaid_subscriptions.iter().map(|s| s.created_at).min().unwrap_or(now);
+        now - oldest_unpaid > payment_periodicity_duration
+    });
+
+    Ok(by_stores)
 }
 
 fn collect_fiat_subscription(
@@ -364,4 +389,79 @@ fn calculate_total_amount(store_subscription: &StoreSubscription, subscriptions:
         })?;
     }
     Ok(total_amount)
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    use chrono::NaiveDate;
+
+    use stq_types::{Quantity, SubscriptionId};
+
+    use models::NewSubscription;
+    use repos::types::RepoResultV2;
+
+    struct SubscriptionRepoStub;
+
+    impl SubscriptionRepo for SubscriptionRepoStub {
+        fn create(&self, _new_subscription: NewSubscription) -> RepoResultV2<Subscription> {
+            unimplemented!()
+        }
+        fn get(&self, _search: SubscriptionSearch) -> RepoResultV2<Option<Subscription>> {
+            unimplemented!()
+        }
+        fn get_unpaid(&self) -> RepoResultV2<Vec<Subscription>> {
+            Ok(vec![
+                Subscription {
+                    id: SubscriptionId(1),
+                    store_id: StoreId(1),
+                    published_base_products_quantity: Quantity(1),
+                    subscription_payment_id: None,
+                    created_at: NaiveDate::from_ymd(2019, 2, 9).and_hms(12, 0, 0),
+                },
+                Subscription {
+                    id: SubscriptionId(2),
+                    store_id: StoreId(2),
+                    published_base_products_quantity: Quantity(1),
+                    subscription_payment_id: None,
+                    created_at: NaiveDate::from_ymd(2019, 2, 10).and_hms(12, 0, 0),
+                },
+                Subscription {
+                    id: SubscriptionId(3),
+                    store_id: StoreId(3),
+                    published_base_products_quantity: Quantity(1),
+                    subscription_payment_id: None,
+                    created_at: NaiveDate::from_ymd(2019, 2, 11).and_hms(12, 0, 0),
+                },
+            ])
+        }
+        fn search(&self, _search: SubscriptionSearch) -> RepoResultV2<Vec<Subscription>> {
+            unimplemented!()
+        }
+        fn update(&self, _search: SubscriptionSearch, _payload: UpdateSubscription) -> RepoResultV2<Subscription> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn correctly_finds_subscriptions() {
+        //given
+        let subscription_repo = SubscriptionRepoStub;
+        let now = NaiveDate::from_ymd(2019, 2, 11).and_hms(12, 0, 0);
+        let payment_periodicity_duration = Duration::days(1);
+        //when
+        let subscriptions_to_pay =
+            subscriptions_to_pay(&subscription_repo, now, payment_periodicity_duration).expect("subscriptions_to_pay failed");
+        //then
+        assert_eq!(
+            subscriptions_to_pay
+                .iter()
+                .flat_map(|(_, s)| s.iter())
+                .map(|s| s.id)
+                .collect::<Vec<_>>(),
+            vec![SubscriptionId(1)]
+        );
+    }
 }
