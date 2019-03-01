@@ -423,13 +423,20 @@ mod tests {
                 },
                 Subscription {
                     id: SubscriptionId(2),
+                    store_id: StoreId(1),
+                    published_base_products_quantity: Quantity(1),
+                    subscription_payment_id: None,
+                    created_at: NaiveDate::from_ymd(2019, 2, 11).and_hms(12, 0, 0),
+                },
+                Subscription {
+                    id: SubscriptionId(3),
                     store_id: StoreId(2),
                     published_base_products_quantity: Quantity(1),
                     subscription_payment_id: None,
                     created_at: NaiveDate::from_ymd(2019, 2, 10).and_hms(12, 0, 0),
                 },
                 Subscription {
-                    id: SubscriptionId(3),
+                    id: SubscriptionId(4),
                     store_id: StoreId(3),
                     published_base_products_quantity: Quantity(1),
                     subscription_payment_id: None,
@@ -461,7 +468,7 @@ mod tests {
                 .flat_map(|(_, s)| s.iter())
                 .map(|s| s.id)
                 .collect::<Vec<_>>(),
-            vec![SubscriptionId(1)]
+            vec![SubscriptionId(1), SubscriptionId(2)]
         );
     }
 }
