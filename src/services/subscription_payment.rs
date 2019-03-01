@@ -15,12 +15,12 @@ use stq_http::client::HttpClient;
 use stq_types::StoreId;
 
 use super::types::ServiceFutureV2;
-use client::payments::PaymentsClient;
+use client::payments::{CreateInternalTransaction, PaymentsClient};
 use client::stripe::{NewCharge, StripeClient};
 use controller::context::DynamicContext;
 use models::{
-    Amount, ChargeId, CurrencyChoice, DbCustomer, FiatCurrency, NewSubscriptionPayment, StoreSubscription, StoreSubscriptionSearch,
-    Subscription, SubscriptionPaymentStatus, SubscriptionSearch, TureCurrency, UpdateSubscription,
+    Account, Amount, ChargeId, CurrencyChoice, DbCustomer, FiatCurrency, NewSubscriptionPayment, StoreSubscription,
+    StoreSubscriptionSearch, Subscription, SubscriptionPaymentStatus, SubscriptionSearch, TransactionId, TureCurrency, UpdateSubscription,
 };
 use repos::repo_factory::ReposFactory;
 use repos::SearchCustomer;
@@ -60,6 +60,7 @@ struct FiatPaymentPreparation {
 
 #[derive(Debug)]
 struct CryptoPaymentPreparation {
+    store_owner_account: Account,
     ture_currency: TureCurrency,
     store_subscription: StoreSubscription,
     subscriptions: Vec<Subscription>,
@@ -93,15 +94,33 @@ impl<
         let cpu_pool = self.cpu_pool.clone();
 
         let now = chrono::offset::Utc::now().naive_utc();
+
         let payment_periodicity_duration = Duration::days(PAYMENT_PERIODICITY_DAYS);
 
         let stripe_client = self.stripe_client.clone();
+
+        let payments_client = match self.dynamic_context.payments_client.clone() {
+            Some(payments_client) => payments_client,
+            None => {
+                let e = format_err!("Payments client was not found in dynamic context");
+                return Box::new(futures::future::err(ectx!(err e, ErrorKind::Internal))) as ServiceFutureV2<()>;
+            }
+        };
+
+        let accounts_service = match self.dynamic_context.account_service.clone() {
+            Some(account_service) => account_service,
+            None => {
+                let e = format_err!("Accounts service was not found in dynamic context");
+                return Box::new(futures::future::err(ectx!(err e, ErrorKind::Internal))) as ServiceFutureV2<()>;
+            }
+        };
 
         let fut = spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let store_subscription_repo = repo_factory.create_store_subscription_repo(&conn, user_id);
             let subscription_repo = repo_factory.create_subscription_repo(&conn, user_id);
             let user_role_repo = repo_factory.create_user_roles_repo(&conn, user_id);
             let customer_repo = repo_factory.create_customers_repo(&conn, user_id);
+            let accounts_repo = repo_factory.create_accounts_repo_with_sys_acl(&conn);
 
             conn.transaction(move || {
                 let unpaid_subscriptions = subscription_repo.get_unpaid().map_err(ectx!(try convert))?;
@@ -121,7 +140,11 @@ impl<
 
                 let mut payment_preparations = Vec::new();
                 for (store_id, subscriptions) in by_stores {
-                    info!("Ready to collect {} subscriptions from store {}", subscriptions.len(), store_id);
+                    info!(
+                        "subscription_payment: Ready to collect {} subscriptions from store {}",
+                        subscriptions.len(),
+                        store_id
+                    );
                     let store_subscription = store_subscription_repo
                         .get(StoreSubscriptionSearch::by_store_id(store_id))
                         .map_err(ectx!(try convert))?
@@ -132,25 +155,50 @@ impl<
 
                     let total_amount = calculate_total_amount(&store_subscription, &subscriptions)?;
 
+                    let store_owner = user_role_repo
+                        .get_by_store_id(store_id)
+                        .map_err(ectx!(try convert))?
+                        .ok_or({
+                            let e = format_err!("Store {} does not have user roles entry", store_id);
+                            ectx!(try err e, ErrorKind::Internal)
+                        })?
+                        .user_id;
+
                     let payment_preparation = match store_subscription.currency.classify() {
-                        CurrencyChoice::Crypto(ture_currency) => PaymentPreparation::Crypto(CryptoPaymentPreparation {
-                            ture_currency,
-                            store_subscription,
-                            subscriptions,
-                            total_amount,
-                        }),
+                        CurrencyChoice::Crypto(ture_currency) => {
+                            let wallet_address = match store_subscription.wallet_address.clone() {
+                                Some(wallet_address) => wallet_address,
+                                None => {
+                                    warn!(
+                                        "subscription_payment: User {} has no wallet addess in store subscription",
+                                        store_owner
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            let store_owner_account =
+                                match accounts_repo.get_by_wallet_address(wallet_address).map_err(ectx!(try convert))? {
+                                    Some(store_owner_account) => store_owner_account,
+                                    None => {
+                                        warn!("subscription_payment: Account with wallet address {} not found", store_owner);
+                                        continue;
+                                    }
+                                };
+
+                            PaymentPreparation::Crypto(CryptoPaymentPreparation {
+                                store_owner_account,
+                                ture_currency,
+                                store_subscription,
+                                subscriptions,
+                                total_amount,
+                            })
+                        }
                         CurrencyChoice::Fiat(fiat_currency) => {
-                            let user_role = user_role_repo.get_by_store_id(store_id).map_err(ectx!(try convert))?.ok_or({
-                                let e = format_err!("Store {} does not have user roles entry", store_id);
-                                ectx!(try err e, ErrorKind::Internal)
-                            })?;
-                            let customer = match customer_repo
-                                .get(SearchCustomer::UserId(user_role.user_id))
-                                .map_err(ectx!(try convert))?
-                            {
+                            let customer = match customer_repo.get(SearchCustomer::UserId(store_owner)).map_err(ectx!(try convert))? {
                                 Some(customer) => customer,
                                 None => {
-                                    warn!("User {} has no stripe customer", user_role.user_id);
+                                    warn!("subscription_payment: User {} has no stripe customer", store_owner);
                                     continue;
                                 }
                             };
@@ -173,7 +221,7 @@ impl<
         .map(futures::stream::iter_ok)
         .flatten_stream()
         .and_then(move |payment_preparation| match payment_preparation {
-            PaymentPreparation::Crypto(crypto) => collect_ture_subscription(crypto),
+            PaymentPreparation::Crypto(crypto) => collect_ture_subscription(payments_client.clone(), accounts_service.clone(), crypto),
             PaymentPreparation::Fiat(fiat) => collect_fiat_subscription(stripe_client.clone(), fiat),
         })
         .collect()
@@ -227,7 +275,10 @@ fn collect_fiat_subscription(
         .then(move |res| match res {
             Ok(charge) => Ok((Some(ChargeId::new(charge.id)), SubscriptionPaymentStatus::Paid)),
             Err(err) => {
-                warn!("Failed to collect subscription payment from {}: {}", store_id, err);
+                warn!(
+                    "subscription_payment: Failed to collect subscription payment from {}: {}",
+                    store_id, err
+                );
                 Ok((None, SubscriptionPaymentStatus::Failed))
             }
         })
@@ -246,19 +297,50 @@ fn collect_fiat_subscription(
     Box::new(fut)
 }
 
-fn collect_ture_subscription(payment_preparation: CryptoPaymentPreparation) -> ServiceFutureV2<FinishedPayment> {
-    warn!("Unimplemented ture subscription: {:?}", payment_preparation);
-    Box::new(futures::future::ok(FinishedPayment {
-        subscription_payment: NewSubscriptionPayment {
-            store_id: payment_preparation.store_subscription.store_id,
-            amount: payment_preparation.total_amount,
-            currency: payment_preparation.store_subscription.currency,
-            charge_id: None,
-            transaction_id: None,
-            status: SubscriptionPaymentStatus::Failed,
-        },
-        subscriptions: payment_preparation.subscriptions,
-    }))
+fn collect_ture_subscription<PC: PaymentsClient, AS: AccountService>(
+    payments_client: PC,
+    accounts_service: AS,
+    payment_preparation: CryptoPaymentPreparation,
+) -> ServiceFutureV2<FinishedPayment> {
+    let transaction_id = TransactionId::generate();
+    let store_id = payment_preparation.store_subscription.store_id;
+    let fut = accounts_service
+        .get_main_account(payment_preparation.ture_currency)
+        .map(|account_with_balance| account_with_balance.account.id)
+        .map({
+            let from = payment_preparation.store_owner_account.id.inner().clone();
+            let amount = payment_preparation.total_amount.clone();
+            move |main_account_id| CreateInternalTransaction {
+                id: transaction_id.inner().clone(),
+                from,
+                to: main_account_id.inner().clone(),
+                amount,
+            }
+        })
+        .and_then(move |transaction| payments_client.create_internal_transaction(transaction).map_err(ectx!(convert)))
+        .then(move |res| match res {
+            Ok(_) => Ok((transaction_id, SubscriptionPaymentStatus::Paid)),
+            Err(err) => {
+                warn!(
+                    "subscription_payment: Failed to collect crypto subscription payment from {}: {}",
+                    store_id, err
+                );
+                Ok((transaction_id, SubscriptionPaymentStatus::Failed))
+            }
+        })
+        .map(move |(transaction_id, status)| FinishedPayment {
+            subscription_payment: NewSubscriptionPayment {
+                store_id,
+                amount: payment_preparation.total_amount,
+                currency: payment_preparation.store_subscription.currency,
+                charge_id: None,
+                transaction_id: Some(transaction_id),
+                status,
+            },
+            subscriptions: payment_preparation.subscriptions,
+        });
+
+    Box::new(fut)
 }
 
 fn calculate_total_amount(store_subscription: &StoreSubscription, subscriptions: &[Subscription]) -> ServiceResultV2<Amount> {
