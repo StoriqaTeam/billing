@@ -1,5 +1,7 @@
 mod types;
 
+use std::collections::HashMap;
+
 use chrono::Utc;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
@@ -23,6 +25,7 @@ use super::types::{ServiceFutureV2, ServiceResultV2};
 pub use self::types::*;
 
 pub trait PayoutService {
+    fn get_balance(&self, store_id: StoreId) -> ServiceFutureV2<Balances>;
     fn calculate_payout(&self, payload: CalculatePayoutPayload) -> ServiceFutureV2<CalculatedPayoutOutput>;
     fn get_payout(&self, payout_id: PayoutId) -> ServiceFutureV2<Option<PayoutOutput>>;
     fn get_payouts_by_order_ids(&self, order_ids: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput>;
@@ -50,6 +53,63 @@ impl<
         PC: PaymentsClient + Clone,
     > PayoutService for PayoutServiceImpl<T, M, F, PC>
 {
+    fn get_balance(&self, store_id: StoreId) -> ServiceFutureV2<Balances> {
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.user_id.clone();
+
+        let fut = spawn_on_pool(db_pool.clone(), cpu_pool.clone(), move |conn| {
+            let orders_repo = repo_factory.create_orders_repo(&conn, user_id);
+            let payouts_repo = repo_factory.create_payouts_repo(&conn, user_id);
+
+            let orders_for_payout = orders_repo
+                .get_orders_for_payout(store_id.clone(), None)
+                .map_err(ectx!(try convert => store_id))?;
+
+            let order_ids_without_payout = {
+                let order_ids = orders_for_payout.iter().map(|o| o.id).collect::<Vec<_>>();
+
+                payouts_repo
+                    .get_by_order_ids(&order_ids)
+                    .map(|p| p.order_ids_without_payout)
+                    .map_err(ectx!(try convert => order_ids))
+            }?;
+
+            orders_for_payout
+                .into_iter()
+                .filter(|order| order_ids_without_payout.contains(&order.id))
+                .try_fold(
+                    HashMap::new(),
+                    |mut hash_map,
+                     RawOrder {
+                         total_amount,
+                         seller_currency,
+                         ..
+                     }| {
+                        {
+                            let gross_amount = hash_map.entry(seller_currency).or_insert(Amount::zero());
+                            *gross_amount = gross_amount.checked_add(total_amount)?;
+                        }
+                        Some(hash_map)
+                    },
+                )
+                .ok_or({
+                    let e = err_msg("Overflow while calculating the gross amount of a payout");
+                    ectx!(err e, ErrorKind::Internal)
+                })
+                .map(|hash| {
+                    Balances::new(
+                        hash.into_iter()
+                            .map(|(currency, gross_amount)| (currency, gross_amount.to_super_unit(currency)))
+                            .collect(),
+                    )
+                })
+        });
+
+        Box::new(fut)
+    }
+
     fn calculate_payout(&self, payload: CalculatePayoutPayload) -> ServiceFutureV2<CalculatedPayoutOutput> {
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
@@ -72,7 +132,7 @@ impl<
             let payouts_repo = repo_factory.create_payouts_repo(&conn, user_id);
 
             let orders_for_payout = orders_repo
-                .get_orders_for_payout(store_id.clone(), currency.clone().into())
+                .get_orders_for_payout(store_id.clone(), Some(currency.clone().into()))
                 .map_err(ectx!(try convert => store_id, currency))?;
 
             let order_ids_without_payout = {

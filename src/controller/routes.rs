@@ -54,6 +54,7 @@ pub enum Route {
     PayoutById { id: PayoutId },
     PayoutsByOrderIds,
     PayoutsByStoreId { id: BillingStoreId },
+    StoreBalance { store_id: BillingStoreId },
     PayoutsCalculate,
     Subscriptions,
     SubscriptionPayment,
@@ -243,6 +244,12 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .get(0)
             .and_then(|string_id| string_id.parse().ok())
             .map(|id| Route::PayoutsByStoreId { id })
+    });
+    route_parser.add_route_with_params(r"^/balance/by-store-id/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|store_id| Route::StoreBalance { store_id })
     });
     route_parser.add_route_with_params(r"^/payouts/([a-zA-Z0-9-]+)$", |params| {
         params

@@ -1122,7 +1122,7 @@ pub mod tests {
             Ok(vec![])
         }
 
-        fn get_orders_for_payout(&self, _store_id: StoreV2Id, _currency: BillingCurrency) -> RepoResultV2<Vec<RawOrder>> {
+        fn get_orders_for_payout(&self, _store_id: StoreV2Id, _currency: Option<BillingCurrency>) -> RepoResultV2<Vec<RawOrder>> {
             Ok(vec![])
         }
 

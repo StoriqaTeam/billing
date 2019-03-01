@@ -462,6 +462,12 @@ impl<
                         .map_err(failure::Error::from)
                 })
             }),
+            (Get, Some(Route::StoreBalance { store_id })) => serialize_future(
+                payout_service
+                    .get_balance(store_id)
+                    .map_err(Error::from)
+                    .map_err(failure::Error::from),
+            ),
             (Post, Some(Route::PayoutsCalculate)) => serialize_future({
                 parse_body::<CalculatePayoutPayload>(req.body()).and_then(move |payload| {
                     payout_service
