@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use diesel;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
@@ -11,7 +13,7 @@ use failure::Fail;
 use stq_types::{StoreId, UserId};
 
 use models::authorization::*;
-use models::{NewSubscriptionPayment, SubscriptionPayment, SubscriptionPaymentSearch, UserRole};
+use models::{NewSubscriptionPayment, SubscriptionPayment, SubscriptionPaymentSearch, SubscriptionPaymentSearchResults, UserRole};
 use repos::legacy_acl::*;
 
 use schema::roles::dsl as UserRolesDsl;
@@ -37,6 +39,7 @@ pub struct SubscriptionPaymentRepoImpl<'a, T: Connection<Backend = Pg, Transacti
 pub trait SubscriptionPaymentRepo {
     fn create(&self, new_store_subscription: NewSubscriptionPayment) -> RepoResultV2<SubscriptionPayment>;
     fn get(&self, search: SubscriptionPaymentSearch) -> RepoResultV2<Option<SubscriptionPayment>>;
+    fn search(&self, skip: i64, count: i64, search_params: SubscriptionPaymentSearch) -> RepoResultV2<SubscriptionPaymentSearchResults>;
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> SubscriptionPaymentRepoImpl<'a, T> {
@@ -103,6 +106,52 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 
         Ok(subscription_payment)
     }
+
+    fn search(&self, skip: i64, count: i64, search_params: SubscriptionPaymentSearch) -> RepoResultV2<SubscriptionPaymentSearchResults> {
+        debug!(
+            "Searching subscription payments, skip={}, count={}, search {:?}",
+            skip, count, search_params
+        );
+        let query: BoxedExpr = into_expr(search_params).unwrap_or(Box::new(true.into_sql::<Bool>()));
+
+        let subscription_payments = crate::schema::subscription_payment::table
+            .filter(&query)
+            .offset(skip)
+            .limit(count)
+            .order_by(SubscriptionPaymentDsl::created_at.desc())
+            .get_results::<SubscriptionPayment>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        let total_count = SubscriptionPaymentDsl::subscription_payment
+            .filter(&query)
+            .count()
+            .get_result::<i64>(self.db_conn)
+            .map_err(|e| {
+                let error_kind = ErrorKind::from(&e);
+                ectx!(try err e, ErrorSource::Diesel, error_kind)
+            })?;
+
+        let store_ids: HashSet<StoreId> = subscription_payments.iter().map(|s| s.store_id).collect();
+
+        for store_id in store_ids {
+            acl::check(
+                &*self.acl,
+                Resource::SubscriptionPayment,
+                Action::Read,
+                self,
+                Some(&SubscriptionPaymentAccess { store_id }),
+            )
+            .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
+        Ok(SubscriptionPaymentSearchResults {
+            total_count,
+            subscription_payments,
+        })
+    }
 }
 
 impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager> + 'static> CheckScope<Scope, SubscriptionPaymentAccess>
@@ -134,7 +183,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 fn into_expr(search: SubscriptionPaymentSearch) -> Option<BoxedExpr> {
     let mut query: Option<BoxedExpr> = None;
 
-    let SubscriptionPaymentSearch { id, store_id } = search;
+    let SubscriptionPaymentSearch { id, store_id, status } = search;
 
     if let Some(id_filter) = id {
         let new_condition = SubscriptionPaymentDsl::id.eq(id_filter);
@@ -143,6 +192,11 @@ fn into_expr(search: SubscriptionPaymentSearch) -> Option<BoxedExpr> {
 
     if let Some(store_id_filter) = store_id {
         let new_condition = SubscriptionPaymentDsl::store_id.eq(store_id_filter);
+        query = Some(and(query, Box::new(new_condition)));
+    }
+
+    if let Some(status_filter) = status {
+        let new_condition = SubscriptionPaymentDsl::status.eq(status_filter);
         query = Some(and(query, Box::new(new_condition)));
     }
 

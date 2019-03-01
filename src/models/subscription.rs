@@ -103,6 +103,7 @@ pub struct SubscriptionSearch {
     pub id: Option<SubscriptionId>,
     pub store_id: Option<StoreId>,
     pub paid: Option<bool>,
+    pub subscription_payment_id: Option<SubscriptionPaymentId>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -114,12 +115,26 @@ pub struct StoreSubscriptionSearch {
 pub struct SubscriptionPaymentSearch {
     pub id: Option<SubscriptionPaymentId>,
     pub store_id: Option<StoreId>,
+    pub status: Option<SubscriptionPaymentStatus>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct SubscriptionPaymentSearchResults {
+    pub total_count: i64,
+    pub subscription_payments: Vec<SubscriptionPayment>,
 }
 
 impl SubscriptionSearch {
     pub fn by_id(id: SubscriptionId) -> SubscriptionSearch {
         SubscriptionSearch {
             id: Some(id),
+            ..Default::default()
+        }
+    }
+
+    pub fn by_subscription_payment_id(id: SubscriptionPaymentId) -> SubscriptionSearch {
+        SubscriptionSearch {
+            subscription_payment_id: Some(id),
             ..Default::default()
         }
     }
