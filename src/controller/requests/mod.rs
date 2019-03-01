@@ -1,5 +1,5 @@
 use models::order_v2::OrderId as Orderv2Id;
-use models::{Currency, CustomerId, NewSubscription, PaymentState, UpdateStoreSubscription};
+use models::{Currency, CustomerId, NewSubscription, PaymentState};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NewCustomerWithSourceRequest {
