@@ -1,5 +1,5 @@
 use models::order_v2::OrderId as Orderv2Id;
-use models::{CustomerId, NewSubscription, PaymentState};
+use models::{Currency, CustomerId, NewSubscription, PaymentState, UpdateStoreSubscription};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NewCustomerWithSourceRequest {
@@ -31,4 +31,14 @@ pub struct FeesPayByOrdersRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateSubscriptionsRequest {
     pub subscriptions: Vec<NewSubscription>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CreateStoreSubscriptionRequest {
+    pub currency: Currency,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct UpdateStoreSubscriptionRequest {
+    pub currency: Currency,
 }

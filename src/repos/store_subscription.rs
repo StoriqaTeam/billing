@@ -157,12 +157,7 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
 fn into_expr(search: StoreSubscriptionSearch) -> Option<BoxedExpr> {
     let mut query: Option<BoxedExpr> = None;
 
-    let StoreSubscriptionSearch { id, store_id } = search;
-
-    if let Some(id_filter) = id {
-        let new_condition = StoreSubscriptionDsl::id.eq(id_filter);
-        query = Some(and(query, Box::new(new_condition)));
-    }
+    let StoreSubscriptionSearch { store_id } = search;
 
     if let Some(store_id_filter) = store_id {
         let new_condition = StoreSubscriptionDsl::store_id.eq(store_id_filter);

@@ -26,8 +26,9 @@ use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::ErrorKind;
 
-const DEFAULT_CURRENCY: Currency = Currency::Usd;
-const DEFAULT_AMOUNT: u128 = 3;
+pub const DEFAULT_EUR_AMOUNT: u128 = 3;
+pub const DEFAULT_STQ_AMOUNT: u128 = 1;
+const DEFAULT_CURRENCY: Currency = Currency::Eur;
 const TRIAL_TIME_DURATION_DAYS: i64 = 30;
 
 pub trait SubscriptionService {
@@ -121,6 +122,7 @@ fn find_update_or_create_store_subscription(
         }
         let update = UpdateStoreSubscription {
             trial_start_date: Some(now),
+            ..Default::default()
         };
         return store_subscription_repo.update(StoreSubscriptionSearch::by_store_id(store_id), update);
     }
@@ -128,7 +130,7 @@ fn find_update_or_create_store_subscription(
     let new_store_subscription = NewStoreSubscription {
         store_id,
         currency: DEFAULT_CURRENCY,
-        value: Amount::new(DEFAULT_AMOUNT),
+        value: Amount::new(DEFAULT_EUR_AMOUNT),
         wallet_address: None,
     };
 

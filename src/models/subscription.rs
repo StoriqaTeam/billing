@@ -7,7 +7,7 @@ use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::VarChar;
 use enum_iterator::IntoEnumIterator;
 
-use stq_types::{Quantity, StoreId, StoreSubscriptionId, SubscriptionId, SubscriptionPaymentId};
+use stq_types::{Quantity, StoreId, SubscriptionId, SubscriptionPaymentId};
 
 use models::{Amount, ChargeId, Currency, TransactionId, WalletAddress};
 
@@ -26,7 +26,6 @@ pub struct Subscription {
 #[derive(Clone, Debug, Serialize, Deserialize, Queryable, Insertable)]
 #[table_name = "store_subscription"]
 pub struct StoreSubscription {
-    pub id: StoreSubscriptionId,
     pub store_id: StoreId,
     pub currency: Currency,
     pub value: Amount,
@@ -79,9 +78,12 @@ pub struct NewStoreSubscription {
     pub wallet_address: Option<WalletAddress>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, AsChangeset)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, AsChangeset)]
 #[table_name = "store_subscription"]
 pub struct UpdateStoreSubscription {
+    pub currency: Option<Currency>,
+    pub value: Option<Amount>,
+    pub wallet_address: Option<WalletAddress>,
     pub trial_start_date: Option<NaiveDateTime>,
 }
 
@@ -105,7 +107,6 @@ pub struct SubscriptionSearch {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StoreSubscriptionSearch {
-    pub id: Option<StoreSubscriptionId>,
     pub store_id: Option<StoreId>,
 }
 
