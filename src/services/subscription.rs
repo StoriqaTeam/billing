@@ -10,14 +10,16 @@ use r2d2::{ManageConnection, Pool};
 use failure::Fail;
 
 use stq_http::client::HttpClient;
-use stq_types::StoreId;
+use stq_types::{StoreId, SubscriptionPaymentId};
 
 use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
+use config::Subscription as SubscriptionConfig;
 use controller::context::DynamicContext;
 use controller::requests::CreateSubscriptionsRequest;
 use models::{
-    Amount, Currency, NewStoreSubscription, StoreSubscription, StoreSubscriptionSearch, SubscriptionSearch, UpdateStoreSubscription,
+    Amount, Currency, NewStoreSubscription, StoreSubscription, StoreSubscriptionSearch, Subscription, SubscriptionSearch,
+    UpdateStoreSubscription,
 };
 use repos::repo_factory::ReposFactory;
 use repos::types::RepoResultV2;
@@ -29,10 +31,10 @@ use services::ErrorKind;
 pub const DEFAULT_EUR_AMOUNT: u128 = 3;
 pub const DEFAULT_STQ_AMOUNT: u128 = 1;
 const DEFAULT_CURRENCY: Currency = Currency::Eur;
-const TRIAL_TIME_DURATION_DAYS: i64 = 30;
 
 pub trait SubscriptionService {
     fn create_all(&self, payload: CreateSubscriptionsRequest) -> ServiceFutureV2<()>;
+    fn get_by_subscription_payment_id(&self, subscription_payment_id: SubscriptionPaymentId) -> ServiceFutureV2<Vec<Subscription>>;
 }
 
 pub struct SubscriptionServiceImpl<
@@ -47,6 +49,7 @@ pub struct SubscriptionServiceImpl<
     pub cpu_pool: CpuPool,
     pub repo_factory: F,
     pub dynamic_context: DynamicContext<C, PC, AS>,
+    pub config: SubscriptionConfig,
 }
 
 impl<
@@ -66,7 +69,7 @@ impl<
         let cpu_pool = self.cpu_pool.clone();
 
         let now = chrono::offset::Utc::now().naive_utc();
-        let max_trial_duration = Duration::days(TRIAL_TIME_DURATION_DAYS);
+        let max_trial_duration = Duration::days(self.config.trial_time_duration_days);
 
         spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let store_subscription_repo = repo_factory.create_store_subscription_repo(&conn, user_id);
@@ -106,6 +109,22 @@ impl<
                 }
                 Ok(())
             })
+        })
+    }
+
+    fn get_by_subscription_payment_id(&self, subscription_payment_id: SubscriptionPaymentId) -> ServiceFutureV2<Vec<Subscription>> {
+        let repo_factory = self.repo_factory.clone();
+        let user_id = self.dynamic_context.user_id;
+
+        let db_pool = self.db_pool.clone();
+        let cpu_pool = self.cpu_pool.clone();
+
+        spawn_on_pool(db_pool, cpu_pool, move |conn| {
+            let subscription_repo = repo_factory.create_subscription_repo(&conn, user_id);
+
+            subscription_repo
+                .search(SubscriptionSearch::by_subscription_payment_id(subscription_payment_id))
+                .map_err(ectx!(convert))
         })
     }
 }

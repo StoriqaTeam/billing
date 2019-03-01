@@ -28,3 +28,4 @@ fiat_timeout_min = 60 # 1 hour
 
 [subscription]
 periodicity_days = 30
+trial_time_duration_days = 30

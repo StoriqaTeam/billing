@@ -230,6 +230,7 @@ impl<
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
             dynamic_context: dynamic_context.clone(),
+            config: self.static_context.config.subscription.clone(),
         });
 
         let subscription_payment_service = Arc::new(SubscriptionPaymentServiceImpl {
@@ -484,12 +485,34 @@ impl<
                         .map_err(failure::Error::from)
                 })
             }),
+            (Post, Some(Route::SubscriptionBySubscriptionPaymentId { id })) => serialize_future(
+                subscription_service
+                    .get_by_subscription_payment_id(id)
+                    .map_err(Error::from)
+                    .map_err(failure::Error::from),
+            ),
             (Post, Some(Route::SubscriptionPayment)) => serialize_future(
                 subscription_payment_service
                     .pay_subscriptions()
                     .map_err(Error::from)
                     .map_err(failure::Error::from),
             ),
+            (Post, Some(Route::SubscriptionPaymentSearch)) => {
+                let (skip_opt, count_opt) = parse_query!(
+                    req.query().unwrap_or_default(),
+                    "skip" => i64, "count" => i64
+                );
+
+                let skip = skip_opt.unwrap_or(0);
+                let count = count_opt.unwrap_or(0);
+
+                serialize_future(parse_body::<SubscriptionPaymentSearch>(req.body()).and_then(move |payload| {
+                    subscription_payment_service
+                        .search(skip, count, payload)
+                        .map_err(Error::from)
+                        .map_err(failure::Error::from)
+                }))
+            }
 
             (Post, Some(Route::StoreSubscriptionByStoreId { store_id })) => {
                 serialize_future(parse_body::<CreateStoreSubscriptionRequest>(req.body()).and_then(move |payload| {

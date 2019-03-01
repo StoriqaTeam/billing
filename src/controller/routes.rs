@@ -1,5 +1,5 @@
 use stq_router::RouteParser;
-use stq_types::{InternationalBillingId, InvoiceId, OrderId, RoleId, RussiaBillingId, SagaId, StoreId, UserId};
+use stq_types::{InternationalBillingId, InvoiceId, OrderId, RoleId, RussiaBillingId, SagaId, StoreId, SubscriptionPaymentId, UserId};
 
 use models::invoice_v2;
 use models::order_v2::{OrderId as Orderv2Id, StoreId as BillingStoreId};
@@ -57,7 +57,9 @@ pub enum Route {
     StoreBalance { store_id: BillingStoreId },
     PayoutsCalculate,
     Subscriptions,
+    SubscriptionBySubscriptionPaymentId { id: SubscriptionPaymentId },
     SubscriptionPayment,
+    SubscriptionPaymentSearch,
     StoreSubscription,
     StoreSubscriptionByStoreId { store_id: StoreId },
 }
@@ -258,7 +260,14 @@ pub fn create_route_parser() -> RouteParser<Route> {
             .map(|id| Route::PayoutById { id })
     });
     route_parser.add_route(r"^/subscriptions$", || Route::Subscriptions);
+    route_parser.add_route_with_params(r"^/subscriptions/by-subscription-payment-id/(\d+)$", |params| {
+        params
+            .get(0)
+            .and_then(|string_id| string_id.parse().ok())
+            .map(|id| Route::SubscriptionBySubscriptionPaymentId { id })
+    });
     route_parser.add_route(r"^/subscription/payment$", || Route::SubscriptionPayment);
+    route_parser.add_route(r"^/subscription/payment/search$", || Route::SubscriptionPaymentSearch);
     route_parser.add_route(r"^/store_subscription$", || Route::StoreSubscription);
     route_parser.add_route_with_params(r"^/store_subscription/by-store-id/(\d+)$", |params| {
         params

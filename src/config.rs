@@ -133,6 +133,7 @@ pub struct PaymentExpiry {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Subscription {
     pub periodicity_days: i64,
+    pub trial_time_duration_days: i64,
 }
 
 /// Creates new app config struct
