@@ -35,7 +35,7 @@ pub trait OrdersRepo {
     fn get_many(&self, order_ids: &[OrderId]) -> RepoResultV2<Vec<RawOrder>>;
     fn get_many_by_invoice_id(&self, invoice_id: InvoiceId) -> RepoResultV2<Vec<RawOrder>>;
     fn get_order_ids_by_store_id(&self, store_id: StoreId) -> RepoResultV2<Vec<OrderId>>;
-    fn get_orders_for_payout(&self, store_id: StoreId, currency: Currency) -> RepoResultV2<Vec<RawOrder>>;
+    fn get_orders_for_payout(&self, store_id: StoreId, currency: Option<Currency>) -> RepoResultV2<Vec<RawOrder>>;
     fn search(&self, skip: i64, count: i64, search: OrdersSearch) -> RepoResultV2<OrderSearchResults>;
     fn create(&self, payload: NewOrder) -> RepoResultV2<RawOrder>;
     fn delete(&self, order_id: OrderId) -> RepoResultV2<Option<RawOrder>>;
@@ -163,16 +163,20 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
         Ok(order_ids)
     }
 
-    fn get_orders_for_payout(&self, store_id: StoreId, currency: Currency) -> RepoResultV2<Vec<RawOrder>> {
+    fn get_orders_for_payout(&self, store_id: StoreId, currency: Option<Currency>) -> RepoResultV2<Vec<RawOrder>> {
         debug!(
-            "Getting orders for payout for store with ID: {} and currency: {}",
+            "Getting orders for payout for store with ID: {} and currency: {:?}",
             store_id, currency
         );
 
-        let query = Orders::orders
+        let mut query = Orders::orders
             .filter(Orders::state.eq(PaymentState::PaymentToSellerNeeded))
             .filter(Orders::store_id.eq(store_id))
-            .filter(Orders::seller_currency.eq(currency));
+            .into_boxed();
+
+        if let Some(currency) = currency {
+            query = query.filter(Orders::seller_currency.eq(currency));
+        };
 
         let results = query.get_results::<RawOrder>(self.db_conn).map_err(|e| {
             let error_kind = ErrorKind::from(&e);
