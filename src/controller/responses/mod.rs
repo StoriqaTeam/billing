@@ -1,15 +1,16 @@
-use bigdecimal::ToPrimitive;
+use bigdecimal::{BigDecimal, ToPrimitive};
 use chrono::NaiveDateTime;
 use failure::Fail;
 use stripe::{Card as StripeCard, CardBrand as StripeCardBrand};
 
-use stq_types::{stripe::PaymentIntentId, UserId};
+use stq_types::{stripe::PaymentIntentId, StoreId as StqStoreId, SubscriptionPaymentId, UserId};
 
 use models::{
     fee::FeeId,
     invoice_v2::InvoiceId,
     order_v2::{OrderId, RawOrder, StoreId},
-    ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus, PaymentState,
+    ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus, PaymentState, StoreSubscription, SubscriptionPayment,
+    SubscriptionPaymentSearchResults, SubscriptionPaymentStatus, TransactionId, WalletAddress,
 };
 use stq_static_resources::Currency as StqCurrency;
 
@@ -196,6 +197,77 @@ impl FeeResponse {
                 metadata: other.metadata,
             }),
             _ => Err(ectx!(err ErrorContext::AmountConversion, ErrorKind::Internal)),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct SubscriptionPaymentResponse {
+    pub id: SubscriptionPaymentId,
+    pub store_id: StqStoreId,
+    pub amount: BigDecimal,
+    pub currency: StqCurrency,
+    pub charge_id: Option<ChargeId>,
+    pub transaction_id: Option<TransactionId>,
+    pub status: SubscriptionPaymentStatus,
+    pub created_at: NaiveDateTime,
+}
+
+impl From<SubscriptionPayment> for SubscriptionPaymentResponse {
+    fn from(subscription_payment: SubscriptionPayment) -> SubscriptionPaymentResponse {
+        SubscriptionPaymentResponse {
+            id: subscription_payment.id,
+            store_id: subscription_payment.store_id,
+            amount: subscription_payment.amount.to_super_unit(subscription_payment.currency),
+            currency: subscription_payment.currency.into(),
+            charge_id: subscription_payment.charge_id,
+            transaction_id: subscription_payment.transaction_id,
+            status: subscription_payment.status,
+            created_at: subscription_payment.created_at,
+        }
+    }
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct SubscriptionPaymentSearchResponse {
+    pub total_count: i64,
+    pub subscription_payments: Vec<SubscriptionPaymentResponse>,
+}
+
+impl From<SubscriptionPaymentSearchResults> for SubscriptionPaymentSearchResponse {
+    fn from(data: SubscriptionPaymentSearchResults) -> Self {
+        SubscriptionPaymentSearchResponse {
+            total_count: data.total_count,
+            subscription_payments: data
+                .subscription_payments
+                .into_iter()
+                .map(SubscriptionPaymentResponse::from)
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct StoreSubscriptionResponse {
+    pub store_id: StqStoreId,
+    pub currency: StqCurrency,
+    pub value: BigDecimal,
+    pub wallet_address: Option<WalletAddress>,
+    pub trial_start_date: Option<NaiveDateTime>,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+impl From<StoreSubscription> for StoreSubscriptionResponse {
+    fn from(data: StoreSubscription) -> Self {
+        StoreSubscriptionResponse {
+            store_id: data.store_id,
+            currency: data.currency.into(),
+            value: data.value.to_super_unit(data.currency),
+            wallet_address: data.wallet_address,
+            trial_start_date: data.trial_start_date,
+            created_at: data.created_at,
+            updated_at: data.updated_at,
         }
     }
 }

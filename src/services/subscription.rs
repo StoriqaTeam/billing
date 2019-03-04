@@ -28,8 +28,8 @@ use services::accounts::AccountService;
 use services::types::spawn_on_pool;
 use services::ErrorKind;
 
-pub const DEFAULT_EUR_AMOUNT: u128 = 3;
-pub const DEFAULT_STQ_AMOUNT: u128 = 1;
+pub const DEFAULT_EUR_CENTS_AMOUNT: u128 = 3;
+pub const DEFAULT_STQ_WEI_AMOUNT: u128 = 1_000_000_000_000_000_000;
 const DEFAULT_CURRENCY: Currency = Currency::Eur;
 
 pub trait SubscriptionService {
@@ -149,7 +149,7 @@ fn find_update_or_create_store_subscription(
     let new_store_subscription = NewStoreSubscription {
         store_id,
         currency: DEFAULT_CURRENCY,
-        value: Amount::new(DEFAULT_EUR_AMOUNT),
+        value: Amount::new(DEFAULT_EUR_CENTS_AMOUNT),
         wallet_address: None,
     };
 
