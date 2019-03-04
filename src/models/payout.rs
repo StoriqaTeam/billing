@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use uuid::Uuid;
 
@@ -292,15 +291,4 @@ pub struct OrderForPayout {
 pub struct PayoutsByOrderIds {
     pub payouts: HashMap<OrderId, Payout>,
     pub order_ids_without_payout: Vec<OrderId>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Balances {
-    pub currencies: HashMap<Currency, BigDecimal>,
-}
-
-impl Balances {
-    pub fn new(currencies: HashMap<Currency, BigDecimal>) -> Self {
-        Self { currencies }
-    }
 }

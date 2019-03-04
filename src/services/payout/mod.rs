@@ -14,6 +14,7 @@ use stq_types::UserId as StqUserId;
 use validator::{ValidationError, ValidationErrors};
 
 use client::payments::{self, PaymentsClient};
+use controller::responses::BalancesResponse;
 use models::order_v2::{OrderId, OrderPaymentKind, RawOrder, StoreId};
 use models::*;
 use repos::ReposFactory;
@@ -25,7 +26,7 @@ use super::types::{ServiceFutureV2, ServiceResultV2};
 pub use self::types::*;
 
 pub trait PayoutService {
-    fn get_balance(&self, store_id: StoreId) -> ServiceFutureV2<Balances>;
+    fn get_balance(&self, store_id: StoreId) -> ServiceFutureV2<BalancesResponse>;
     fn calculate_payout(&self, payload: CalculatePayoutPayload) -> ServiceFutureV2<CalculatedPayoutOutput>;
     fn get_payout(&self, payout_id: PayoutId) -> ServiceFutureV2<Option<PayoutOutput>>;
     fn get_payouts_by_order_ids(&self, order_ids: GetPayoutsPayload) -> ServiceFutureV2<PayoutsByOrderIdsOutput>;
@@ -53,7 +54,7 @@ impl<
         PC: PaymentsClient + Clone,
     > PayoutService for PayoutServiceImpl<T, M, F, PC>
 {
-    fn get_balance(&self, store_id: StoreId) -> ServiceFutureV2<Balances> {
+    fn get_balance(&self, store_id: StoreId) -> ServiceFutureV2<BalancesResponse> {
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
         let repo_factory = self.repo_factory.clone();
@@ -99,9 +100,9 @@ impl<
                     ectx!(err e, ErrorKind::Internal)
                 })
                 .map(|hash| {
-                    Balances::new(
+                    BalancesResponse::new(
                         hash.into_iter()
-                            .map(|(currency, gross_amount)| (currency, gross_amount.to_super_unit(currency)))
+                            .map(|(currency, gross_amount)| (currency.into(), gross_amount.to_super_unit(currency)))
                             .collect(),
                     )
                 })
