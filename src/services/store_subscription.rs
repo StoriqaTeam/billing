@@ -15,18 +15,19 @@ use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
 use controller::context::DynamicContext;
 use controller::requests::{CreateStoreSubscriptionRequest, UpdateStoreSubscriptionRequest};
-use models::{Amount, Currency, NewStoreSubscription, StoreSubscription, StoreSubscriptionSearch, TureCurrency, UpdateStoreSubscription};
+use controller::responses::StoreSubscriptionResponse;
+use models::{Amount, Currency, NewStoreSubscription, StoreSubscriptionSearch, TureCurrency, UpdateStoreSubscription};
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
-use services::subscription::DEFAULT_EUR_AMOUNT;
-use services::subscription::DEFAULT_STQ_AMOUNT;
+use services::subscription::DEFAULT_EUR_CENTS_AMOUNT;
+use services::subscription::DEFAULT_STQ_WEI_AMOUNT;
 use services::types::spawn_on_pool;
 use services::ErrorKind;
 
 pub trait StoreSubscriptionService {
-    fn create(&self, store_id: StoreId, payload: CreateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscription>;
-    fn get(&self, store_id: StoreId) -> ServiceFutureV2<Option<StoreSubscription>>;
-    fn update(&self, store_id: StoreId, payload: UpdateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscription>;
+    fn create(&self, store_id: StoreId, payload: CreateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscriptionResponse>;
+    fn get(&self, store_id: StoreId) -> ServiceFutureV2<Option<StoreSubscriptionResponse>>;
+    fn update(&self, store_id: StoreId, payload: UpdateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscriptionResponse>;
 }
 
 pub struct StoreSubscriptionServiceImpl<
@@ -52,7 +53,7 @@ impl<
         AS: AccountService + Clone,
     > StoreSubscriptionService for StoreSubscriptionServiceImpl<T, M, F, C, PC, AS>
 {
-    fn create(&self, store_id: StoreId, payload: CreateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscription> {
+    fn create(&self, store_id: StoreId, payload: CreateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscriptionResponse> {
         let repo_factory = self.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
 
@@ -63,7 +64,7 @@ impl<
             Some(account_service) => account_service,
             None => {
                 let e = format_err!("Accounts service was not found in dynamic context");
-                return Box::new(futures::future::err(ectx!(err e, ErrorKind::Internal))) as ServiceFutureV2<StoreSubscription>;
+                return Box::new(futures::future::err(ectx!(err e, ErrorKind::Internal))) as ServiceFutureV2<StoreSubscriptionResponse>;
             }
         };
 
@@ -71,7 +72,7 @@ impl<
             Currency::Eur => Box::new(futures::future::ok(NewStoreSubscription {
                 store_id,
                 currency: payload.currency,
-                value: Amount::new(DEFAULT_EUR_AMOUNT),
+                value: Amount::new(DEFAULT_EUR_CENTS_AMOUNT),
                 wallet_address: None,
             })),
             Currency::Stq => create_store_subscription_account(account_service, store_id),
@@ -86,14 +87,16 @@ impl<
             spawn_on_pool(db_pool, cpu_pool, move |conn| {
                 let store_subscription_repo = repo_factory.create_store_subscription_repo(&conn, user_id);
 
-                store_subscription_repo.create(new_store_subscription).map_err(ectx!(convert))
+                let result = store_subscription_repo.create(new_store_subscription).map_err(ectx!(try convert))?;
+
+                Ok(result.into())
             })
         });
 
         Box::new(fut)
     }
 
-    fn get(&self, store_id: StoreId) -> ServiceFutureV2<Option<StoreSubscription>> {
+    fn get(&self, store_id: StoreId) -> ServiceFutureV2<Option<StoreSubscriptionResponse>> {
         let repo_factory = self.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
 
@@ -103,13 +106,15 @@ impl<
         spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let store_subscription_repo = repo_factory.create_store_subscription_repo(&conn, user_id);
 
-            store_subscription_repo
+            let result = store_subscription_repo
                 .get(StoreSubscriptionSearch::by_store_id(store_id))
-                .map_err(ectx!(convert))
+                .map_err(ectx!(try convert))?;
+
+            Ok(result.map(StoreSubscriptionResponse::from))
         })
     }
 
-    fn update(&self, store_id: StoreId, payload: UpdateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscription> {
+    fn update(&self, store_id: StoreId, payload: UpdateStoreSubscriptionRequest) -> ServiceFutureV2<StoreSubscriptionResponse> {
         let repo_factory = self.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
 
@@ -120,7 +125,7 @@ impl<
             Some(account_service) => account_service,
             None => {
                 let e = format_err!("Accounts service was not found in dynamic context");
-                return Box::new(futures::future::err(ectx!(err e, ErrorKind::Internal))) as ServiceFutureV2<StoreSubscription>;
+                return Box::new(futures::future::err(ectx!(err e, ErrorKind::Internal))) as ServiceFutureV2<StoreSubscriptionResponse>;
             }
         };
 
@@ -145,7 +150,7 @@ impl<
             match payload.currency {
                 Currency::Eur => Box::new(futures::future::ok(UpdateStoreSubscription {
                     currency: Some(Currency::Eur),
-                    value: Some(Amount::new(DEFAULT_EUR_AMOUNT)),
+                    value: Some(Amount::new(DEFAULT_EUR_CENTS_AMOUNT)),
                     ..Default::default()
                 })) as ServiceFutureV2<UpdateStoreSubscription>,
                 Currency::Stq => {
@@ -159,7 +164,7 @@ impl<
                             )
                             .map(move |account| UpdateStoreSubscription {
                                 currency: Some(Currency::Stq),
-                                value: Some(Amount::new(DEFAULT_STQ_AMOUNT)),
+                                value: Some(Amount::new(DEFAULT_STQ_WEI_AMOUNT)),
                                 wallet_address: Some(account.wallet_address),
                                 ..Default::default()
                             });
@@ -167,7 +172,7 @@ impl<
                     } else {
                         Box::new(futures::future::ok(UpdateStoreSubscription {
                             currency: Some(Currency::Stq),
-                            value: Some(Amount::new(DEFAULT_STQ_AMOUNT)),
+                            value: Some(Amount::new(DEFAULT_STQ_WEI_AMOUNT)),
                             ..Default::default()
                         })) as ServiceFutureV2<UpdateStoreSubscription>
                     }
@@ -189,9 +194,10 @@ impl<
                     let store_subscription_repo = repo_factory.create_store_subscription_repo(&conn, user_id);
                     let by_store_id = StoreSubscriptionSearch::by_store_id(store_id);
 
-                    store_subscription_repo
+                    let result = store_subscription_repo
                         .update(by_store_id, store_subscription)
-                        .map_err(ectx!(convert))
+                        .map_err(ectx!(try convert))?;
+                    Ok(result.into())
                 })
             }
         });
@@ -206,7 +212,7 @@ fn create_store_subscription_account<AS: AccountService>(account_service: AS, st
         .map(move |account| NewStoreSubscription {
             store_id,
             currency: Currency::Stq,
-            value: Amount::new(DEFAULT_STQ_AMOUNT),
+            value: Amount::new(DEFAULT_STQ_WEI_AMOUNT),
             wallet_address: Some(account.wallet_address),
         });
     Box::new(fut)

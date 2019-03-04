@@ -19,10 +19,11 @@ use client::payments::{CreateInternalTransaction, PaymentsClient};
 use client::stripe::{NewCharge, StripeClient};
 use config::Subscription as SubscriptionConfig;
 use controller::context::DynamicContext;
+use controller::responses::SubscriptionPaymentSearchResponse;
 use models::{
     Account, Amount, ChargeId, CurrencyChoice, DbCustomer, FiatCurrency, NewSubscriptionPayment, StoreSubscription,
-    StoreSubscriptionSearch, Subscription, SubscriptionPaymentSearch, SubscriptionPaymentSearchResults, SubscriptionPaymentStatus,
-    SubscriptionSearch, TransactionId, TureCurrency, UpdateSubscription,
+    StoreSubscriptionSearch, Subscription, SubscriptionPaymentSearch, SubscriptionPaymentStatus, SubscriptionSearch, TransactionId,
+    TureCurrency, UpdateSubscription,
 };
 use repos::repo_factory::ReposFactory;
 use repos::{AccountsRepo, CustomersRepo, SearchCustomer, StoreSubscriptionRepo, SubscriptionRepo, UserRolesRepo};
@@ -32,7 +33,7 @@ use services::ErrorKind;
 
 pub trait SubscriptionPaymentService {
     fn pay_subscriptions(&self) -> ServiceFutureV2<()>;
-    fn search(&self, skip: i64, count: i64, payload: SubscriptionPaymentSearch) -> ServiceFutureV2<SubscriptionPaymentSearchResults>;
+    fn search(&self, skip: i64, count: i64, payload: SubscriptionPaymentSearch) -> ServiceFutureV2<SubscriptionPaymentSearchResponse>;
 }
 
 pub struct SubscriptionPaymentServiceImpl<
@@ -174,7 +175,7 @@ impl<
         Box::new(fut)
     }
 
-    fn search(&self, skip: i64, count: i64, payload: SubscriptionPaymentSearch) -> ServiceFutureV2<SubscriptionPaymentSearchResults> {
+    fn search(&self, skip: i64, count: i64, payload: SubscriptionPaymentSearch) -> ServiceFutureV2<SubscriptionPaymentSearchResponse> {
         let repo_factory = self.repo_factory.clone();
         let user_id = self.dynamic_context.user_id;
 
@@ -184,7 +185,9 @@ impl<
         spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let subscription_payment_repo = repo_factory.create_subscription_payment_repo(&conn, user_id);
 
-            subscription_payment_repo.search(skip, count, payload).map_err(ectx!(convert))
+            let resposne = subscription_payment_repo.search(skip, count, payload).map_err(ectx!(try convert))?;
+
+            Ok(resposne.into())
         })
     }
 }
