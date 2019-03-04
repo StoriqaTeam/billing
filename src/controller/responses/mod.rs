@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use bigdecimal::{BigDecimal, ToPrimitive};
 use chrono::NaiveDateTime;
 use failure::Fail;
@@ -269,5 +271,16 @@ impl From<StoreSubscription> for StoreSubscriptionResponse {
             created_at: data.created_at,
             updated_at: data.updated_at,
         }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct BalancesResponse {
+    pub currencies: HashMap<StqCurrency, BigDecimal>,
+}
+
+impl BalancesResponse {
+    pub fn new(currencies: HashMap<StqCurrency, BigDecimal>) -> Self {
+        Self { currencies }
     }
 }
