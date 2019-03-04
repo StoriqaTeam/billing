@@ -1,5 +1,5 @@
 use models::order_v2::OrderId as Orderv2Id;
-use models::{Currency, CustomerId, NewSubscription, PaymentState};
+use models::{Currency, CustomerId, NewSubscription, PaymentState, StoreSubscriptionStatus, UpdateStoreSubscription};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NewCustomerWithSourceRequest {
@@ -40,5 +40,16 @@ pub struct CreateStoreSubscriptionRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateStoreSubscriptionRequest {
-    pub currency: Currency,
+    pub currency: Option<Currency>,
+    pub status: Option<StoreSubscriptionStatus>,
+}
+
+impl From<UpdateStoreSubscriptionRequest> for UpdateStoreSubscription {
+    fn from(data: UpdateStoreSubscriptionRequest) -> Self {
+        UpdateStoreSubscription {
+            currency: data.currency,
+            status: data.status,
+            ..Default::default()
+        }
+    }
 }

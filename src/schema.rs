@@ -271,6 +271,7 @@ table! {
         trial_start_date -> Nullable<Timestamp>,
         created_at -> Timestamp,
         updated_at -> Timestamp,
+        status -> Varchar,
     }
 }
 
