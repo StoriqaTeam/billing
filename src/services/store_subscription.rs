@@ -139,19 +139,18 @@ impl<
             })
         })
         .and_then(move |old_store_subscription| {
-            let new_currency = payload.currency;
-            if new_currency == old_store_subscription.currency {
-                return Box::new(futures::future::ok(UpdateStoreSubscription {
-                    currency: Some(new_currency),
-                    ..Default::default()
-                })) as ServiceFutureV2<UpdateStoreSubscription>;
-            }
+            let update_payload: UpdateStoreSubscription = payload.into();
 
-            match payload.currency {
+            let new_currency = match update_payload.currency {
+                Some(new_currency) if new_currency != old_store_subscription.currency => new_currency,
+                _ => return Box::new(futures::future::ok(update_payload)) as ServiceFutureV2<UpdateStoreSubscription>,
+            };
+
+            match new_currency {
                 Currency::Eur => Box::new(futures::future::ok(UpdateStoreSubscription {
                     currency: Some(Currency::Eur),
                     value: Some(Amount::new(DEFAULT_EUR_CENTS_AMOUNT)),
-                    ..Default::default()
+                    ..update_payload
                 })) as ServiceFutureV2<UpdateStoreSubscription>,
                 Currency::Stq => {
                     if old_store_subscription.wallet_address.is_none() {
@@ -166,21 +165,21 @@ impl<
                                 currency: Some(Currency::Stq),
                                 value: Some(Amount::new(DEFAULT_STQ_WEI_AMOUNT)),
                                 wallet_address: Some(account.wallet_address),
-                                ..Default::default()
+                                ..update_payload
                             });
                         Box::new(fut) as ServiceFutureV2<UpdateStoreSubscription>
                     } else {
                         Box::new(futures::future::ok(UpdateStoreSubscription {
                             currency: Some(Currency::Stq),
                             value: Some(Amount::new(DEFAULT_STQ_WEI_AMOUNT)),
-                            ..Default::default()
+                            ..update_payload
                         })) as ServiceFutureV2<UpdateStoreSubscription>
                     }
                 }
                 Currency::Eth | Currency::Btc | Currency::Usd | Currency::Rub => {
                     let e = format_err!("Only {} and {} is allowed", Currency::Stq, Currency::Eur);
                     Box::new(futures::future::err(ectx!(err e, ErrorKind::Validation(serde_json::json!({
-                        "currency": payload.currency,
+                        "currency": new_currency,
                     }))))) as ServiceFutureV2<UpdateStoreSubscription>
                 }
             }

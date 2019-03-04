@@ -113,6 +113,12 @@ impl<'a, T: Connection<Backend = Pg, TransactionManager = AnsiTransactionManager
             .map(|entry| StoreSubscriptionAccess { store_id: entry.store_id });
         acl::check(&*self.acl, Resource::StoreSubscription, Action::Write, self, access.as_ref())
             .map_err(ectx!(try ErrorKind::Forbidden))?;
+
+        if payload.status.is_some() && payload.status != updated_entry.map(|s| s.status) {
+            acl::check(&*self.acl, Resource::StoreSubscriptionStatus, Action::Write, self, None)
+                .map_err(ectx!(try ErrorKind::Forbidden))?;
+        }
+
         let query: Option<BoxedExpr> = into_expr(search_params);
 
         let query = query.ok_or_else(|| {

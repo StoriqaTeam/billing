@@ -18,8 +18,8 @@ use config::Subscription as SubscriptionConfig;
 use controller::context::DynamicContext;
 use controller::requests::CreateSubscriptionsRequest;
 use models::{
-    Amount, Currency, NewStoreSubscription, StoreSubscription, StoreSubscriptionSearch, Subscription, SubscriptionSearch,
-    UpdateStoreSubscription,
+    Amount, Currency, NewStoreSubscription, StoreSubscription, StoreSubscriptionSearch, StoreSubscriptionStatus, Subscription,
+    SubscriptionSearch, UpdateStoreSubscription,
 };
 use repos::repo_factory::ReposFactory;
 use repos::types::RepoResultV2;
@@ -80,13 +80,24 @@ impl<
                     let store_id = new_subscription.store_id;
                     let store_subscription =
                         find_update_or_create_store_subscription(&*store_subscription_repo, store_id, now).map_err(ectx!(try convert))?;
-                    let trial_duration = store_subscription.trial_start_date.ok_or({
-                        let e = format_err!("Store {} has empty trial start time", store_id);
-                        ectx!(try err e, ErrorKind::Internal)
-                    })? - now;
 
-                    if trial_duration < max_trial_duration {
-                        continue 'subscriptions;
+                    match store_subscription.status {
+                        StoreSubscriptionStatus::Trial => {
+                            let trial_duration = store_subscription.trial_start_date.ok_or({
+                                let e = format_err!("Store {} has empty trial start time", store_id);
+                                ectx!(try err e, ErrorKind::Internal)
+                            })? - now;
+
+                            if trial_duration < max_trial_duration {
+                                continue 'subscriptions;
+                            }
+                        }
+                        StoreSubscriptionStatus::Paid => {
+                            //do nothing - just pay
+                        }
+                        StoreSubscriptionStatus::Free => {
+                            continue 'subscriptions;
+                        }
                     }
 
                     let unpaid_store_subscriptions = subscription_repo

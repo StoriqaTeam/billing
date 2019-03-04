@@ -33,6 +33,16 @@ pub struct StoreSubscription {
     pub trial_start_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub status: StoreSubscriptionStatus,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, FromSqlRow, AsExpression, Eq, PartialEq, Hash, IntoEnumIterator)]
+#[sql_type = "VarChar"]
+#[serde(rename_all = "lowercase")]
+pub enum StoreSubscriptionStatus {
+    Trial,
+    Paid,
+    Free,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Queryable, Insertable)]
@@ -85,6 +95,7 @@ pub struct UpdateStoreSubscription {
     pub value: Option<Amount>,
     pub wallet_address: Option<WalletAddress>,
     pub trial_start_date: Option<NaiveDateTime>,
+    pub status: Option<StoreSubscriptionStatus>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Insertable)]
@@ -146,6 +157,34 @@ impl StoreSubscriptionSearch {
             store_id: Some(store_id),
             ..Default::default()
         }
+    }
+}
+
+impl FromSql<VarChar, Pg> for StoreSubscriptionStatus {
+    fn from_sql(data: Option<&[u8]>) -> deserialize::Result<Self> {
+        match data {
+            Some(b"trial") => Ok(StoreSubscriptionStatus::Trial),
+            Some(b"paid") => Ok(StoreSubscriptionStatus::Paid),
+            Some(b"free") => Ok(StoreSubscriptionStatus::Free),
+            Some(v) => Err(format!(
+                "Unrecognized enum variant: {:?}",
+                String::from_utf8(v.to_vec()).unwrap_or_else(|_| "Non - UTF8 value".to_string()),
+            )
+            .to_string()
+            .into()),
+            None => Err("Unexpected null for non-null column".into()),
+        }
+    }
+}
+
+impl ToSql<VarChar, Pg> for StoreSubscriptionStatus {
+    fn to_sql<W: Write>(&self, out: &mut Output<W, Pg>) -> serialize::Result {
+        match self {
+            StoreSubscriptionStatus::Trial => out.write_all(b"trial")?,
+            StoreSubscriptionStatus::Paid => out.write_all(b"paid")?,
+            StoreSubscriptionStatus::Free => out.write_all(b"free")?,
+        };
+        Ok(IsNull::No)
     }
 }
 
