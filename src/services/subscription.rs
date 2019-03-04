@@ -83,7 +83,7 @@ impl<
 
                     match store_subscription.status {
                         StoreSubscriptionStatus::Trial => {
-                            let trial_duration = store_subscription.trial_start_date.ok_or({
+                            let trial_duration = store_subscription.trial_start_date.ok_or_else(|| {
                                 let e = format_err!("Store {} has empty trial start time", store_id);
                                 ectx!(try err e, ErrorKind::Internal)
                             })? - now;
@@ -162,6 +162,7 @@ fn find_update_or_create_store_subscription(
         currency: DEFAULT_CURRENCY,
         value: Amount::new(DEFAULT_EUR_CENTS_AMOUNT),
         wallet_address: None,
+        trial_start_date: Some(now),
     };
 
     store_subscription_repo.create(new_store_subscription)
