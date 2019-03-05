@@ -16,7 +16,9 @@ use client::payments::PaymentsClient;
 use controller::context::DynamicContext;
 use controller::requests::{CreateStoreSubscriptionRequest, UpdateStoreSubscriptionRequest};
 use controller::responses::StoreSubscriptionResponse;
-use models::{Amount, Currency, NewStoreSubscription, StoreSubscriptionSearch, TureCurrency, UpdateStoreSubscription};
+use models::{
+    Amount, CreateStoreSubscription, Currency, NewStoreSubscription, StoreSubscriptionSearch, TureCurrency, UpdateStoreSubscription,
+};
 use repos::repo_factory::ReposFactory;
 use services::accounts::AccountService;
 use services::subscription::DEFAULT_EUR_CENTS_AMOUNT;
@@ -59,6 +61,8 @@ impl<
 
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
+
+        let payload: CreateStoreSubscription = payload.into();
 
         let account_service = match self.dynamic_context.account_service.clone() {
             Some(account_service) => account_service,

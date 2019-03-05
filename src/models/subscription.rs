@@ -89,6 +89,10 @@ pub struct NewStoreSubscription {
     pub trial_start_date: Option<NaiveDateTime>,
 }
 
+pub struct CreateStoreSubscription {
+    pub currency: Currency,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize, AsChangeset)]
 #[table_name = "store_subscription"]
 pub struct UpdateStoreSubscription {

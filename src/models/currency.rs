@@ -148,6 +148,19 @@ impl Into<StqCurrency> for Currency {
     }
 }
 
+impl From<StqCurrency> for Currency {
+    fn from(stq_currency: StqCurrency) -> Currency {
+        match stq_currency {
+            StqCurrency::ETH => Currency::Eth,
+            StqCurrency::STQ => Currency::Stq,
+            StqCurrency::BTC => Currency::Btc,
+            StqCurrency::EUR => Currency::Eur,
+            StqCurrency::USD => Currency::Usd,
+            StqCurrency::RUB => Currency::Rub,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum CurrencyChoice {
     Crypto(TureCurrency),
