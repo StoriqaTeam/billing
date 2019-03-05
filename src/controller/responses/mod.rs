@@ -11,8 +11,8 @@ use models::{
     fee::FeeId,
     invoice_v2::InvoiceId,
     order_v2::{OrderId, RawOrder, StoreId},
-    ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus, PaymentState, StoreSubscription, StoreSubscriptionStatus,
-    SubscriptionPayment, SubscriptionPaymentSearchResults, SubscriptionPaymentStatus, TransactionId, WalletAddress,
+    ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus, PaymentState, StoreSubscriptionStatus, SubscriptionPayment,
+    SubscriptionPaymentSearchResults, SubscriptionPaymentStatus, TransactionId, WalletAddress,
 };
 use stq_static_resources::Currency as StqCurrency;
 
@@ -256,24 +256,10 @@ pub struct StoreSubscriptionResponse {
     pub value: BigDecimal,
     pub wallet_address: Option<WalletAddress>,
     pub trial_start_date: Option<NaiveDateTime>,
+    pub trial_end_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub status: StoreSubscriptionStatus,
-}
-
-impl From<StoreSubscription> for StoreSubscriptionResponse {
-    fn from(data: StoreSubscription) -> Self {
-        StoreSubscriptionResponse {
-            store_id: data.store_id,
-            currency: data.currency.into(),
-            value: data.value.to_super_unit(data.currency),
-            wallet_address: data.wallet_address,
-            trial_start_date: data.trial_start_date,
-            created_at: data.created_at,
-            updated_at: data.updated_at,
-            status: data.status,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize)]

@@ -247,6 +247,7 @@ impl<
             cpu_pool: self.static_context.cpu_pool.clone(),
             repo_factory: self.static_context.repo_factory.clone(),
             dynamic_context: dynamic_context.clone(),
+            config: self.static_context.config.subscription.clone(),
         });
 
         let path = req.path().to_string();
