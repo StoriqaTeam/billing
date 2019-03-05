@@ -1,5 +1,7 @@
+use stq_static_resources::Currency as StqCurrency;
+
 use models::order_v2::OrderId as Orderv2Id;
-use models::{Currency, CustomerId, NewSubscription, PaymentState, StoreSubscriptionStatus, UpdateStoreSubscription};
+use models::{CreateStoreSubscription, CustomerId, NewSubscription, PaymentState, StoreSubscriptionStatus, UpdateStoreSubscription};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NewCustomerWithSourceRequest {
@@ -35,21 +37,29 @@ pub struct CreateSubscriptionsRequest {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateStoreSubscriptionRequest {
-    pub currency: Currency,
+    pub currency: StqCurrency,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateStoreSubscriptionRequest {
-    pub currency: Option<Currency>,
+    pub currency: Option<StqCurrency>,
     pub status: Option<StoreSubscriptionStatus>,
 }
 
 impl From<UpdateStoreSubscriptionRequest> for UpdateStoreSubscription {
     fn from(data: UpdateStoreSubscriptionRequest) -> Self {
         UpdateStoreSubscription {
-            currency: data.currency,
+            currency: data.currency.map(|c| c.into()),
             status: data.status,
             ..Default::default()
+        }
+    }
+}
+
+impl From<CreateStoreSubscriptionRequest> for CreateStoreSubscription {
+    fn from(data: CreateStoreSubscriptionRequest) -> Self {
+        CreateStoreSubscription {
+            currency: data.currency.into(),
         }
     }
 }
