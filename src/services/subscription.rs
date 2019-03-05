@@ -83,10 +83,11 @@ impl<
 
                     match store_subscription.status {
                         StoreSubscriptionStatus::Trial => {
-                            let trial_duration = store_subscription.trial_start_date.ok_or_else(|| {
-                                let e = format_err!("Store {} has empty trial start time", store_id);
-                                ectx!(try err e, ErrorKind::Internal)
-                            })? - now;
+                            let trial_duration = now
+                                - store_subscription.trial_start_date.ok_or_else(|| {
+                                    let e = format_err!("Store {} has empty trial start time", store_id);
+                                    ectx!(try err e, ErrorKind::Internal)
+                                })?;
 
                             if trial_duration < max_trial_duration {
                                 continue 'subscriptions;
