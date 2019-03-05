@@ -74,6 +74,7 @@ impl<
                 currency: payload.currency,
                 value: Amount::new(DEFAULT_EUR_CENTS_AMOUNT),
                 wallet_address: None,
+                trial_start_date: None,
             })),
             Currency::Stq => create_store_subscription_account(account_service, store_id),
             Currency::Eth | Currency::Btc | Currency::Usd | Currency::Rub => {
@@ -213,6 +214,7 @@ fn create_store_subscription_account<AS: AccountService>(account_service: AS, st
             currency: Currency::Stq,
             value: Amount::new(DEFAULT_STQ_WEI_AMOUNT),
             wallet_address: Some(account.wallet_address),
+            trial_start_date: None,
         });
     Box::new(fut)
 }

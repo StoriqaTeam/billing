@@ -86,6 +86,7 @@ pub struct NewStoreSubscription {
     pub currency: Currency,
     pub value: Amount,
     pub wallet_address: Option<WalletAddress>,
+    pub trial_start_date: Option<NaiveDateTime>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, AsChangeset)]
