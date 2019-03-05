@@ -1,3 +1,4 @@
+use chrono::Duration;
 use diesel::connection::AnsiTransactionManager;
 use diesel::pg::Pg;
 use diesel::Connection;
@@ -13,6 +14,7 @@ use stq_types::StoreId;
 
 use super::types::ServiceFutureV2;
 use client::payments::PaymentsClient;
+use config::Subscription as SubscriptionConfig;
 use controller::context::DynamicContext;
 use controller::requests::{CreateStoreSubscriptionRequest, UpdateStoreSubscriptionRequest};
 use controller::responses::StoreSubscriptionResponse;
@@ -44,6 +46,7 @@ pub struct StoreSubscriptionServiceImpl<
     pub cpu_pool: CpuPool,
     pub repo_factory: F,
     pub dynamic_context: DynamicContext<C, PC, AS>,
+    pub config: SubscriptionConfig,
 }
 
 impl<
@@ -63,6 +66,8 @@ impl<
         let cpu_pool = self.cpu_pool.clone();
 
         let payload: CreateStoreSubscription = payload.into();
+
+        let max_trial_duration = Duration::days(self.config.trial_time_duration_days);
 
         let account_service = match self.dynamic_context.account_service.clone() {
             Some(account_service) => account_service,
@@ -94,7 +99,17 @@ impl<
 
                 let result = store_subscription_repo.create(new_store_subscription).map_err(ectx!(try convert))?;
 
-                Ok(result.into())
+                Ok(StoreSubscriptionResponse {
+                    store_id: result.store_id,
+                    currency: result.currency.into(),
+                    value: result.value.to_super_unit(result.currency),
+                    wallet_address: result.wallet_address,
+                    trial_start_date: result.trial_start_date,
+                    trial_end_date: result.trial_start_date.map(|date| date + max_trial_duration),
+                    created_at: result.created_at,
+                    updated_at: result.updated_at,
+                    status: result.status,
+                })
             })
         });
 
@@ -108,6 +123,8 @@ impl<
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
 
+        let max_trial_duration = Duration::days(self.config.trial_time_duration_days);
+
         spawn_on_pool(db_pool, cpu_pool, move |conn| {
             let store_subscription_repo = repo_factory.create_store_subscription_repo(&conn, user_id);
 
@@ -115,7 +132,17 @@ impl<
                 .get(StoreSubscriptionSearch::by_store_id(store_id))
                 .map_err(ectx!(try convert))?;
 
-            Ok(result.map(StoreSubscriptionResponse::from))
+            Ok(result.map(|result| StoreSubscriptionResponse {
+                store_id: result.store_id,
+                currency: result.currency.into(),
+                value: result.value.to_super_unit(result.currency),
+                wallet_address: result.wallet_address,
+                trial_start_date: result.trial_start_date,
+                trial_end_date: result.trial_start_date.map(|date| date + max_trial_duration),
+                created_at: result.created_at,
+                updated_at: result.updated_at,
+                status: result.status,
+            }))
         })
     }
 
@@ -125,6 +152,8 @@ impl<
 
         let db_pool = self.db_pool.clone();
         let cpu_pool = self.cpu_pool.clone();
+
+        let max_trial_duration = Duration::days(self.config.trial_time_duration_days);
 
         let account_service = match self.dynamic_context.account_service.clone() {
             Some(account_service) => account_service,
@@ -201,7 +230,17 @@ impl<
                     let result = store_subscription_repo
                         .update(by_store_id, store_subscription)
                         .map_err(ectx!(try convert))?;
-                    Ok(result.into())
+                    Ok(StoreSubscriptionResponse {
+                        store_id: result.store_id,
+                        currency: result.currency.into(),
+                        value: result.value.to_super_unit(result.currency),
+                        wallet_address: result.wallet_address,
+                        trial_start_date: result.trial_start_date,
+                        trial_end_date: result.trial_start_date.map(|date| date + max_trial_duration),
+                        created_at: result.created_at,
+                        updated_at: result.updated_at,
+                        status: result.status,
+                    })
                 })
             }
         });
