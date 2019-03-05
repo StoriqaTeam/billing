@@ -1,0 +1,10 @@
+interval_s = 5
+file_name = "all_offers"
+cluster = "stage.stq.cloud"
+thread_count = 1
+
+[stores_microservice]
+url="http://stores:8000"
+
+[billing_microservice]
+url="http://billing:8000"
