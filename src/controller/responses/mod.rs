@@ -11,8 +11,8 @@ use models::{
     fee::FeeId,
     invoice_v2::InvoiceId,
     order_v2::{OrderId, RawOrder, StoreId},
-    ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus, PaymentState, StoreSubscription, SubscriptionPayment,
-    SubscriptionPaymentSearchResults, SubscriptionPaymentStatus, TransactionId, WalletAddress,
+    ChargeId, CustomerId, Fee, FeeStatus, PaymentIntent, PaymentIntentStatus, PaymentState, StoreSubscription, StoreSubscriptionStatus,
+    SubscriptionPayment, SubscriptionPaymentSearchResults, SubscriptionPaymentStatus, TransactionId, WalletAddress,
 };
 use stq_static_resources::Currency as StqCurrency;
 
@@ -258,6 +258,7 @@ pub struct StoreSubscriptionResponse {
     pub trial_start_date: Option<NaiveDateTime>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub status: StoreSubscriptionStatus,
 }
 
 impl From<StoreSubscription> for StoreSubscriptionResponse {
@@ -270,6 +271,7 @@ impl From<StoreSubscription> for StoreSubscriptionResponse {
             trial_start_date: data.trial_start_date,
             created_at: data.created_at,
             updated_at: data.updated_at,
+            status: data.status,
         }
     }
 }
