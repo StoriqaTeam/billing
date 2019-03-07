@@ -12,7 +12,7 @@ use r2d2::{ManageConnection, Pool};
 use failure::Fail;
 
 use stq_http::client::HttpClient;
-use stq_types::StoreId;
+use stq_types::{StoreId, UserId};
 
 use super::types::ServiceFutureV2;
 use client::payments::{CreateInternalTransaction, PaymentsClient};
@@ -70,9 +70,16 @@ struct CryptoPaymentPreparation {
     total_amount: Amount,
 }
 
+struct FailedPaymentPreparation {
+    store_subscription: StoreSubscription,
+    subscriptions: Vec<Subscription>,
+    total_amount: Amount,
+}
+
 enum PaymentPreparation {
     Fiat(FiatPaymentPreparation),
     Crypto(CryptoPaymentPreparation),
+    Failed(FailedPaymentPreparation),
 }
 
 struct FinishedPayment {
@@ -142,6 +149,7 @@ impl<
         .and_then(move |payment_preparation| match payment_preparation {
             PaymentPreparation::Crypto(crypto) => collect_ture_subscription(payments_client.clone(), accounts_service.clone(), crypto),
             PaymentPreparation::Fiat(fiat) => collect_fiat_subscription(stripe_client.clone(), fiat),
+            PaymentPreparation::Failed(failed) => into_finished_payment(failed),
         })
         .collect()
         .and_then({
@@ -225,57 +233,87 @@ fn create_payment_preparations(
             })?
             .user_id;
 
-        let payment_preparation = match store_subscription.currency.classify() {
-            CurrencyChoice::Crypto(ture_currency) => {
-                let wallet_address = match store_subscription.wallet_address.clone() {
-                    Some(wallet_address) => wallet_address,
-                    None => {
-                        warn!(
-                            "subscription_payment: User {} has no wallet addess in store subscription",
-                            store_owner
-                        );
-                        continue;
-                    }
-                };
-
-                let store_owner_account = match accounts_repo.get_by_wallet_address(wallet_address).map_err(ectx!(try convert))? {
-                    Some(store_owner_account) => store_owner_account,
-                    None => {
-                        warn!("subscription_payment: Account with wallet address {} not found", store_owner);
-                        continue;
-                    }
-                };
-
-                PaymentPreparation::Crypto(CryptoPaymentPreparation {
-                    store_owner_account,
-                    ture_currency,
-                    store_subscription,
-                    subscriptions,
-                    total_amount,
-                })
-            }
-            CurrencyChoice::Fiat(fiat_currency) => {
-                let customer = match customer_repo.get(SearchCustomer::UserId(store_owner)).map_err(ectx!(try convert))? {
-                    Some(customer) => customer,
-                    None => {
-                        warn!("subscription_payment: User {} has no stripe customer", store_owner);
-                        continue;
-                    }
-                };
-                PaymentPreparation::Fiat(FiatPaymentPreparation {
-                    fiat_currency,
-                    customer,
-                    store_subscription,
-                    subscriptions,
-                    total_amount,
-                })
-            }
-        };
+        let payment_preparation = payment_preparation(
+            accounts_repo,
+            customer_repo,
+            store_subscription,
+            subscriptions,
+            store_owner,
+            total_amount,
+        )?;
 
         payment_preparations.push(payment_preparation)
     }
 
     Ok(payment_preparations)
+}
+
+fn payment_preparation(
+    accounts_repo: &AccountsRepo,
+    customer_repo: &CustomersRepo,
+    store_subscription: StoreSubscription,
+    subscriptions: Vec<Subscription>,
+    store_owner: UserId,
+    total_amount: Amount,
+) -> ServiceResultV2<PaymentPreparation> {
+    match store_subscription.currency.classify() {
+        CurrencyChoice::Crypto(ture_currency) => {
+            let wallet_address = match store_subscription.wallet_address.clone() {
+                Some(wallet_address) => wallet_address,
+                None => {
+                    warn!(
+                        "subscription_payment: User {} has no wallet addess in store subscription",
+                        store_owner
+                    );
+                    return Ok(failed_payment_preparation(store_subscription, subscriptions, total_amount));
+                }
+            };
+
+            let store_owner_account = match accounts_repo.get_by_wallet_address(wallet_address).map_err(ectx!(try convert))? {
+                Some(store_owner_account) => store_owner_account,
+                None => {
+                    warn!("subscription_payment: Account with wallet address {} not found", store_owner);
+                    return Ok(failed_payment_preparation(store_subscription, subscriptions, total_amount));
+                }
+            };
+
+            Ok(PaymentPreparation::Crypto(CryptoPaymentPreparation {
+                store_owner_account,
+                ture_currency,
+                store_subscription,
+                subscriptions,
+                total_amount,
+            }))
+        }
+        CurrencyChoice::Fiat(fiat_currency) => {
+            let customer = match customer_repo.get(SearchCustomer::UserId(store_owner)).map_err(ectx!(try convert))? {
+                Some(customer) => customer,
+                None => {
+                    warn!("subscription_payment: User {} has no stripe customer", store_owner);
+                    return Ok(failed_payment_preparation(store_subscription, subscriptions, total_amount));
+                }
+            };
+            Ok(PaymentPreparation::Fiat(FiatPaymentPreparation {
+                fiat_currency,
+                customer,
+                store_subscription,
+                subscriptions,
+                total_amount,
+            }))
+        }
+    }
+}
+
+fn failed_payment_preparation(
+    store_subscription: StoreSubscription,
+    subscriptions: Vec<Subscription>,
+    total_amount: Amount,
+) -> PaymentPreparation {
+    PaymentPreparation::Failed(FailedPaymentPreparation {
+        store_subscription,
+        subscriptions,
+        total_amount,
+    })
 }
 
 fn subscriptions_to_pay(
@@ -339,6 +377,20 @@ fn collect_fiat_subscription(
         });
 
     Box::new(fut)
+}
+
+fn into_finished_payment(failed_payment_preparation: FailedPaymentPreparation) -> ServiceFutureV2<FinishedPayment> {
+    Box::new(futures::future::ok(FinishedPayment {
+        subscriptions: failed_payment_preparation.subscriptions,
+        subscription_payment: NewSubscriptionPayment {
+            store_id: failed_payment_preparation.store_subscription.store_id,
+            amount: failed_payment_preparation.total_amount,
+            currency: failed_payment_preparation.store_subscription.currency,
+            charge_id: None,
+            transaction_id: None,
+            status: SubscriptionPaymentStatus::Failed,
+        },
+    }))
 }
 
 fn collect_ture_subscription<PC: PaymentsClient, AS: AccountService>(
