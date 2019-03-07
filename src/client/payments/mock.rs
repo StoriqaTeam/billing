@@ -169,15 +169,15 @@ impl PaymentsClient for MockPaymentsClient {
             currency,
             fees: vec![
                 Fee {
-                    value: Amount::new(1),
+                    value: BigDecimal::from(1),
                     estimated_time: 3600,
                 },
                 Fee {
-                    value: Amount::new(100),
+                    value: BigDecimal::from(100),
                     estimated_time: 60,
                 },
                 Fee {
-                    value: Amount::new(10000),
+                    value: BigDecimal::from(10000),
                     estimated_time: 1,
                 },
             ],

@@ -166,7 +166,7 @@ pub struct FeesResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Fee {
-    pub value: Amount,
+    pub value: BigDecimal,
     pub estimated_time: u64,
 }
 
