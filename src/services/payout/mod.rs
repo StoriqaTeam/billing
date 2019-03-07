@@ -189,6 +189,10 @@ impl<
                         .collect(),
                 })
                 .map_err(ectx!(convert => input))
+        })
+        .then(|res| {
+            debug!("Calculated payout: {:?}", res);
+            res
         });
 
         Box::new(fut)
