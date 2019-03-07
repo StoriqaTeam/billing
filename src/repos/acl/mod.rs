@@ -140,6 +140,7 @@ impl ApplicationAcl {
                 permission!(Resource::Payout, Action::Write),
                 permission!(Resource::Subscription, Action::Read),
                 permission!(Resource::StoreSubscription, Action::Read),
+                permission!(Resource::StoreSubscription, Action::Write),
                 permission!(Resource::StoreSubscriptionStatus, Action::Read),
                 permission!(Resource::StoreSubscriptionStatus, Action::Write),
                 permission!(Resource::SubscriptionPayment, Action::Read),

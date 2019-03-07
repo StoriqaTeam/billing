@@ -33,11 +33,11 @@ pub struct BlockchainFeeOption {
 }
 
 impl BlockchainFeeOption {
-    pub fn from_payments_fee(currency: TureCurrency, fee: payments::Fee) -> Self {
+    pub fn from_payments_fee(_currency: TureCurrency, fee: payments::Fee) -> Self {
         let payments::Fee { value, estimated_time } = fee;
 
         Self {
-            value: value.to_super_unit(currency.into()),
+            value: value,
             estimated_time_seconds: estimated_time,
         }
     }
