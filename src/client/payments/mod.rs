@@ -293,6 +293,7 @@ impl<C: Clone + HttpClient> PaymentsClient for PaymentsClientImpl<C> {
     }
 
     fn get_fees(&self, input: GetFees) -> Box<Future<Item = FeesResponse, Error = Error> + Send> {
+        info!("payments get_fees: {:?}", input);
         let query = format!("/v1/fees");
         Box::new(
             self.request_with_auth::<_, FeesResponse>(Method::Post, query.clone(), input.clone())
